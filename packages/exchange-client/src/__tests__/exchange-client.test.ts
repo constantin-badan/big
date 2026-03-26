@@ -1,12 +1,11 @@
 import { describe, test, expect } from 'bun:test';
 import { createExchange } from '../factory';
-import type { IExchange } from '../types';
 import type { ExchangeConfig } from '@trading-bot/types';
 
 describe('exchange-client', () => {
-  test('IExchange interface is importable', () => {
-    const exchange = {} as IExchange;
-    expect(exchange).toBeDefined();
+  test('module exports are importable', async () => {
+    const mod = await import('../index');
+    expect(mod.createExchange).toBeDefined();
   });
 
   test('createExchange throws for binance-live', () => {

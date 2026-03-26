@@ -1,10 +1,10 @@
 import { describe, test, expect } from 'bun:test';
-import type { IPositionManager, PositionState } from '../index';
+import type { PositionState } from '../index';
 
 describe('position-manager', () => {
-  test('IPositionManager interface is importable', () => {
-    const pm = {} as IPositionManager;
-    expect(pm).toBeDefined();
+  test('package is importable', async () => {
+    const mod = await import('../index');
+    expect(mod).toBeDefined();
   });
 
   test('PositionState type is correct', () => {

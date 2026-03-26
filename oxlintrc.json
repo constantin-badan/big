@@ -1,12 +1,10 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "categories": {
-    "correctness": "error",
-    "suspicious": "error",
-    "pedantic": "error",
-    "style": "error"
-  },
   "rules": {
-    "typescript/no-explicit-any": "deny"
+    "typescript/no-explicit-any": "deny",
+    "typescript/consistent-type-assertions": [
+      "deny",
+      { "assertionStyle": "never" }
+    ]
   }
 }

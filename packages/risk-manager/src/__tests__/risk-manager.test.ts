@@ -1,10 +1,10 @@
 import { describe, test, expect } from 'bun:test';
-import type { IRiskManager, RiskCheckResult } from '../index';
+import type { RiskCheckResult } from '../index';
 
 describe('risk-manager', () => {
-  test('IRiskManager interface is importable', () => {
-    const rm = {} as IRiskManager;
-    expect(rm).toBeDefined();
+  test('package is importable', async () => {
+    const mod = await import('../index');
+    expect(mod).toBeDefined();
   });
 
   test('RiskCheckResult discriminated union works', () => {

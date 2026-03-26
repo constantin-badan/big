@@ -159,4 +159,4 @@ export const fixtures = {
   openLong,
   defaultRiskConfig,
   defaultPositionManagerConfig,
-} as const;
+};

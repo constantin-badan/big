@@ -1,14 +1,18 @@
 import { describe, test, expect } from 'bun:test';
-import type { IIndicator, IndicatorFactory } from '../index';
+
+import type { IndicatorFactory } from '../index';
 
 describe('indicators', () => {
-  test('IIndicator interface is importable', () => {
-    const indicator = {} as IIndicator<{ period: number }>;
-    expect(indicator).toBeDefined();
-  });
-
-  test('IndicatorFactory type is importable', () => {
-    const factory: IndicatorFactory<{ period: number }> = () => ({} as IIndicator<{ period: number }>);
-    expect(factory).toBeDefined();
+  test('IndicatorFactory creates valid indicators', () => {
+    const factory: IndicatorFactory<{ period: number }> = (config) => ({
+      name: 'test-ema',
+      warmupPeriod: config.period,
+      config,
+      update: () => null,
+      reset: () => {},
+    });
+    const indicator = factory({ period: 14 });
+    expect(indicator.name).toBe('test-ema');
+    expect(indicator.warmupPeriod).toBe(14);
   });
 });
