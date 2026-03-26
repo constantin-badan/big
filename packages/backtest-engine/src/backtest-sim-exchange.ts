@@ -1,0 +1,234 @@
+import type { IEventBus } from '@trading-bot/event-bus';
+import type { IExchange } from '@trading-bot/exchange-client';
+import type { IFillSimulator } from '@trading-bot/order-executor';
+import type {
+  AccountBalance,
+  Candle,
+  FeeStructure,
+  OrderBookDiff,
+  OrderBookSnapshot,
+  OrderRequest,
+  OrderResult,
+  Position,
+  SlippageModel,
+  Tick,
+  Timeframe,
+} from '@trading-bot/types';
+
+interface BacktestExchangeConfig {
+  feeStructure: FeeStructure;
+  slippageModel: SlippageModel;
+  initialBalance: number;
+}
+
+export class BacktestSimExchange implements IExchange, IFillSimulator {
+  private readonly bus: IEventBus;
+  private readonly feeStructure: FeeStructure;
+  private readonly slippageBps: number;
+  private readonly initialBalance: number;
+  private readonly currentPrices = new Map<string, number>();
+  private readonly handler: (data: { symbol: string; timeframe: Timeframe; candle: Candle }) => void;
+  private orderCounter = 0;
+
+  constructor(bus: IEventBus, config: BacktestExchangeConfig) {
+    this.bus = bus;
+    this.feeStructure = config.feeStructure;
+    this.initialBalance = config.initialBalance;
+
+    if (config.slippageModel.type !== 'fixed') {
+      throw new Error(
+        `BacktestSimExchange: only 'fixed' slippage model supported, got '${config.slippageModel.type}'`,
+      );
+    }
+    this.slippageBps = config.slippageModel.fixedBps ?? 0;
+
+    this.handler = (data) => {
+      this.currentPrices.set(data.symbol, data.candle.close);
+    };
+    bus.on('candle:close', this.handler);
+  }
+
+  // --- IFillSimulator ---
+
+  simulateFill(request: OrderRequest): OrderResult {
+    const currentPrice = this.currentPrices.get(request.symbol);
+    if (currentPrice === undefined) {
+      return this.makeRejected(request, 'No price data for symbol');
+    }
+
+    const slippageMult = this.slippageBps / 10_000;
+
+    switch (request.type) {
+      case 'MARKET':
+        return this.fillMarket(request, currentPrice, slippageMult);
+      case 'LIMIT':
+        return this.fillLimit(request, currentPrice);
+      case 'STOP_MARKET':
+        return this.fillStop(request, currentPrice, slippageMult);
+      case 'TAKE_PROFIT_MARKET':
+        return this.fillTakeProfit(request, currentPrice, slippageMult);
+    }
+  }
+
+  private fillMarket(request: OrderRequest, basePrice: number, slippageMult: number): OrderResult {
+    const direction = request.side === 'BUY' ? 1 : -1;
+    const fillPrice = basePrice * (1 + direction * slippageMult);
+    return this.makeFilled(request, fillPrice);
+  }
+
+  private fillLimit(request: OrderRequest, currentPrice: number): OrderResult {
+    if (request.price === undefined) {
+      return this.makeRejected(request, 'LIMIT order requires price');
+    }
+    // BUY LIMIT fills when market <= limit; SELL LIMIT fills when market >= limit
+    const canFill =
+      request.side === 'BUY' ? currentPrice <= request.price : currentPrice >= request.price;
+    if (!canFill) {
+      return this.makeRejected(request, 'LIMIT price not crossed');
+    }
+    return this.makeFilled(request, request.price);
+  }
+
+  private fillStop(request: OrderRequest, currentPrice: number, slippageMult: number): OrderResult {
+    if (request.stopPrice === undefined) {
+      return this.makeRejected(request, 'STOP_MARKET requires stopPrice');
+    }
+    // BUY STOP triggers when price >= stop; SELL STOP triggers when price <= stop
+    const triggered =
+      request.side === 'BUY' ? currentPrice >= request.stopPrice : currentPrice <= request.stopPrice;
+    if (!triggered) {
+      return this.makeRejected(request, 'STOP_MARKET not triggered');
+    }
+    const direction = request.side === 'BUY' ? 1 : -1;
+    const fillPrice = request.stopPrice * (1 + direction * slippageMult);
+    return this.makeFilled(request, fillPrice);
+  }
+
+  private fillTakeProfit(request: OrderRequest, currentPrice: number, slippageMult: number): OrderResult {
+    if (request.stopPrice === undefined) {
+      return this.makeRejected(request, 'TAKE_PROFIT_MARKET requires stopPrice');
+    }
+    // BUY TP triggers when price <= stop; SELL TP triggers when price >= stop
+    const triggered =
+      request.side === 'BUY' ? currentPrice <= request.stopPrice : currentPrice >= request.stopPrice;
+    if (!triggered) {
+      return this.makeRejected(request, 'TAKE_PROFIT_MARKET not triggered');
+    }
+    const direction = request.side === 'BUY' ? 1 : -1;
+    const fillPrice = request.stopPrice * (1 + direction * slippageMult);
+    return this.makeFilled(request, fillPrice);
+  }
+
+  private makeFilled(request: OrderRequest, fillPrice: number): OrderResult {
+    const fee = request.quantity * fillPrice * this.feeStructure.taker;
+    this.orderCounter += 1;
+    return {
+      orderId: `sim-${this.orderCounter}`,
+      clientOrderId: request.clientOrderId ?? `sim-${this.orderCounter}`,
+      symbol: request.symbol,
+      side: request.side,
+      type: request.type,
+      status: 'FILLED',
+      price: fillPrice,
+      avgPrice: fillPrice,
+      quantity: request.quantity,
+      filledQuantity: request.quantity,
+      commission: fee,
+      commissionAsset: 'USDT',
+      timestamp: Date.now(),
+      latencyMs: 0,
+    };
+  }
+
+  private makeRejected(request: OrderRequest, _reason: string): OrderResult {
+    this.orderCounter += 1;
+    return {
+      orderId: `sim-${this.orderCounter}`,
+      clientOrderId: request.clientOrderId ?? `sim-${this.orderCounter}`,
+      symbol: request.symbol,
+      side: request.side,
+      type: request.type,
+      status: 'REJECTED',
+      price: 0,
+      avgPrice: 0,
+      quantity: request.quantity,
+      filledQuantity: 0,
+      commission: 0,
+      commissionAsset: 'USDT',
+      timestamp: Date.now(),
+      latencyMs: 0,
+    };
+  }
+
+  dispose(): void {
+    this.bus.off('candle:close', this.handler);
+  }
+
+  // --- IExchange stubs (not used during replay) ---
+
+  getCandles(): Promise<Candle[]> {
+    return Promise.resolve([]);
+  }
+
+  getOrderBook(symbol: string): Promise<OrderBookSnapshot> {
+    return Promise.resolve({ symbol, timestamp: 0, bids: [], asks: [] });
+  }
+
+  subscribeCandles(_s: string, _t: Timeframe, _cb: (c: Candle) => void): () => void {
+    return () => {};
+  }
+
+  subscribeTicks(_s: string, _cb: (t: Tick) => void): () => void {
+    return () => {};
+  }
+
+  subscribeOrderBookDiff(_s: string, _cb: (d: OrderBookDiff) => void): () => void {
+    return () => {};
+  }
+
+  placeOrder(request: OrderRequest): Promise<OrderResult> {
+    return Promise.resolve(this.simulateFill(request));
+  }
+
+  cancelOrder(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  getOpenOrders(): Promise<OrderResult[]> {
+    return Promise.resolve([]);
+  }
+
+  getPosition(): Promise<Position | null> {
+    return Promise.resolve(null);
+  }
+
+  getPositions(): Promise<Position[]> {
+    return Promise.resolve([]);
+  }
+
+  setLeverage(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  getBalance(): Promise<AccountBalance[]> {
+    return Promise.resolve([
+      { asset: 'USDT', free: this.initialBalance, locked: 0, total: this.initialBalance },
+    ]);
+  }
+
+  getFees(): Promise<FeeStructure> {
+    return Promise.resolve(this.feeStructure);
+  }
+
+  connect(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  disconnect(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  isConnected(): boolean {
+    return true;
+  }
+}

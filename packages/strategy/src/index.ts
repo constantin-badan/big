@@ -7,3 +7,4 @@ export type {
   SignalBuffer,
   SweepParamGrid,
 } from './types';
+export { Strategy, passthroughMerge } from './strategy';

@@ -1,4 +1,4 @@
-import type { OrderRequest, SubmissionReceipt } from '@trading-bot/types';
+import type { OrderRequest, OrderResult, SubmissionReceipt } from '@trading-bot/types';
 
 export interface OrderExecutorConfig {
   maxRetries: number;
@@ -13,4 +13,8 @@ export interface IOrderExecutor {
   getPendingCount(): number;
   start(): Promise<void>;
   stop(): Promise<void>;
+}
+
+export interface IFillSimulator {
+  simulateFill(request: OrderRequest): OrderResult; // sync
 }

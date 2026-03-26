@@ -10,5 +10,8 @@
   },
   "dependencies": {
     "@trading-bot/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@trading-bot/test-utils": "workspace:*"
   }
 }
