@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "options": {
+    "typeAware": true
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts"],
+      "rules": {
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-assignment": "off"
+      }
+    }
+  ],
+  "rules": {
+    "typescript/no-explicit-any": "deny",
+    "typescript/consistent-type-assertions": [
+      "deny",
+      { "assertionStyle": "never" }
+    ],
+    "typescript/no-unsafe-assignment": "deny",
+    "typescript/no-unsafe-argument": "deny",
+    "typescript/no-unsafe-member-access": "deny",
+    "typescript/no-unsafe-return": "deny",
+    "typescript/no-floating-promises": "deny"
+  }
+}

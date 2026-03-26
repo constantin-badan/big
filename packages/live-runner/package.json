@@ -5,8 +5,8 @@
   "main": "src/index.ts",
   "scripts": {
     "test": "bun test",
-    "lint": "oxlint ./src",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "oxlint ./src --config ../../.oxlintrc.json"
   },
   "dependencies": {
     "@trading-bot/types": "workspace:*",

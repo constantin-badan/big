@@ -3,6 +3,9 @@
     "editor.defaultFormatter": "oxc.oxc-vscode",
     "editor.formatOnSave": true
   },
+  "typescript.experimental.useTsgo": true,
   "oxc.lint.enable": true,
+  "oxc.typeAware": true,
+  "oxc.tsConfigPath": "./tsconfig.json",
   "oxc.format.enable": true
 }
