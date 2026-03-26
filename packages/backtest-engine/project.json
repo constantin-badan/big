@@ -1,0 +1,4 @@
+{
+  "name": "@trading-bot/backtest-engine",
+  "tags": ["scope:backtest-engine"]
+}

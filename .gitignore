@@ -1,0 +1,6 @@
+node_modules
+dist
+.nx
+.eslintcache
+*.tsbuildinfo
+bun.lock

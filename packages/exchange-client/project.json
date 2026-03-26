@@ -1,0 +1,4 @@
+{
+  "name": "@trading-bot/exchange-client",
+  "tags": ["scope:exchange-client"]
+}

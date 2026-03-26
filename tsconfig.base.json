@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "paths": {
+      "@trading-bot/types": ["./packages/types/src/index.ts"],
+      "@trading-bot/event-bus": ["./packages/event-bus/src/index.ts"],
+      "@trading-bot/exchange-client": ["./packages/exchange-client/src/index.ts"],
+      "@trading-bot/indicators": ["./packages/indicators/src/index.ts"],
+      "@trading-bot/data-feed": ["./packages/data-feed/src/index.ts"],
+      "@trading-bot/position-manager": ["./packages/position-manager/src/index.ts"],
+      "@trading-bot/risk-manager": ["./packages/risk-manager/src/index.ts"],
+      "@trading-bot/order-executor": ["./packages/order-executor/src/index.ts"],
+      "@trading-bot/scanner": ["./packages/scanner/src/index.ts"],
+      "@trading-bot/strategy": ["./packages/strategy/src/index.ts"],
+      "@trading-bot/backtest-engine": ["./packages/backtest-engine/src/index.ts"],
+      "@trading-bot/sweep-engine": ["./packages/sweep-engine/src/index.ts"],
+      "@trading-bot/live-runner": ["./packages/live-runner/src/index.ts"],
+      "@trading-bot/arena": ["./packages/arena/src/index.ts"],
+      "@trading-bot/evolver": ["./packages/evolver/src/index.ts"],
+      "@trading-bot/parity-checker": ["./packages/parity-checker/src/index.ts"],
+      "@trading-bot/reporting": ["./packages/reporting/src/index.ts"],
+      "@trading-bot/test-utils": ["./packages/test-utils/src/index.ts"]
+    }
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "name": "@trading-bot/order-executor",
+  "tags": ["scope:order-executor"]
+}

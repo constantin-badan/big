@@ -1,0 +1,16 @@
+{
+  "name": "@trading-bot/sweep-engine",
+  "version": "0.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "bun test",
+    "lint": "oxlint ./src",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@trading-bot/types": "workspace:*",
+    "@trading-bot/backtest-engine": "workspace:*",
+    "@trading-bot/strategy": "workspace:*"
+  }
+}

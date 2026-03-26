@@ -1,0 +1,21 @@
+{
+  "name": "trading-bot",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "format": "oxfmt --write packages/",
+    "format:check": "oxfmt --check packages/",
+    "lint:boundaries": "eslint --no-eslintrc -c .eslintrc.json 'packages/*/src/**/*.ts'"
+  },
+  "devDependencies": {
+    "@nx/eslint-plugin": "^22.6.1",
+    "@nx/js": "^22.6.1",
+    "@types/bun": "^1.3.11",
+    "@typescript-eslint/parser": "^8.57.2",
+    "eslint": "^10.1.0",
+    "nx": "^22.6.1",
+    "oxfmt": "^0.42.0",
+    "oxlint": "^1.57.0",
+    "typescript": "^6.0.2"
+  }
+}

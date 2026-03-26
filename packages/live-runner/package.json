@@ -1,0 +1,17 @@
+{
+  "name": "@trading-bot/live-runner",
+  "version": "0.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "bun test",
+    "lint": "oxlint ./src",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@trading-bot/types": "workspace:*",
+    "@trading-bot/event-bus": "workspace:*",
+    "@trading-bot/exchange-client": "workspace:*",
+    "@trading-bot/strategy": "workspace:*"
+  }
+}

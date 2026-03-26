@@ -1,0 +1,18 @@
+{
+  "name": "@trading-bot/strategy",
+  "version": "0.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "bun test",
+    "lint": "oxlint ./src",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@trading-bot/types": "workspace:*",
+    "@trading-bot/event-bus": "workspace:*",
+    "@trading-bot/scanner": "workspace:*",
+    "@trading-bot/position-manager": "workspace:*",
+    "@trading-bot/risk-manager": "workspace:*"
+  }
+}

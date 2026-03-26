@@ -1,0 +1,14 @@
+{
+  "name": "@trading-bot/event-bus",
+  "version": "0.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "bun test",
+    "lint": "oxlint ./src",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@trading-bot/types": "workspace:*"
+  }
+}
