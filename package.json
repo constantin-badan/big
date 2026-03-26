@@ -5,7 +5,10 @@
   "scripts": {
     "format": "oxfmt --write packages/",
     "format:check": "oxfmt --check packages/",
-    "lint:boundaries": "eslint --no-eslintrc -c .eslintrc.json 'packages/*/src/**/*.ts'"
+    "lint:boundaries": "eslint 'packages/*/src/**/*.ts'",
+    "lint": "nx run-many -t lint",
+    "typecheck": "nx run-many -t typecheck",
+    "test": "nx run-many -t test"
   },
   "devDependencies": {
     "@nx/eslint-plugin": "^22.6.1",

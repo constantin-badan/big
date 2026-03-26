@@ -2,12 +2,15 @@
 set -e
 
 echo "Running lint..."
-npx nx run-many -t lint
+npx nx affected -t lint
 
 echo "Running typecheck..."
-npx nx run-many -t typecheck
+npx nx affected -t typecheck
 
 echo "Running tests..."
-npx nx run-many -t test
+npx nx affected -t test
+
+echo "Running boundary checks..."
+npx eslint 'packages/*/src/**/*.ts'
 
 echo "All checks passed."
