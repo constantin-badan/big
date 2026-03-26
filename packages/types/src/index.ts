@@ -110,6 +110,7 @@ export interface Signal {
   symbol: string;
   action: SignalAction;
   confidence: number;
+  price: number; // last close price at signal time — used by position-manager for entry sizing
   timestamp: number;
   sourceScanner: string;
   metadata: Record<string, unknown>;
@@ -140,6 +141,10 @@ export type RiskRule =
   | 'COOLDOWN';
 
 export type RiskSeverity = 'REJECT' | 'KILL';
+
+export type RiskCheckResult =
+  | { allowed: true; quantity: number } // quantity = balance * maxPositionSizePct * leverage / entryPrice
+  | { allowed: false; rule: RiskRule; reason: string; severity: RiskSeverity };
 
 // === Backtest ===
 
@@ -228,5 +233,5 @@ export interface BacktestConfig {
   startTime: number;
   endTime: number;
   symbols: string[];
-  timeframe: Timeframe;
+  timeframes: Timeframe[]; // plural — engine calls loader for every symbol × timeframe combination
 }

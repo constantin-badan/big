@@ -3,6 +3,7 @@
 Use this prompt with an AI coding assistant (or Claude Code) to lay down the Bun + Nx monorepo foundation for the scalper bot. Feed the referenced docs as context alongside this prompt.
 
 **Reference docs (include all of these):**
+
 - [architecture.md](./architecture.md) — Architectural decisions and rationale
 - [types.md](./types.md) — All shared domain types
 - [interfaces.md](./interfaces.md) — All package interface definitions

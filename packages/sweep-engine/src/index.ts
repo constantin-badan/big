@@ -1,1 +1,1 @@
-export type { ISweepEngine, SweepConfig, SweepResult } from './types';
+export type { ISweepEngine, SweepResult, CreateSweepEngine } from './types';

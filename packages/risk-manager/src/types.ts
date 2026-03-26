@@ -1,4 +1,4 @@
-import type { RiskRule, RiskSeverity, Signal } from '@trading-bot/types';
+import type { RiskCheckResult, Signal } from '@trading-bot/types';
 
 export interface RiskConfig {
   maxPositionSizePct: number;
@@ -7,14 +7,12 @@ export interface RiskConfig {
   maxDrawdownPct: number;
   maxDailyTrades: number;
   cooldownAfterLossMs: number;
+  leverage: number; // default 1 for spot; quantity = balance * pct * leverage / price
+  initialBalance: number; // balance tracked internally via position:closed PnL
 }
 
-export type RiskCheckResult =
-  | { allowed: true }
-  | { allowed: false; rule: RiskRule; reason: string; severity: RiskSeverity };
-
 export interface IRiskManager {
-  checkEntry(signal: Signal): RiskCheckResult;
+  checkEntry(signal: Signal, entryPrice: number): RiskCheckResult;
   isKillSwitchActive(): boolean;
   reset(): void;
   dispose(): void;

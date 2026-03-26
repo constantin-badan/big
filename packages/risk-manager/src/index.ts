@@ -1,1 +1,1 @@
-export type { IRiskManager, RiskConfig, RiskCheckResult } from './types';
+export type { IRiskManager, RiskConfig } from './types';

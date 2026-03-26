@@ -42,6 +42,7 @@ const longSignal: Signal = {
   symbol: 'BTCUSDT',
   action: 'ENTER_LONG',
   confidence: 0.85,
+  price: 50020,
   timestamp: BASE_TIME,
   sourceScanner: 'test-scanner',
   metadata: {},
@@ -51,6 +52,7 @@ const shortSignal: Signal = {
   symbol: 'BTCUSDT',
   action: 'ENTER_SHORT',
   confidence: 0.75,
+  price: 50020,
   timestamp: BASE_TIME,
   sourceScanner: 'test-scanner',
   metadata: {},
@@ -60,6 +62,7 @@ const exitSignal: Signal = {
   symbol: 'BTCUSDT',
   action: 'EXIT',
   confidence: 1.0,
+  price: 50020,
   timestamp: BASE_TIME,
   sourceScanner: 'test-scanner',
   metadata: {},
@@ -135,6 +138,8 @@ const defaultRiskConfig: RiskConfig = {
   maxDrawdownPct: 10,
   maxDailyTrades: 20,
   cooldownAfterLossMs: 60000,
+  leverage: 1,
+  initialBalance: 10000,
 };
 
 const defaultPositionManagerConfig: PositionManagerConfig = {

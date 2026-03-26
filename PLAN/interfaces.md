@@ -9,8 +9,18 @@ All interface and type definitions for each package. Types referenced here are f
 The most important interface. Abstracts all exchange interaction so that backtest, testnet, and live are swappable. See [ADR-5](./architecture.md#adr-5-raw-streams-in-iexchange-semantics-in-data-feed).
 
 ```typescript
-import type { Candle, Tick, OrderRequest, OrderResult, Position,
-  AccountBalance, FeeStructure, OrderBookSnapshot, OrderBookDiff, Timeframe } from '@trading-bot/types';
+import type {
+  Candle,
+  Tick,
+  OrderRequest,
+  OrderResult,
+  Position,
+  AccountBalance,
+  FeeStructure,
+  OrderBookSnapshot,
+  OrderBookDiff,
+  Timeframe,
+} from '@trading-bot/types';
 
 export interface IExchange {
   // Market data (REST)
@@ -29,7 +39,11 @@ export interface IExchange {
 
   // Fires on EVERY kline update — forming (isClosed=false) AND closed (isClosed=true).
   // data-feed filters closes and routes to the appropriate event bus event.
-  subscribeCandles(symbol: string, timeframe: Timeframe, callback: (candle: Candle) => void): () => void;
+  subscribeCandles(
+    symbol: string,
+    timeframe: Timeframe,
+    callback: (candle: Candle) => void,
+  ): () => void;
 
   // Fires on every aggTrade — already 1:1 with Binance's stream.
   subscribeTicks(symbol: string, callback: (tick: Tick) => void): () => void;
@@ -80,26 +94,29 @@ Typed, synchronous event emitter. Backbone that prevents lookahead bias. See [AD
 export interface TradingEventMap {
   // Market data
   'candle:close': { symbol: string; timeframe: Timeframe; candle: Candle };
-  'candle:update': { symbol: string; timeframe: Timeframe; candle: Candle };  // forming candle
-  'tick': { symbol: string; tick: Tick };
+  'candle:update': { symbol: string; timeframe: Timeframe; candle: Candle }; // forming candle
+  tick: { symbol: string; tick: Tick };
 
   // Signals — two-tier routing (see ADR-9):
   //   scanner:signal = raw output from a single scanner (may need merging)
   //   signal         = actionable signal after strategy's merge logic
   // Position-manager subscribes to 'signal' only. Strategy subscribes to 'scanner:signal'.
-  'scanner:signal': { signal: Signal };   // emitted by scanners
-  'signal': { signal: Signal };           // emitted by strategy after merge
+  'scanner:signal': { signal: Signal }; // emitted by scanners
+  signal: { signal: Signal }; // emitted by strategy after merge
 
   // Orders — note: order:submitted is SYNC (enqueued), order:filled is ASYNC (result arrived)
-  'order:submitted': { receipt: SubmissionReceipt };   // fired immediately by submit()
-  'order:filled': { order: OrderResult };              // fired when the exchange confirms fill
+  'order:submitted': { receipt: SubmissionReceipt }; // fired immediately by submit()
+  'order:filled': { order: OrderResult }; // fired when the exchange confirms fill
   'order:rejected': { clientOrderId: string; reason: string };
   'order:canceled': { order: OrderResult };
 
   // Positions
   'position:opened': { position: Position };
   'position:updated': { position: Position };
-  'position:closed': { position: Position; pnl: number };
+  'position:closed': { position: Position; trade: TradeRecord };
+  // pnl is available as trade.pnl — single source of truth, no duplication.
+  // position-manager builds the full TradeRecord (entry/exit prices, fees, slippage,
+  // exitReason) — it's the only component that knows all these fields.
 
   // Risk (RiskRule and RiskSeverity imported from @trading-bot/types)
   'risk:breach': { rule: RiskRule; message: string; severity: RiskSeverity };
@@ -125,21 +142,24 @@ export interface TradingEventMap {
   'exchange:gap': {
     stream: ExchangeStream;
     symbol: string;
-    fromTimestamp: number;   // last known good data point
-    toTimestamp: number;     // first data point after reconnect
-    missedCandles?: number;  // estimated, for kline streams
+    fromTimestamp: number; // last known good data point
+    toTimestamp: number; // first data point after reconnect
+    missedCandles?: number; // estimated, for kline streams
     timestamp: number;
   };
 
   // System
-  'error': { source: string; error: Error; context?: Record<string, unknown> };
+  error: { source: string; error: Error; context?: Record<string, unknown> };
 }
 
 export interface IEventBus {
   on<K extends keyof TradingEventMap>(event: K, handler: (data: TradingEventMap[K]) => void): void;
   off<K extends keyof TradingEventMap>(event: K, handler: (data: TradingEventMap[K]) => void): void;
   emit<K extends keyof TradingEventMap>(event: K, data: TradingEventMap[K]): void;
-  once<K extends keyof TradingEventMap>(event: K, handler: (data: TradingEventMap[K]) => void): void;
+  once<K extends keyof TradingEventMap>(
+    event: K,
+    handler: (data: TradingEventMap[K]) => void,
+  ): void;
   removeAllListeners(event?: keyof TradingEventMap): void;
 
   // Debug / monitoring
@@ -148,6 +168,7 @@ export interface IEventBus {
 ```
 
 **Implement this fully** with an `EventBus` class. It should be:
+
 - Synchronous (handlers run inline, not deferred — critical for deterministic backtesting)
 - Type-safe (wrong event/payload combos are compile errors)
 - Handler signatures are `(data: T) => void` — NOT `(data: T) => Promise<void>`. The type system enforces this: if a handler returns a Promise, TypeScript should flag it as a type error.
@@ -165,9 +186,9 @@ See [ADR-6](./architecture.md#adr-6-indicator-and-scanner-factory-pattern).
 ```typescript
 export interface IIndicator<TConfig = unknown, TOutput = number> {
   readonly name: string;
-  readonly warmupPeriod: number;   // how many candles needed before output is valid
-  readonly config: TConfig;        // exposed for logging, reporting, sweep output
-  update(candle: Candle): TOutput | null;  // null during warmup
+  readonly warmupPeriod: number; // how many candles needed before output is valid
+  readonly config: TConfig; // exposed for logging, reporting, sweep output
+  update(candle: Candle): TOutput | null; // null during warmup
   reset(): void;
   // No clone() — use IndicatorFactory to create fresh instances instead.
   // This avoids deep-copy bugs with nested indicator state (e.g., EMA feeding EMA).
@@ -176,8 +197,9 @@ export interface IIndicator<TConfig = unknown, TOutput = number> {
 // A factory is just a function that creates a fresh, stateless indicator instance.
 // Scanners hold factories (not instances) so each backtest run / parallel strategy
 // gets independent state by calling the factory. No shared mutable state is possible.
-export type IndicatorFactory<TConfig = unknown, TOutput = number> =
-  (config: TConfig) => IIndicator<TConfig, TOutput>;
+export type IndicatorFactory<TConfig = unknown, TOutput = number> = (
+  config: TConfig,
+) => IIndicator<TConfig, TOutput>;
 ```
 
 ---
@@ -240,9 +262,9 @@ export interface PositionManagerConfig {
   defaultStopLossPct: number;
   defaultTakeProfitPct: number;
   trailingStopEnabled: boolean;
-  trailingStopActivationPct: number;  // profit % to activate trailing
-  trailingStopDistancePct: number;    // distance from peak
-  maxHoldTimeMs: number;              // timeout exit
+  trailingStopActivationPct: number; // profit % to activate trailing
+  trailingStopDistancePct: number; // distance from peak
+  maxHoldTimeMs: number; // timeout exit
 }
 
 // Position lifecycle: IDLE → PENDING_ENTRY → OPEN → PENDING_EXIT → IDLE
@@ -255,10 +277,19 @@ export type PositionState = 'IDLE' | 'PENDING_ENTRY' | 'OPEN' | 'PENDING_EXIT';
 export interface IPositionManager {
   // REACTIVE — constructor receives (eventBus, orderExecutor, riskManager, config)
   // and subscribes to events immediately (see ADR-8):
-  //   - 'tick'            → evaluates SL/TP/trailing on open positions
-  //   - 'signal'          → calls riskManager.checkEntry(), then orderExecutor.submit()
+  //   - 'tick'            → updates lastTickPrice[symbol]; evaluates SL/TP/trailing on open positions
+  //   - 'candle:close'    → evaluates SL/TP against candle.high/low (backtest path — no ticks)
+  //                         SL-wins tiebreak if both SL and TP hit in same candle
+  //   - 'signal'          → calls riskManager.checkEntry(signal, lastTickPrice) — if allowed,
+  //                         uses result.quantity in the OrderRequest to orderExecutor.submit()
+  //                         Falls back to signal.price if no tick seen yet for that symbol
   //   - 'order:filled'    → transitions PENDING_ENTRY → OPEN or PENDING_EXIT → IDLE
+  //                         Builds TradeRecord on exit fills
   //   - 'order:rejected'  → transitions PENDING_ENTRY → IDLE or PENDING_EXIT → OPEN
+  //
+  // On position close, emits 'position:closed' with the full TradeRecord (entry/exit
+  // prices, fees, slippage, exitReason). Position-manager is the only component that
+  // knows all these fields.
   //
   // No onTick(), onSignal(), onOrderFilled() methods — the bus delivers events directly.
 
@@ -284,12 +315,14 @@ See [ADR-7](./architecture.md#adr-7-reactive-risk-manager-with-structured-result
 // (they live there because TradingEventMap in event-bus also references RiskRule).
 
 export interface RiskConfig {
-  maxPositionSizePct: number;     // max % of balance per position
+  maxPositionSizePct: number; // max % of balance per position
   maxConcurrentPositions: number;
-  maxDailyLossPct: number;        // kill switch (severity: KILL)
-  maxDrawdownPct: number;         // kill switch (severity: KILL)
+  maxDailyLossPct: number; // kill switch (severity: KILL)
+  maxDrawdownPct: number; // kill switch (severity: KILL)
   maxDailyTrades: number;
-  cooldownAfterLossMs: number;    // wait after a losing trade
+  cooldownAfterLossMs: number; // wait after a losing trade
+  leverage: number; // default 1 for spot; sizing = balance * pct * leverage / price
+  initialBalance: number; // starting balance; updated internally via position:closed PnL
 }
 
 export interface IRiskManager {
@@ -297,13 +330,15 @@ export interface IRiskManager {
   // its own internal state from events:
   //   - 'order:filled'     → tracks trade count, last trade timestamp
   //   - 'position:opened'  → tracks concurrent position count
-  //   - 'position:closed'  → tracks PnL, drawdown, daily loss
-  //   - balance updates    → tracks current balance
+  //   - 'position:closed'  → tracks PnL, drawdown, daily loss, running balance
   //
-  // checkEntry only needs the signal — the risk manager already knows
-  // the balance, open positions, trade count, and last loss timestamp.
-  // No caller-provided context needed (see ADR-7).
-  checkEntry(signal: Signal): RiskCheckResult;
+  // Balance is reconstructed from initialBalance + Σ(trade.pnl) via position:closed events.
+  // Drawdown is measured against peak REALIZED equity, not unrealized.
+  //
+  // checkEntry needs the signal + entryPrice (last tick price from position-manager).
+  // entryPrice is needed for position sizing: quantity = (balance * pct * leverage) / price.
+  // The risk manager doesn't subscribe to ticks itself — price comes from the caller.
+  checkEntry(signal: Signal, entryPrice: number): RiskCheckResult;
 
   // Quick probe — is the kill switch active? (max daily loss or max drawdown breached)
   // Other components can check this without submitting a fake signal.
@@ -327,7 +362,7 @@ See [ADR-2](./architecture.md#adr-2-synchronous-event-bus) for the sync `submit(
 export interface OrderExecutorConfig {
   maxRetries: number;
   retryDelayMs: number;
-  rateLimitPerMinute: number;    // Binance limits
+  rateLimitPerMinute: number; // Binance limits
 }
 
 export interface IOrderExecutor {
@@ -361,7 +396,7 @@ See [ADR-6](./architecture.md#adr-6-indicator-and-scanner-factory-pattern), [ADR
 ```typescript
 export interface IScannerConfig {
   symbols: string[];
-  timeframe: Timeframe;             // each scanner operates on ONE timeframe
+  timeframe: Timeframe; // each scanner operates on ONE timeframe
   // Factories, NOT instances. Each backtest run / parallel strategy calls these
   // to create independent indicator instances. No shared mutable state.
   indicators: Record<string, IndicatorFactory>;
@@ -408,9 +443,9 @@ export type SignalBuffer = Map<string, Signal[]>;
 // Returns an actionable signal (emitted as 'signal' on the bus) or null (not yet).
 // For single-scanner strategies, this is a simple pass-through: (trigger) => trigger
 export type SignalMerge = (
-  trigger: Signal,           // the scanner:signal that just arrived
-  buffer: SignalBuffer,      // recent signals from all scanners, time-windowed
-) => Signal | null;          // null = no actionable signal yet
+  trigger: Signal, // the scanner:signal that just arrived
+  buffer: SignalBuffer, // recent signals from all scanners, time-windowed
+) => Signal | null; // null = no actionable signal yet
 
 export interface StrategyConfig {
   name: string;
@@ -418,9 +453,9 @@ export interface StrategyConfig {
   // No single timeframe — each scanner carries its own (see ADR-9).
   // These are INSTANCES for a single run — created fresh via factories by the engine.
   // All components are already wired to the event bus via their constructors (ADR-8).
-  scanners: IScanner[];              // one or more, each on its own timeframe
-  signalMerge: SignalMerge;          // composites — pass-through for single scanner
-  signalBufferWindowMs: number;      // how long to keep signals (e.g., 4h for multi-TF)
+  scanners: IScanner[]; // one or more, each on its own timeframe
+  signalMerge: SignalMerge; // composites — pass-through for single scanner
+  signalBufferWindowMs: number; // how long to keep signals (e.g., 4h for multi-TF)
   positionManager: IPositionManager;
   riskManager: IRiskManager;
 }
@@ -434,22 +469,45 @@ export interface IStrategy {
   readonly name: string;
   start(): Promise<void>;
   stop(): Promise<void>;
+
+  // LIVE-ONLY — returns running performance metrics during live trading.
+  // In backtest mode, metrics come from BacktestResult (computed by the engine
+  // via reporting.computeMetrics), not from the strategy. getStats() returns
+  // stub zeros in backtest — that's intentional, not a bug.
+  // Phase 2 implementation returns all zeros; Phase 3 live-runner populates it.
   getStats(): PerformanceMetrics;
 }
 
+// === Strategy environment — provided by the runner, not the factory ===
+// The runner (backtest-engine or live-runner) owns the environment:
+// bus, exchange, executor. These differ between backtest and live.
+// The factory builds the strategy-specific parts (scanners, risk, position mgr)
+// and wires them to the environment the runner provides.
+export interface StrategyDeps {
+  bus: IEventBus;
+  exchange: IExchange;
+  executor: IOrderExecutor;
+}
+
 // === Strategy factory for sweep/arena ===
-// A function that takes a numeric parameter vector and returns a fully wired IStrategy.
-// The user writes this once per strategy — it captures all wiring knowledge:
-// which indicators, which scanner, which risk config, which merge function.
+// A function that takes a numeric parameter vector + environment deps
+// and returns a fully wired IStrategy.
 //
-// CRITICAL: Each invocation MUST create its own EventBus. If two strategy instances
-// share a bus, one run's events contaminate the other. The bus is created INSIDE
-// the factory body, never closed over from outside.
+// The factory builds the STRATEGY-SPECIFIC parts:
+//   - Scanners (which indicators, which timeframes)
+//   - RiskManager (which rules, what thresholds)
+//   - PositionManager (SL/TP config, trailing stops)
+//   - SignalMerge (how to combine multi-scanner signals)
+//
+// The factory does NOT create:
+//   - EventBus — runner creates it (isolation between runs)
+//   - IExchange — runner creates it (backtest-sim vs binance-live)
+//   - IOrderExecutor — runner creates it (sync fill vs async queue)
 //
 // Params are Record<string, number> because sweep parameters are almost always
 // numeric (periods, percentages, thresholds). Non-numeric config (symbols, timeframe,
 // merge function) is fixed in the factory closure — it doesn't vary across a sweep.
-export type StrategyFactory = (params: Record<string, number>) => IStrategy;
+export type StrategyFactory = (params: Record<string, number>, deps: StrategyDeps) => IStrategy;
 
 // Param grid for sweep-engine: each key maps to an array of values to try.
 // Sweep-engine computes the cartesian product to get all param combinations.
@@ -461,9 +519,42 @@ export type SweepParamGrid = Record<string, number[]>;
 ## `backtest-engine`
 
 ```typescript
+// Loads historical candle data for backtest replay.
+// Engine calls this for every symbol × timeframe combination in BacktestConfig.
+// In tests: async () => fixtures.candles
+// In production: reads parquet files, queries DB, or fetches from REST
+export type CandleLoader = (
+  symbol: string,
+  timeframe: Timeframe,
+  startTime: number,
+  endTime: number,
+) => Promise<Candle[]>;
+
 export interface IBacktestEngine {
-  run(config: BacktestConfig, strategy: IStrategy): Promise<BacktestResult>;
+  // Runs a SINGLE backtest. The engine:
+  //   1. Creates bus, exchange (backtest-sim), executor, data-feed (replay)
+  //   2. For each symbol × timeframe, calls loader to get candles
+  //   3. Creates ReplayDataFeed(bus, candles) — pure replayer, no I/O
+  //   4. Calls factory(params, { bus, exchange, executor }) → strategy
+  //   5. Starts replay → candles pump through bus → full pipeline
+  //   6. Subscribes to position:closed to collect TradeRecord[]
+  //   7. After replay, calls computeMetrics() from reporting
+  //   8. Returns BacktestResult
+  //
+  // The factory receives the environment so the strategy's components
+  // wire to the same bus the data-feed emits on.
+  run(
+    factory: StrategyFactory,
+    params: Record<string, number>,
+    config: BacktestConfig,
+  ): Promise<BacktestResult>;
 }
+
+// Engine is constructed with the loader — shared across all runs in a sweep
+export function createBacktestEngine(
+  loader: CandleLoader,
+  exchangeConfig: ExchangeConfig, // must be 'backtest-sim' variant
+): IBacktestEngine;
 ```
 
 ---
@@ -471,33 +562,31 @@ export interface IBacktestEngine {
 ## `sweep-engine`
 
 ```typescript
-export interface SweepConfig {
-  backtestConfig: BacktestConfig;     // time range, symbols
-  exchangeConfig: ExchangeConfig;     // must be 'backtest-sim' variant
-}
-
 export interface SweepResult {
   params: Record<string, number>;
   result: BacktestResult;
 }
 
 export interface ISweepEngine {
-  // Takes a strategy factory + param grid, runs the cartesian product of params
-  // through the backtest engine. Each run gets a fresh strategy from the factory.
+  // Takes a strategy factory + param grid, computes the cartesian product,
+  // runs each combination through IBacktestEngine.run().
   // Returns results sorted by a metric (e.g., profitFactor, sharpeRatio).
   run(
     factory: StrategyFactory,
     grid: SweepParamGrid,
-    config: SweepConfig,
+    config: BacktestConfig,
   ): Promise<SweepResult[]>;
 }
+
+// Constructed with an IBacktestEngine (already configured with loader + exchangeConfig)
+export function createSweepEngine(engine: IBacktestEngine): ISweepEngine;
 ```
 
 ---
 
 ## `reporting`
 
-`KahanSum` is fully implemented in Phase 1. Rest is stub. See [ADR-1](./architecture.md#adr-1-floating-point-precision).
+`KahanSum` is fully implemented in Phase 1. `computeMetrics` is Phase 2. See [ADR-1](./architecture.md#adr-1-floating-point-precision).
 
 ```typescript
 // KahanSum — compensated summation to eliminate floating-point drift
@@ -510,7 +599,7 @@ export class KahanSum {
   add(value: number): void {
     const y = value - this.compensation;
     const t = this.sum + y;
-    this.compensation = (t - this.sum) - y;
+    this.compensation = t - this.sum - y;
     this.sum = t;
   }
 
@@ -523,9 +612,25 @@ export class KahanSum {
     this.compensation = 0;
   }
 }
+
+// Computes all PerformanceMetrics from a completed backtest's trade list.
+// Uses KahanSum internally for accumulated values (totalFees, totalSlippage, PnL sums).
+// Sharpe ratio conventions:
+//   - Risk-free rate: 0%
+//   - Annualization: √(periodsPerYear) derived from timeframe
+//   - Return series: equity-curve periodic returns (not trade-by-trade)
+// Called by backtest-engine after replay completes.
+export function computeMetrics(
+  trades: TradeRecord[],
+  timeframes: Timeframe[], // for Sharpe annualization — uses the finest timeframe
+  initialBalance: number,
+  startTime: number,
+  endTime: number,
+): PerformanceMetrics;
 ```
 
 **Tests for `KahanSum`:**
+
 - Sum 10,000 additions of `0.1` — naive `+=` gives `999.9999...98`, KahanSum gives exactly `1000`
 - Sum alternating `+large` / `-large` values with a small residual — verify the residual is preserved
 - Verify `reset()` zeroes both sum and compensation
@@ -568,10 +673,10 @@ export function createTestBus(): { bus: EventBus; capture: EventCapture };
 // Override specific methods via config or direct assignment.
 
 export interface MockExchangeConfig {
-  candles?: Candle[];               // getCandles() returns these
-  orderBook?: OrderBookSnapshot;    // getOrderBook() returns this
-  fees?: FeeStructure;              // getFees() returns this
-  balance?: AccountBalance[];       // getBalance() returns these
+  candles?: Candle[]; // getCandles() returns these
+  orderBook?: OrderBookSnapshot; // getOrderBook() returns this
+  fees?: FeeStructure; // getFees() returns this
+  balance?: AccountBalance[]; // getBalance() returns these
 }
 
 export function createMockExchange(config?: MockExchangeConfig): IExchange;
@@ -583,17 +688,14 @@ export function createMockExchange(config?: MockExchangeConfig): IExchange;
 // Tracks all submitted orders for assertions.
 
 export interface MockExecutorConfig {
-  syncFill?: boolean;               // default: true (backtest mode)
-  fillPrice?: number;               // default: order request price
-  commission?: number;              // default: 0
-  rejectAll?: boolean;              // submit() emits order:rejected instead
+  syncFill?: boolean; // default: true (backtest mode)
+  fillPrice?: number; // default: order request price
+  commission?: number; // default: 0
+  rejectAll?: boolean; // submit() emits order:rejected instead
   rejectReason?: string;
 }
 
-export function createMockExecutor(
-  bus: IEventBus,
-  config?: MockExecutorConfig
-): IOrderExecutor;
+export function createMockExecutor(bus: IEventBus, config?: MockExecutorConfig): IOrderExecutor;
 
 // === Fixtures — deterministic test data ===
 
@@ -627,6 +729,7 @@ export const fixtures: {
 ```
 
 **Tests for `test-utils` itself:**
+
 - `EventCapture` records events emitted on the bus, `get()` returns correct payloads, `clear()` resets, `dispose()` stops capturing
 - `createMockExchange` returns an IExchange where all methods resolve without error
 - `createMockExecutor` with `syncFill: true` emits `order:filled` synchronously on `submit()`

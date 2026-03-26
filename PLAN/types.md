@@ -11,8 +11,8 @@ All shared domain types. Every other package depends on this one.
 export type Timeframe = '1m' | '3m' | '5m' | '15m' | '1h' | '4h' | '1d';
 
 export interface Candle {
-  openTime: number;       // unix ms
-  closeTime: number;      // unix ms
+  openTime: number; // unix ms
+  closeTime: number; // unix ms
   open: number;
   high: number;
   low: number;
@@ -20,22 +20,22 @@ export interface Candle {
   volume: number;
   quoteVolume: number;
   trades: number;
-  isClosed: boolean;      // CRITICAL: false for the current forming candle
+  isClosed: boolean; // CRITICAL: false for the current forming candle
 }
 
 export interface Tick {
   symbol: string;
   price: number;
   quantity: number;
-  timestamp: number;      // unix ms
+  timestamp: number; // unix ms
   isBuyerMaker: boolean;
 }
 
 export interface OrderBookSnapshot {
   symbol: string;
   timestamp: number;
-  bids: [price: number, quantity: number][];  // sorted best (highest) first
-  asks: [price: number, quantity: number][];  // sorted best (lowest) first
+  bids: [price: number, quantity: number][]; // sorted best (highest) first
+  asks: [price: number, quantity: number][]; // sorted best (lowest) first
 }
 
 // Depth stream diff — used by subscribeOrderBookDiff().
@@ -43,8 +43,8 @@ export interface OrderBookSnapshot {
 export interface OrderBookDiff {
   symbol: string;
   timestamp: number;
-  bids: [price: number, quantity: number][];  // updated levels (qty=0 means remove)
-  asks: [price: number, quantity: number][];  // updated levels (qty=0 means remove)
+  bids: [price: number, quantity: number][]; // updated levels (qty=0 means remove)
+  asks: [price: number, quantity: number][]; // updated levels (qty=0 means remove)
   firstUpdateId: number;
   lastUpdateId: number;
 }
@@ -53,7 +53,13 @@ export interface OrderBookDiff {
 
 export type OrderSide = 'BUY' | 'SELL';
 export type OrderType = 'MARKET' | 'LIMIT' | 'STOP_MARKET' | 'TAKE_PROFIT_MARKET';
-export type OrderStatus = 'NEW' | 'PARTIALLY_FILLED' | 'FILLED' | 'CANCELED' | 'REJECTED' | 'EXPIRED';
+export type OrderStatus =
+  | 'NEW'
+  | 'PARTIALLY_FILLED'
+  | 'FILLED'
+  | 'CANCELED'
+  | 'REJECTED'
+  | 'EXPIRED';
 export type PositionSide = 'LONG' | 'SHORT';
 
 export interface OrderRequest {
@@ -61,8 +67,8 @@ export interface OrderRequest {
   side: OrderSide;
   type: OrderType;
   quantity: number;
-  price?: number;         // required for LIMIT
-  stopPrice?: number;     // required for STOP_MARKET / TAKE_PROFIT_MARKET
+  price?: number; // required for LIMIT
+  stopPrice?: number; // required for STOP_MARKET / TAKE_PROFIT_MARKET
   timeInForce?: 'GTC' | 'IOC' | 'FOK';
   reduceOnly?: boolean;
   clientOrderId?: string;
@@ -75,14 +81,14 @@ export interface OrderResult {
   side: OrderSide;
   type: OrderType;
   status: OrderStatus;
-  price: number;          // requested price
-  avgPrice: number;       // actual fill price
-  quantity: number;       // requested qty
+  price: number; // requested price
+  avgPrice: number; // actual fill price
+  quantity: number; // requested qty
   filledQuantity: number; // actual filled qty
-  commission: number;     // fees paid
+  commission: number; // fees paid
   commissionAsset: string;
   timestamp: number;
-  latencyMs: number;      // time from request to response
+  latencyMs: number; // time from request to response
 }
 
 // Returned synchronously by order-executor's submit() — confirms the request is enqueued
@@ -92,7 +98,7 @@ export interface SubmissionReceipt {
   side: OrderSide;
   type: OrderType;
   quantity: number;
-  submittedAt: number;     // unix ms — when enqueued, NOT when filled
+  submittedAt: number; // unix ms — when enqueued, NOT when filled
 }
 
 export interface Position {
@@ -114,10 +120,11 @@ export type SignalAction = 'ENTER_LONG' | 'ENTER_SHORT' | 'EXIT' | 'NO_ACTION';
 export interface Signal {
   symbol: string;
   action: SignalAction;
-  confidence: number;     // 0-1
+  confidence: number; // 0-1
+  price: number; // last close price at signal time — used by position-manager for sizing
   timestamp: number;
-  sourceScanner: string;  // which scanner emitted this
-  metadata: Record<string, unknown>;  // indicator values, reasons, etc
+  sourceScanner: string; // which scanner emitted this
+  metadata: Record<string, unknown>; // indicator values, reasons, etc
 }
 
 // === Risk ===
@@ -137,7 +144,7 @@ export type RiskRule =
 export type RiskSeverity = 'REJECT' | 'KILL';
 
 export type RiskCheckResult =
-  | { allowed: true }
+  | { allowed: true; quantity: number } // quantity computed by risk-manager (balance * pct * leverage / price)
   | { allowed: false; rule: RiskRule; reason: string; severity: RiskSeverity };
 
 // === Account ===
@@ -150,8 +157,8 @@ export interface AccountBalance {
 }
 
 export interface FeeStructure {
-  maker: number;    // e.g. 0.0002 for 0.02%
-  taker: number;    // e.g. 0.0004 for 0.04%
+  maker: number; // e.g. 0.0002 for 0.02%
+  taker: number; // e.g. 0.0004 for 0.04%
   // BNB discount, VIP tiers, etc handled by implementation
 }
 
@@ -166,9 +173,9 @@ export interface TradeRecord {
   quantity: number;
   entryTime: number;
   exitTime: number;
-  pnl: number;           // net after fees
+  pnl: number; // net after fees
   fees: number;
-  slippage: number;       // difference between signal price and fill price
+  slippage: number; // difference between signal price and fill price
   holdTimeMs: number;
   exitReason: 'STOP_LOSS' | 'TAKE_PROFIT' | 'TRAILING_STOP' | 'SIGNAL' | 'TIMEOUT' | 'FORCED';
   metadata: Record<string, unknown>;
@@ -188,12 +195,12 @@ export interface PerformanceMetrics {
   winRate: number;
   profitFactor: number;
   sharpeRatio: number;
-  maxDrawdown: number;      // percentage
+  maxDrawdown: number; // percentage
   maxDrawdownDuration: number; // ms
   avgWin: number;
   avgLoss: number;
-  expectancy: number;        // avg pnl per trade
-  avgHoldTime: number;       // ms
+  expectancy: number; // avg pnl per trade
+  avgHoldTime: number; // ms
   totalFees: number;
   totalSlippage: number;
 }
@@ -213,38 +220,40 @@ interface ExchangeConfigBase {
 }
 
 export type ExchangeConfig =
-  | ExchangeConfigBase & {
+  | (ExchangeConfigBase & {
       type: 'binance-live';
       apiKey: string;
       apiSecret: string;
-    }
-  | ExchangeConfigBase & {
+    })
+  | (ExchangeConfigBase & {
       type: 'binance-testnet';
       apiKey: string;
       apiSecret: string;
-    }
-  | ExchangeConfigBase & {
+    })
+  | (ExchangeConfigBase & {
       type: 'backtest-sim';
       feeStructure: FeeStructure;
       slippageModel: SlippageModel;
       initialBalance: number;
       // No apiKey/apiSecret — compile error if you try to access them
-    };
+    });
 
 export interface SlippageModel {
   type: 'fixed' | 'proportional' | 'orderbook-based';
-  fixedBps?: number;         // basis points for fixed model
+  fixedBps?: number; // basis points for fixed model
   proportionalFactor?: number;
-  maxSlippageBps?: number;   // hard cap
+  maxSlippageBps?: number; // hard cap
 }
 
-// BacktestConfig is a RUN-LEVEL concern (time range, symbols, timeframe).
+// BacktestConfig is a RUN-LEVEL concern (time range, symbols, timeframes).
 // Fee/slippage config lives on ExchangeConfig['backtest-sim'] because
 // the exchange adapter is what simulates fills — the engine just replays data.
+// timeframes is plural — multi-timeframe strategies (ADR-9) need candles
+// at all timeframes loaded and replayed (e.g., 4h + 1m).
 export interface BacktestConfig {
   startTime: number;
   endTime: number;
   symbols: string[];
-  timeframe: Timeframe;
+  timeframes: Timeframe[]; // engine calls loader for every symbols × timeframes combination
 }
 ```

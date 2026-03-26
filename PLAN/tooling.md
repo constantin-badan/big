@@ -41,18 +41,21 @@ All Nx, TypeScript, linting, formatting, and testing configuration.
 ## Linting & formatting config
 
 **oxlint** (`oxlintrc.json` at root):
+
 - Enable type-aware rules via `--tsconfig ./tsconfig.base.json`
 - Enable categories: `correctness`, `suspicious`, `pedantic`, `style`
 - Deny `no-explicit-any` (aligns with our "no `any`" rule)
 - Enable import sorting rules
 
 **oxfmt** (run via `oxfmt --write`):
+
 - Indent: 2 spaces
 - Quotes: single
 - Semicolons: always
 - Print width: 100
 
 **ESLint** (`.eslintrc.json` at root — minimal config, boundary enforcement only):
+
 ```json
 {
   "root": true,
@@ -71,18 +74,96 @@ All Nx, TypeScript, linting, formatting, and testing configuration.
               { "sourceTag": "scope:event-bus", "onlyDependOnLibsWithTags": ["scope:types"] },
               { "sourceTag": "scope:exchange-client", "onlyDependOnLibsWithTags": ["scope:types"] },
               { "sourceTag": "scope:indicators", "onlyDependOnLibsWithTags": ["scope:types"] },
-              { "sourceTag": "scope:data-feed", "onlyDependOnLibsWithTags": ["scope:types", "scope:event-bus", "scope:exchange-client"] },
-              { "sourceTag": "scope:position-manager", "onlyDependOnLibsWithTags": ["scope:types", "scope:event-bus", "scope:order-executor", "scope:risk-manager"] },
-              { "sourceTag": "scope:risk-manager", "onlyDependOnLibsWithTags": ["scope:types", "scope:event-bus"] },
-              { "sourceTag": "scope:order-executor", "onlyDependOnLibsWithTags": ["scope:types", "scope:event-bus", "scope:exchange-client"] },
-              { "sourceTag": "scope:scanner", "onlyDependOnLibsWithTags": ["scope:types", "scope:event-bus", "scope:indicators"] },
-              { "sourceTag": "scope:strategy", "onlyDependOnLibsWithTags": ["scope:types", "scope:event-bus", "scope:scanner", "scope:position-manager", "scope:risk-manager"] },
-              { "sourceTag": "scope:backtest-engine", "onlyDependOnLibsWithTags": ["scope:types", "scope:event-bus", "scope:exchange-client", "scope:strategy"] },
-              { "sourceTag": "scope:sweep-engine", "onlyDependOnLibsWithTags": ["scope:types", "scope:backtest-engine", "scope:strategy"] },
-              { "sourceTag": "scope:live-runner", "onlyDependOnLibsWithTags": ["scope:types", "scope:event-bus", "scope:exchange-client", "scope:strategy"] },
-              { "sourceTag": "scope:arena", "onlyDependOnLibsWithTags": ["scope:types", "scope:live-runner", "scope:reporting"] },
-              { "sourceTag": "scope:evolver", "onlyDependOnLibsWithTags": ["scope:types", "scope:arena"] },
-              { "sourceTag": "scope:parity-checker", "onlyDependOnLibsWithTags": ["scope:types", "scope:backtest-engine", "scope:reporting"] },
+              {
+                "sourceTag": "scope:data-feed",
+                "onlyDependOnLibsWithTags": [
+                  "scope:types",
+                  "scope:event-bus",
+                  "scope:exchange-client"
+                ]
+              },
+              {
+                "sourceTag": "scope:position-manager",
+                "onlyDependOnLibsWithTags": [
+                  "scope:types",
+                  "scope:event-bus",
+                  "scope:order-executor",
+                  "scope:risk-manager"
+                ]
+              },
+              {
+                "sourceTag": "scope:risk-manager",
+                "onlyDependOnLibsWithTags": ["scope:types", "scope:event-bus"]
+              },
+              {
+                "sourceTag": "scope:order-executor",
+                "onlyDependOnLibsWithTags": [
+                  "scope:types",
+                  "scope:event-bus",
+                  "scope:exchange-client"
+                ]
+              },
+              {
+                "sourceTag": "scope:scanner",
+                "onlyDependOnLibsWithTags": ["scope:types", "scope:event-bus", "scope:indicators"]
+              },
+              {
+                "sourceTag": "scope:strategy",
+                "onlyDependOnLibsWithTags": [
+                  "scope:types",
+                  "scope:event-bus",
+                  "scope:scanner",
+                  "scope:position-manager",
+                  "scope:risk-manager"
+                ]
+              },
+              {
+                "sourceTag": "scope:backtest-engine",
+                "onlyDependOnLibsWithTags": [
+                  "scope:types",
+                  "scope:event-bus",
+                  "scope:exchange-client",
+                  "scope:data-feed",
+                  "scope:order-executor",
+                  "scope:strategy",
+                  "scope:reporting"
+                ]
+              },
+              {
+                "sourceTag": "scope:sweep-engine",
+                "onlyDependOnLibsWithTags": [
+                  "scope:types",
+                  "scope:backtest-engine",
+                  "scope:strategy"
+                ]
+              },
+              {
+                "sourceTag": "scope:live-runner",
+                "onlyDependOnLibsWithTags": [
+                  "scope:types",
+                  "scope:event-bus",
+                  "scope:exchange-client",
+                  "scope:data-feed",
+                  "scope:order-executor",
+                  "scope:strategy"
+                ]
+              },
+              {
+                "sourceTag": "scope:arena",
+                "onlyDependOnLibsWithTags": ["scope:types", "scope:live-runner", "scope:reporting"]
+              },
+              {
+                "sourceTag": "scope:evolver",
+                "onlyDependOnLibsWithTags": ["scope:types", "scope:arena"]
+              },
+              {
+                "sourceTag": "scope:parity-checker",
+                "onlyDependOnLibsWithTags": [
+                  "scope:types",
+                  "scope:backtest-engine",
+                  "scope:reporting"
+                ]
+              },
               { "sourceTag": "scope:reporting", "onlyDependOnLibsWithTags": ["scope:types"] }
             ]
           }
@@ -96,18 +177,21 @@ All Nx, TypeScript, linting, formatting, and testing configuration.
 Each package's `project.json` must include the corresponding `"tags": ["scope:<package-name>"]`.
 
 **`test-utils` boundary rules:**
+
 - Tagged `scope:test-utils` but has NO `depConstraints` entry — it can import any package (it needs to import interfaces to mock them)
 - Listed in the `allow` array so any package's test files can import it
 - `@trading-bot/test-utils` must be a `devDependency` only in each package's `package.json`
 - **Production code must never import test-utils.** Enforce in CI with: `grep -r "@trading-bot/test-utils" packages/*/src/*.ts packages/*/src/**/*.ts --include="*.ts" --exclude-dir="__tests__"` — this should return zero matches. Nx boundary rules can't distinguish test vs production files, so this CI check is the enforcement layer.
 
 **Dev dependencies at root:**
+
 - `oxlint` (install via `bun add -d oxlint`)
 - `oxfmt` (install via `bun add -d oxfmt` or use the `@oxc/oxfmt` package — check latest naming)
 - `eslint` + `@nx/eslint-plugin` (only for boundary enforcement)
 - Do NOT install any other ESLint plugins, configs, or parsers beyond what `@nx/eslint-plugin` requires
 
 **Nx target setup for the split tooling:**
+
 - `lint` target in each `project.json`: runs `oxlint --tsconfig ./tsconfig.json ./src`
 - `format` target at root: runs `oxfmt --write packages/`
 - `lint:boundaries` target at root: runs `eslint --no-eslintrc -c .eslintrc.json 'packages/*/src/**/*.ts'` — this is slow and only needs to run in CI or pre-push, not on every save

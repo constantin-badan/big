@@ -9,6 +9,7 @@ import type {
   SubmissionReceipt,
   Tick,
   Timeframe,
+  TradeRecord,
 } from '@trading-bot/types';
 
 export interface TradingEventMap {
@@ -26,7 +27,7 @@ export interface TradingEventMap {
 
   'position:opened': { position: Position };
   'position:updated': { position: Position };
-  'position:closed': { position: Position; pnl: number };
+  'position:closed': { position: Position; trade: TradeRecord };
 
   'risk:breach': { rule: RiskRule; message: string; severity: RiskSeverity };
 

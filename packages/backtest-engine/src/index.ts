@@ -1,1 +1,1 @@
-export type { IBacktestEngine } from './types';
+export type { IBacktestEngine, CandleLoader, CreateBacktestEngine } from './types';
