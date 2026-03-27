@@ -37,7 +37,14 @@ import {
   routeOrderType,
 } from './parsers';
 import { signRequest } from './signing';
-import { jsonParse, unsafeCast } from './unsafe-cast';
+import { jsonParse } from './unsafe-cast';
+import { z } from 'zod';
+import {
+  PositionRiskSchema,
+  BalanceEntrySchema,
+  CommissionRateSchema,
+  WsApiOrderResponseSchema,
+} from './schemas';
 
 import { WsConnection } from './ws-connection';
 import { RequestTracker } from './request-tracker';
@@ -249,7 +256,7 @@ export class BinanceAdapter implements IExchange {
     const params = { symbol };
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
     const data = await this.restClient.restGet('/fapi/v1/openOrders', signed);
-    return unsafeCast<Array<Record<string, unknown>>>(data).map((o) =>
+    return z.array(WsApiOrderResponseSchema).parse(data).map((o) =>
       parseWsApiOrderResponse(o, Date.now()),
     );
   }
@@ -265,7 +272,7 @@ export class BinanceAdapter implements IExchange {
     const params = {};
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
     const data = await this.restClient.restGet('/fapi/v2/positionRisk', signed);
-    return unsafeCast<BinancePositionRisk[]>(data)
+    return z.array(PositionRiskSchema).parse(data)
       .filter((p) => Number(p.positionAmt) !== 0)
       .map((p): Position => {
         const amt = Number(p.positionAmt);
@@ -298,7 +305,7 @@ export class BinanceAdapter implements IExchange {
     const params = {};
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
     const data = await this.restClient.restGet('/fapi/v2/balance', signed);
-    return unsafeCast<BinanceBalanceEntry[]>(data).map((b) => ({
+    return z.array(BalanceEntrySchema).parse(data).map((b) => ({
       asset: b.asset,
       free: Number(b.availableBalance),
       locked: Number(b.balance) - Number(b.availableBalance),
@@ -310,7 +317,7 @@ export class BinanceAdapter implements IExchange {
     const params = { symbol };
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
     const data = await this.restClient.restGet('/fapi/v1/commissionRate', signed);
-    const resp = unsafeCast<BinanceCommissionRate>(data);
+    const resp = CommissionRateSchema.parse(data);
     return {
       maker: Number(resp.makerCommissionRate),
       taker: Number(resp.takerCommissionRate),

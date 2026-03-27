@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@trading-bot/event-bus": "workspace:*",
-    "@trading-bot/types": "workspace:*"
+    "@trading-bot/types": "workspace:*",
+    "zod": "^4.3.6"
   }
 }

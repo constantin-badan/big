@@ -42,8 +42,8 @@ Full audit conducted 2026-03-27. Items ordered by priority within each section.
 
 ## Deferred — Requires Architectural Discussion
 
-- [ ] **Account-level unrealized drawdown protection** — risk-manager deliberately tracks realized balance only (ADR-7); intra-trade risk is position-manager's job via SL/TP. Adding mark-to-market unrealized PnL to risk-manager would require tick subscriptions for every open position, making it the most expensive component and duplicating position-manager's responsibility. If account-level unrealized drawdown protection is needed, design a separate `MarginGuard` component rather than modifying risk-manager. Contradicts ADR-7 — do not implement without explicit architectural decision.
-- [ ] **Add runtime schema validation for Binance responses** — requires adding `zod` as first external runtime dependency. Needs decision on zero-dep policy vs. silent shape change risk.
+- [x] **Account-level unrealized drawdown protection** — implemented as `MarginGuard` package (ADR-12). Separate reactive component that subscribes to price events and position lifecycle. Emits `risk:breach` with `severity: 'KILL'` when unrealized loss or total exposure exceeds thresholds. Optional in StrategyConfig. Does not modify risk-manager (ADR-7 preserved).
+- [x] **Add runtime schema validation for Binance responses** — implemented with Zod (ADR-11). Validates at money boundaries only: order fills, account balance, position data. Market data streams unchecked for performance. Zod added as dependency of exchange-client only.
 
 ---
 

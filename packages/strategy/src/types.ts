@@ -1,5 +1,6 @@
 import type { IEventBus } from '@trading-bot/event-bus';
 import type { IExchange } from '@trading-bot/exchange-client';
+import type { IMarginGuard } from '@trading-bot/margin-guard';
 import type { IOrderExecutor } from '@trading-bot/order-executor';
 import type { IPositionManager } from '@trading-bot/position-manager';
 import type { IRiskManager } from '@trading-bot/risk-manager';
@@ -18,6 +19,7 @@ export interface StrategyConfig {
   signalBufferWindowMs: number;
   positionManager: IPositionManager;
   riskManager: IRiskManager;
+  marginGuard?: IMarginGuard;
 }
 
 export interface IStrategy {

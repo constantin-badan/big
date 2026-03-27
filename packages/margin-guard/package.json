@@ -1,5 +1,5 @@
 {
-  "name": "@trading-bot/strategy",
+  "name": "@trading-bot/margin-guard",
   "version": "0.0.0",
   "private": true,
   "main": "src/index.ts",
@@ -10,10 +10,9 @@
   },
   "dependencies": {
     "@trading-bot/event-bus": "workspace:*",
-    "@trading-bot/margin-guard": "workspace:*",
-    "@trading-bot/position-manager": "workspace:*",
-    "@trading-bot/risk-manager": "workspace:*",
-    "@trading-bot/scanner": "workspace:*",
     "@trading-bot/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@trading-bot/test-utils": "workspace:*"
   }
 }

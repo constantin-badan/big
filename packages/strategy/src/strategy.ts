@@ -64,6 +64,7 @@ export class Strategy implements IStrategy {
 
   async stop(): Promise<void> {
     this.bus.off('scanner:signal', this.handler);
+    this.config.marginGuard?.dispose();
     for (const scanner of this.config.scanners) {
       scanner.dispose();
     }

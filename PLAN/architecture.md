@@ -312,13 +312,14 @@ types                          (no deps)
 ├── reporting
 │
 ├── risk-manager               (types, event-bus)
+├── margin-guard               (types, event-bus)
 ├── data-feed                  (types, event-bus, exchange-client)
 ├── order-executor             (types, event-bus, exchange-client)
 │
 ├── position-manager           (types, event-bus, order-executor, risk-manager)
 ├── scanner                    (types, event-bus, indicators)
 │
-├── strategy                   (types, event-bus, exchange-client, order-executor, scanner, position-manager, risk-manager)
+├── strategy                   (types, event-bus, exchange-client, order-executor, scanner, position-manager, risk-manager, margin-guard)
 │
 ├── backtest-engine            (types, event-bus, exchange-client, data-feed, order-executor, strategy, reporting)
 ├── live-runner                (types, event-bus, exchange-client, data-feed, order-executor, strategy)
@@ -330,6 +331,51 @@ types                          (no deps)
 └── evolver                    (types, arena)
 ```
 
+## ADR-11: Zod validation at money boundaries
+
+**Decision:** Use Zod (`zod@4.x`, 13KB, zero deps) to validate Binance API responses at money boundaries only. Market data streams stay unchecked.
+
+**Context:** `unsafeCast<T>()` trusts response shapes blindly. Binance changes API shapes without warning (the algo service migration is a recent example). A silent field rename in a fill response produces `NaN` from `undefined`, corrupting position tracking.
+
+**Validated (money boundaries):**
+- `parseOrderTradeUpdate` — ORDER_TRADE_UPDATE events (fill data)
+- `parseAlgoUpdate` — ALGO_UPDATE events (conditional order fills)
+- `parseWsApiOrderResponse` — WS API order ack
+- `getPositions()` — REST position risk data
+- `getBalance()` — REST account balance
+- `getFees()` — REST commission rates
+
+**Not validated (market data — performance-sensitive):**
+- `parseKlineMessage` — kline/candle streams (thousands/sec for scalper)
+- `parseAggTradeMessage` — tick streams
+- `parseDepthMessage` — depth diff streams
+- `parseRestCandles`, `parseRestOrderBook` — REST market data
+
+**Rationale:** A malformed candle produces a bad indicator value, detectable downstream. A malformed fill produces a wrong position size, which is not. Zod throws `ZodError` immediately with a descriptive message, the adapter catch block logs the raw payload, and the order is treated as rejected. You lose one trade instead of corrupting position tracking.
+
+**Dependency scoping:** Zod is a dependency of `exchange-client` only, not workspace-wide.
+
+---
+
+## ADR-12: MarginGuard — account-level unrealized risk
+
+**Decision:** Create a separate `margin-guard` package for account-level unrealized drawdown protection. Do NOT modify `risk-manager`.
+
+**Context:** Risk-manager deliberately tracks realized balance only (ADR-7). Intra-trade risk is position-manager's job via SL/TP. But a position that's underwater by 50% of account value won't trigger the risk-manager's drawdown kill switch until it's closed.
+
+**Design:**
+- `MarginGuard` is a reactive component (ADR-8) that subscribes to price events and position lifecycle events
+- On each price update, computes total unrealized PnL and total notional exposure across all tracked positions
+- Emits `risk:breach` with `severity: 'KILL'` when thresholds are breached (same event as risk-manager)
+- `MarginGuardConfig` specifies `evaluationEvent: 'tick' | 'candle:close'` (tick for live, candle:close for backtest)
+- Optional in `StrategyConfig` — not all strategies need unrealized monitoring
+
+**Why not modify risk-manager?** Adding mark-to-market unrealized PnL to risk-manager would require tick subscriptions for every open position, making it the most expensive component and duplicating position-manager's responsibility. Different concerns, different thresholds, different actions. Position-manager closes one position when its SL hits. MarginGuard kills all trading when the portfolio is underwater.
+
+**Dependencies:** `types` + `event-bus` only. Builds its own view of open positions from events — does not depend on risk-manager or position-manager.
+
+---
+
 ## Critical rules
 
 1. **No `any` anywhere.** Use `unknown` + type narrowing if truly needed.
@@ -340,7 +386,7 @@ types                          (no deps)
 6. **Event bus handlers are synchronous.** Async work goes through `submit()` patterns.
 7. **IExchange mirrors the exchange API.** Semantic logic lives in data-feed.
 8. **Factories, not clone().** Fresh instances via factory functions for parallelism.
-9. **Reactive risk manager.** Builds state from events, not from caller-provided context.
+9. **Reactive risk manager.** Builds state from events, not from caller-provided context. Tracks realized equity only — unrealized risk is MarginGuard's job (ADR-12).
 10. **Constructor-injected reactivity.** No `onX` callbacks; components self-subscribe to the bus.
 11. **Two-tier signal routing.** Scanners emit `scanner:signal`; strategy merges and emits `signal`. Position-manager never sees raw scanner output.
 12. **Runner owns environment.** Bus, exchange, executor, data-feed are created by the runner and injected into the factory via `StrategyDeps`.

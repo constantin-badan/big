@@ -10,6 +10,11 @@ import type {
 } from '@trading-bot/types';
 
 import { jsonParse, numPair, unsafeCast } from './unsafe-cast';
+import {
+  OrderTradeUpdateSchema,
+  AlgoUpdateSchema,
+  WsApiOrderResponseSchema,
+} from './schemas';
 
 // === Combined stream message parsing ===
 
@@ -197,7 +202,7 @@ interface BinanceOrderTradeUpdate {
 }
 
 export function parseOrderTradeUpdate(data: unknown): OrderResult {
-  const event = unsafeCast<BinanceOrderTradeUpdate>(data);
+  const event = OrderTradeUpdateSchema.parse(data);
   const o = event.o;
   return {
     orderId: String(o.i),
@@ -238,7 +243,7 @@ interface BinanceAlgoUpdate {
 }
 
 export function parseAlgoUpdate(data: unknown): OrderResult {
-  const event = unsafeCast<BinanceAlgoUpdate>(data);
+  const event = AlgoUpdateSchema.parse(data);
   const o = event.o;
   return {
     orderId: String(o.i),
@@ -277,7 +282,7 @@ interface BinanceWsApiOrderResponse {
 }
 
 export function parseWsApiOrderResponse(data: unknown, requestTime: number): OrderResult {
-  const r = unsafeCast<BinanceWsApiOrderResponse>(data);
+  const r = WsApiOrderResponseSchema.parse(data);
   return {
     orderId: String(r.orderId),
     clientOrderId: r.clientOrderId,
