@@ -84,6 +84,13 @@ const RECONNECT_JITTER_MS = 500;
 const RECONNECT_KILL_AFTER = 10;
 const WS_REQUEST_TIMEOUT_MS = 30_000;
 
+// Binance close codes indicating scheduled maintenance (skip reconnect loop)
+const MAINTENANCE_CLOSE_CODES = new Set([1001, 1012]);
+
+function isMaintenanceClose(code: number): boolean {
+  return MAINTENANCE_CLOSE_CODES.has(code);
+}
+
 function reconnectDelay(attempt: number): number {
   const exponential = Math.min(RECONNECT_BASE_DELAY_MS * Math.pow(2, attempt), RECONNECT_MAX_DELAY_MS);
   const jitter = Math.random() * RECONNECT_JITTER_MS;
@@ -350,19 +357,22 @@ export class BinanceAdapter implements IExchange {
         this.handleTradingMessage(String(event.data));
       });
 
-      ws.addEventListener('close', () => {
+      ws.addEventListener('close', (event: CloseEvent) => {
         this.tradingWs = null;
         this.tradingConnected = false;
         if (this.intentionalDisconnect) return;
 
+        const maintenance = isMaintenanceClose(event.code);
         this.bus?.emit('exchange:disconnected', {
           stream: 'userData',
           symbol: '*',
-          reason: 'server_close',
+          reason: maintenance ? 'maintenance' : 'server_close',
           timestamp: Date.now(),
         });
 
-        void this.reconnectTrading();
+        if (!maintenance) {
+          void this.reconnectTrading();
+        }
       });
     });
   }
@@ -439,19 +449,22 @@ export class BinanceAdapter implements IExchange {
         this.handleMarketDataMessage(String(event.data));
       });
 
-      ws.addEventListener('close', () => {
+      ws.addEventListener('close', (event: CloseEvent) => {
         this.marketDataWs = null;
         this.marketDataConnected = false;
         if (this.intentionalDisconnect) return;
 
+        const maintenance = isMaintenanceClose(event.code);
         this.bus?.emit('exchange:disconnected', {
           stream: 'kline',
           symbol: '*',
-          reason: 'server_close',
+          reason: maintenance ? 'maintenance' : 'server_close',
           timestamp: Date.now(),
         });
 
-        void this.reconnectMarketData(streams);
+        if (!maintenance) {
+          void this.reconnectMarketData(streams);
+        }
       });
     });
   }
@@ -638,7 +651,7 @@ export class BinanceAdapter implements IExchange {
     });
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Binance REST ${response.status}: ${body}`);
+      throw new Error(`Binance REST ${response.status}: ${body.substring(0, 500)}`);
     }
     return response.json();
   }
@@ -659,7 +672,7 @@ export class BinanceAdapter implements IExchange {
     });
     if (!response.ok) {
       const respBody = await response.text();
-      throw new Error(`Binance REST ${response.status}: ${respBody}`);
+      throw new Error(`Binance REST ${response.status}: ${respBody.substring(0, 500)}`);
     }
     return response.json();
   }

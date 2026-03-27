@@ -6,8 +6,9 @@ import { createExchange } from '@trading-bot/exchange-client';
 import type { IExchange } from '@trading-bot/exchange-client';
 import { BacktestExecutor } from '@trading-bot/order-executor';
 import { computeMetrics } from '@trading-bot/reporting';
+import type { IOrderExecutor } from '@trading-bot/order-executor';
 import type { IStrategy } from '@trading-bot/strategy';
-import type { ExchangeConfig, TradeRecord } from '@trading-bot/types';
+import type { ExchangeConfig, OrderRequest, SubmissionReceipt, TradeRecord } from '@trading-bot/types';
 
 import type { ArenaConfig, ArenaRanking, IArena } from './types';
 
@@ -24,10 +25,12 @@ interface ArenaInstance {
   params: Record<string, number>;
   bus: IEventBus;
   simExchange: BacktestSimExchange;
-  executor: BacktestExecutor;
+  executor: IOrderExecutor;
   strategy: IStrategy;
   trades: TradeRecord[];
   tradeHandler: (data: TradingEventMap['position:closed']) => void;
+  positionHandler: (data: TradingEventMap['position:opened']) => void;
+  positionClosedHandler: (data: TradingEventMap['position:closed']) => void;
   forwarders: Array<() => void>;
 }
 
@@ -57,6 +60,9 @@ export class Arena implements IArena {
   private sourceBus: IEventBus | null = null;
   private dataFeed: LiveDataFeed | null = null;
   private running = false;
+
+  // Global position budget across all instances
+  private globalOpenPositions = 0;
 
   constructor(config: ArenaConfig) {
     if (config.simExchangeConfig.type !== 'backtest-sim') {
@@ -112,6 +118,7 @@ export class Arena implements IArena {
     this.exchange = null;
     this.sourceBus = null;
     this.dataFeed = null;
+    this.globalOpenPositions = 0;
   }
 
   getRankings(): ArenaRanking[] {
@@ -161,6 +168,8 @@ export class Arena implements IArena {
       dispose();
     }
     instance.bus.off('position:closed', instance.tradeHandler);
+    instance.bus.off('position:opened', instance.positionHandler);
+    instance.bus.off('position:closed', instance.positionClosedHandler);
     instance.simExchange.dispose();
 
     // Strategy stop is async — fire-and-forget with error boundary
@@ -187,7 +196,12 @@ export class Arena implements IArena {
     });
 
     // Create executor wired to this bus and sim exchange
-    const executor = new BacktestExecutor(bus, simExchange);
+    const rawExecutor = new BacktestExecutor(bus, simExchange);
+
+    // Wrap executor with global position budget enforcement
+    const executor: IOrderExecutor = this.config.maxGlobalPositions !== undefined
+      ? this.wrapExecutorWithBudget(rawExecutor, bus)
+      : rawExecutor;
 
     // Collect trades from position:closed events
     const trades: TradeRecord[] = [];
@@ -195,6 +209,16 @@ export class Arena implements IArena {
       trades.push(data.trade);
     };
     bus.on('position:closed', tradeHandler);
+
+    // Track global open positions
+    const positionHandler = (): void => {
+      this.globalOpenPositions++;
+    };
+    const positionClosedHandler = (): void => {
+      this.globalOpenPositions = Math.max(0, this.globalOpenPositions - 1);
+    };
+    bus.on('position:opened', positionHandler);
+    bus.on('position:closed', positionClosedHandler);
 
     // Wire up event forwarding from source bus to this instance bus
     const forwarders = this.setupForwarding(bus);
@@ -210,6 +234,8 @@ export class Arena implements IArena {
       strategy,
       trades,
       tradeHandler,
+      positionHandler,
+      positionClosedHandler,
       forwarders,
     };
 
@@ -217,6 +243,45 @@ export class Arena implements IArena {
 
     // Start strategy (fire-and-forget since createInstance is sync)
     void strategy.start();
+  }
+
+  private wrapExecutorWithBudget(executor: IOrderExecutor, bus: IEventBus): IOrderExecutor {
+    const maxGlobal = this.config.maxGlobalPositions!;
+    return {
+      submit: (request: OrderRequest): SubmissionReceipt => {
+        if (this.globalOpenPositions >= maxGlobal && !request.reduceOnly) {
+          const clientOrderId = request.clientOrderId ?? '';
+          bus.emit('order:submitted', {
+            receipt: {
+              clientOrderId,
+              symbol: request.symbol,
+              side: request.side,
+              type: request.type,
+              quantity: request.quantity,
+              submittedAt: Date.now(),
+            },
+          });
+          bus.emit('order:rejected', {
+            clientOrderId,
+            reason: `Global position limit reached (${maxGlobal})`,
+          });
+          return {
+            clientOrderId,
+            symbol: request.symbol,
+            side: request.side,
+            type: request.type,
+            quantity: request.quantity,
+            submittedAt: Date.now(),
+          };
+        }
+        return executor.submit(request);
+      },
+      cancelAll: (symbol: string): void => executor.cancelAll(symbol),
+      hasPending: (symbol: string): boolean => executor.hasPending(symbol),
+      getPendingCount: (): number => executor.getPendingCount(),
+      start: (): Promise<void> => executor.start(),
+      stop: (): Promise<void> => executor.stop(),
+    };
   }
 
   private setupForwarding(targetBus: IEventBus): Array<() => void> {
@@ -253,11 +318,16 @@ export class Arena implements IArena {
       dispose();
     }
     instance.bus.off('position:closed', instance.tradeHandler);
+    instance.bus.off('position:opened', instance.positionHandler);
+    instance.bus.off('position:closed', instance.positionClosedHandler);
     instance.simExchange.dispose();
 
-    // Stop strategy (async — may fail, but event flow is already severed)
+    // Stop strategy with timeout — event flow is already severed so a hang is safe
     try {
-      await instance.strategy.stop();
+      await Promise.race([
+        instance.strategy.stop(),
+        new Promise<void>((r) => setTimeout(r, 5000)),
+      ]);
     } catch {
       // Strategy stop failed — event flow already cleaned up above
     }

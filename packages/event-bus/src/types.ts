@@ -39,7 +39,7 @@ export interface TradingEventMap {
   'exchange:disconnected': {
     stream: ExchangeStream;
     symbol: string;
-    reason: 'ping_timeout' | 'server_close' | 'network_error' | 'manual';
+    reason: 'ping_timeout' | 'server_close' | 'network_error' | 'manual' | 'maintenance';
     timestamp: number;
   };
   'exchange:reconnecting': {

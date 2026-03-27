@@ -4,3 +4,18 @@ dist
 .eslintcache
 *.tsbuildinfo
 bun.lock
+
+# Secrets and credentials
+.env
+.env.*
+*.pem
+*.p8
+*.key
+*.jks
+secrets/
+credentials*
+config.prod.*
+
+# Databases
+*.db
+*.sqlite

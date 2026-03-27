@@ -146,7 +146,12 @@ export class LiveDataFeed implements IDataFeed {
         this.bus.emit('candle:close', { symbol, timeframe, candle });
       }
     } catch (err) {
-      console.error(`[LiveDataFeed] Gap backfill failed for ${key}:`, err);
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.bus.emit('error', {
+        source: 'data-feed',
+        error,
+        context: { action: 'backfill', symbol, timeframe, fromTimestamp, toTimestamp },
+      });
     }
 
     // Clear backfilling flag

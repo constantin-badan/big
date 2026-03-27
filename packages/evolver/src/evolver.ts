@@ -135,7 +135,10 @@ export class Evolver implements IEvolver {
 
     this.loopTimer = setTimeout(() => {
       if (!this.running) return;
-      void this.evolve();
+      this.evolve().catch(() => {
+        this.running = false;
+        this.loopTimer = null;
+      });
     }, this.config.evaluationWindowMs);
   }
 

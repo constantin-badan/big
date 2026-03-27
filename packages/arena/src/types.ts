@@ -14,6 +14,7 @@ export interface ArenaConfig {
   factory: StrategyFactory;
   paramSets: Record<string, number>[]; // N param vectors to run
   evaluationWindowMs: number;
+  maxGlobalPositions?: number; // total open positions across all instances
 }
 
 export interface ArenaRanking {
