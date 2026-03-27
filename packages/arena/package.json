@@ -9,6 +9,7 @@
     "lint": "oxlint ./src --config ../../.oxlintrc.json"
   },
   "dependencies": {
+    "@trading-bot/backtest-engine": "workspace:*",
     "@trading-bot/data-feed": "workspace:*",
     "@trading-bot/event-bus": "workspace:*",
     "@trading-bot/exchange-client": "workspace:*",

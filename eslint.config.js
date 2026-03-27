@@ -29,7 +29,7 @@ module.exports = [
             { sourceTag: 'scope:sweep-engine', onlyDependOnLibsWithTags: ['scope:types', 'scope:backtest-engine', 'scope:strategy', 'scope:storage'] },
             { sourceTag: 'scope:storage', onlyDependOnLibsWithTags: ['scope:types'] },
             { sourceTag: 'scope:live-runner', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus', 'scope:exchange-client', 'scope:data-feed', 'scope:order-executor', 'scope:strategy', 'scope:storage'] },
-            { sourceTag: 'scope:arena', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus', 'scope:exchange-client', 'scope:data-feed', 'scope:order-executor', 'scope:strategy', 'scope:reporting'] },
+            { sourceTag: 'scope:arena', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus', 'scope:exchange-client', 'scope:data-feed', 'scope:order-executor', 'scope:strategy', 'scope:reporting', 'scope:backtest-engine'] },
             { sourceTag: 'scope:evolver', onlyDependOnLibsWithTags: ['scope:types', 'scope:arena'] },
             { sourceTag: 'scope:parity-checker', onlyDependOnLibsWithTags: ['scope:types', 'scope:backtest-engine', 'scope:reporting', 'scope:storage', 'scope:strategy'] },
             { sourceTag: 'scope:reporting', onlyDependOnLibsWithTags: ['scope:types'] },
