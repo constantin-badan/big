@@ -1,6 +1,5 @@
 import type { IEventBus } from '@trading-bot/event-bus';
-import type { IOrderExecutor } from '@trading-bot/order-executor';
-import type { OrderRequest, SubmissionReceipt } from '@trading-bot/types';
+import type { IOrderExecutor, OrderRequest, SubmissionReceipt } from '@trading-bot/types';
 
 export interface MockExecutorConfig {
   syncFill?: boolean;

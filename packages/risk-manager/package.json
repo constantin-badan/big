@@ -11,8 +11,5 @@
   "dependencies": {
     "@trading-bot/event-bus": "workspace:*",
     "@trading-bot/types": "workspace:*"
-  },
-  "devDependencies": {
-    "@trading-bot/test-utils": "workspace:*"
   }
 }

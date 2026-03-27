@@ -115,7 +115,7 @@ function tradingFactory(buyAt: number, sellAt: number): StrategyFactory {
           fees: 0.1 * entryPrice * 0.0004 + 0.1 * exitPrice * 0.0004,
           slippage: 0,
           holdTimeMs: data.candle.closeTime - entryTime,
-          exitReason: 'signal',
+          exitReason: 'SIGNAL',
           metadata: {},
         };
         deps.bus.emit('position:closed', {

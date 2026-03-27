@@ -58,12 +58,16 @@ export class PositionManager implements IPositionManager {
   private readonly handleOrderFilled: (data: { order: OrderResult }) => void;
   private readonly handleOrderRejected: (data: { clientOrderId: string; reason: string }) => void;
 
-  constructor(
-    private readonly eventBus: IEventBus,
-    private readonly executor: IOrderExecutor,
-    private readonly riskManager: IRiskManager,
-    private readonly config: PositionManagerConfig,
-  ) {
+  private readonly eventBus: IEventBus;
+  private readonly executor: IOrderExecutor;
+  private readonly riskManager: IRiskManager;
+  private readonly config: PositionManagerConfig;
+
+  constructor(eventBus: IEventBus, executor: IOrderExecutor, riskManager: IRiskManager, config: PositionManagerConfig) {
+    this.eventBus = eventBus;
+    this.executor = executor;
+    this.riskManager = riskManager;
+    this.config = config;
     if (config.defaultStopLossPct <= 0 || config.defaultStopLossPct >= 100) {
       throw new Error(
         `PositionManager: defaultStopLossPct must be in (0, 100), got ${config.defaultStopLossPct}`,

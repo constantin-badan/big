@@ -13,8 +13,5 @@
     "@trading-bot/order-executor": "workspace:*",
     "@trading-bot/risk-manager": "workspace:*",
     "@trading-bot/types": "workspace:*"
-  },
-  "devDependencies": {
-    "@trading-bot/test-utils": "workspace:*"
   }
 }

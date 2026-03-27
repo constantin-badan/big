@@ -12,8 +12,5 @@
     "@trading-bot/event-bus": "workspace:*",
     "@trading-bot/exchange-client": "workspace:*",
     "@trading-bot/types": "workspace:*"
-  },
-  "devDependencies": {
-    "@trading-bot/test-utils": "workspace:*"
   }
 }

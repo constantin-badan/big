@@ -1,5 +1,5 @@
-import type { IExchange } from '@trading-bot/exchange-client';
 import type {
+  IExchange,
   AccountBalance,
   Candle,
   FeeStructure,

@@ -10,11 +10,11 @@ let mockExchange: IExchange;
 let mockPositions: Position[];
 
 // Module mocks must be declared before imports that use them
-mock.module('@trading-bot/exchange-client', () => ({
+void mock.module('@trading-bot/exchange-client', () => ({
   createExchange: (_config: ExchangeConfig) => mockExchange,
 }));
 
-mock.module('@trading-bot/data-feed', () => ({
+void mock.module('@trading-bot/data-feed', () => ({
   LiveDataFeed: class {
     async start(): Promise<void> {}
     async stop(): Promise<void> {}
@@ -24,7 +24,7 @@ mock.module('@trading-bot/data-feed', () => ({
   },
 }));
 
-mock.module('@trading-bot/order-executor', () => ({
+void mock.module('@trading-bot/order-executor', () => ({
   LiveExecutor: class {
     submit(): void {}
     cancelAll(): void {}
@@ -47,6 +47,9 @@ function makeStrategy(): IStrategy {
     name: 'test-strategy',
     async start(): Promise<void> {},
     async stop(): Promise<void> {},
+    getStats() {
+      return { totalTrades: 0, winRate: 0, profitFactor: 0, sharpeRatio: 0, maxDrawdown: 0, maxDrawdownDuration: 0, avgWin: 0, avgLoss: 0, expectancy: 0, avgHoldTime: 0, totalFees: 0, totalSlippage: 0 };
+    },
   };
 }
 
@@ -106,7 +109,7 @@ describe('live-runner', () => {
   test('start() throws when not idle', async () => {
     const runner = new LiveRunner(makeConfig());
     await runner.start();
-    await expect(runner.start()).rejects.toThrow('Cannot start runner in running state');
+    expect(runner.start()).rejects.toThrow('Cannot start runner in running state');
     await runner.stop();
   });
 
@@ -139,7 +142,7 @@ describe('live-runner', () => {
     ];
 
     const runner = new LiveRunner(makeConfig());
-    await expect(runner.start()).rejects.toThrow(/Orphan positions detected.*BTCUSDT/);
+    expect(runner.start()).rejects.toThrow(/Orphan positions detected.*BTCUSDT/);
     expect(runner.status).toBe('idle');
   });
 

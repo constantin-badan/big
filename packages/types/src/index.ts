@@ -146,6 +146,106 @@ export type RiskCheckResult =
   | { allowed: true; quantity: number } // quantity = balance * maxPositionSizePct * leverage / entryPrice
   | { allowed: false; rule: RiskRule; reason: string; severity: RiskSeverity };
 
+// === Config: Risk ===
+
+export interface RiskConfig {
+  maxPositionSizePct: number;
+  maxConcurrentPositions: number;
+  maxDailyLossPct: number;
+  maxDrawdownPct: number;
+  maxDailyTrades: number;
+  cooldownAfterLossMs: number;
+  leverage: number;
+  initialBalance: number;
+  expectedSlippageBps?: number;
+}
+
+// === Config: Position Manager ===
+
+export interface PositionManagerConfig {
+  defaultStopLossPct: number;
+  defaultTakeProfitPct: number;
+  trailingStopEnabled: boolean;
+  trailingStopActivationPct: number;
+  trailingStopDistancePct: number;
+  maxHoldTimeMs: number;
+  entryOrderType: OrderType;
+  safetyStopEnabled: boolean;
+  safetyStopMultiplier: number;
+}
+
+export type PositionState = 'IDLE' | 'PENDING_ENTRY' | 'OPEN' | 'PENDING_EXIT';
+
+// === Interfaces: Exchange ===
+
+export interface IExchange {
+  getCandles(symbol: string, timeframe: Timeframe, limit: number): Promise<Candle[]>;
+  getOrderBook(symbol: string, depth?: number): Promise<OrderBookSnapshot>;
+
+  subscribeCandles(
+    symbol: string,
+    timeframe: Timeframe,
+    callback: (candle: Candle) => void,
+  ): () => void;
+  subscribeTicks(symbol: string, callback: (tick: Tick) => void): () => void;
+  subscribeOrderBookDiff(symbol: string, callback: (diff: OrderBookDiff) => void): () => void;
+
+  placeOrder(request: OrderRequest): Promise<OrderResult>;
+  cancelOrder(symbol: string, orderId: string): Promise<void>;
+  getOpenOrders(symbol: string): Promise<OrderResult[]>;
+
+  getPosition(symbol: string): Promise<Position | null>;
+  getPositions(): Promise<Position[]>;
+  setLeverage(symbol: string, leverage: number): Promise<void>;
+
+  getBalance(): Promise<AccountBalance[]>;
+  getFees(symbol: string): Promise<FeeStructure>;
+
+  connect(): Promise<void>;
+  disconnect(): Promise<void>;
+  isConnected(): boolean;
+}
+
+// === Interfaces: Order Executor ===
+
+export interface IOrderExecutor {
+  submit(request: OrderRequest): SubmissionReceipt;
+  cancelAll(symbol: string): void;
+  hasPending(symbol: string): boolean;
+  getPendingCount(): number;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+}
+
+export interface OrderExecutorConfig {
+  maxRetries: number;
+  retryDelayMs: number;
+  rateLimitPerMinute: number;
+}
+
+export interface IFillSimulator {
+  simulateFill(request: OrderRequest): OrderResult;
+}
+
+// === Interfaces: Risk Manager ===
+
+export interface IRiskManager {
+  checkEntry(signal: Signal, entryPrice: number): RiskCheckResult;
+  isKillSwitchActive(): boolean;
+  reset(): void;
+  dispose(): void;
+}
+
+// === Interfaces: Position Manager ===
+
+export interface IPositionManager {
+  getState(symbol: string): PositionState;
+  hasOpenPosition(symbol: string): boolean;
+  hasPendingOrder(symbol: string): boolean;
+  getOpenPositions(): Position[];
+  dispose(): void;
+}
+
 // === Backtest ===
 
 export interface TradeRecord {
