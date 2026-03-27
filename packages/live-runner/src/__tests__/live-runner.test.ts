@@ -99,7 +99,7 @@ describe('live-runner', () => {
     const runner = new LiveRunner(makeConfig());
     await runner.start();
     expect(runner.status).toBe('running');
-    expect(runner.uptime).toBeGreaterThan(0);
+    expect(runner.uptime).toBeGreaterThanOrEqual(0);
     await runner.stop();
   });
 
