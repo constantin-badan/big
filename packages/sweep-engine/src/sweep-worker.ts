@@ -23,7 +23,8 @@ declare const self: {
   postMessage: (msg: WorkerResponse) => void;
 };
 
-self.onmessage = async (event: MessageEvent) => {
+self.onmessage = (event: MessageEvent) => {
+  void (async () => {
   const msg = unsafeCast<WorkerRequest>(event.data);
 
   if (msg.type !== 'run') return;
@@ -68,4 +69,5 @@ self.onmessage = async (event: MessageEvent) => {
       error: err instanceof Error ? err.message : 'Unknown worker error',
     });
   }
+  })();
 };

@@ -480,7 +480,12 @@ export class PositionManager implements IPositionManager {
       case 'STOP_LOSS':
         requestedExitPrice = symState.stopPrice ?? exitOrder.price;
         break;
-      default:
+
+      // Default
+      case 'FORCED':
+      case 'TIMEOUT':
+      case 'SIGNAL':
+      case null:
         // SIGNAL / TIMEOUT — no "intended" price, slippage is 0
         requestedExitPrice = exitOrder.avgPrice;
     }

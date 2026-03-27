@@ -14,14 +14,42 @@
   ],
   "rules": {
     "typescript/no-explicit-any": "deny",
-    "typescript/consistent-type-assertions": [
-      "deny",
-      { "assertionStyle": "never" }
-    ],
     "typescript/no-unsafe-assignment": "deny",
     "typescript/no-unsafe-argument": "deny",
     "typescript/no-unsafe-member-access": "deny",
     "typescript/no-unsafe-return": "deny",
-    "typescript/no-floating-promises": "deny"
+    "typescript/no-floating-promises": "deny",
+    "typescript/consistent-type-assertions": ["deny", { "assertionStyle": "never" }],
+    "@typescript-eslint/switch-exhaustiveness-check": [
+      "deny",
+      {
+        "allowDefaultCaseForExhaustiveSwitch": false,
+        "considerDefaultExhaustiveForUnions": false,
+        "requireDefaultForNonUnion": true
+      }
+    ],
+    "@typescript-eslint/no-misused-promises": [
+      "deny",
+      { "checksVoidReturn": { "attributes": false } }
+    ],
+    "@typescript-eslint/restrict-template-expressions": [
+      "deny",
+      {
+        "allowAny": false,
+        "allowBoolean": false,
+        "allowNullish": false,
+        "allowNumber": true,
+        "allowRegExp": false
+      }
+    ],
+    "@typescript-eslint/ban-ts-comment": [
+      "deny",
+      {
+        "ts-check": true,
+        "ts-expect-error": true,
+        "ts-ignore": true,
+        "ts-nocheck": true
+      }
+    ]
   }
 }

@@ -32,7 +32,7 @@ export async function signPayload(
 export function buildQueryString(params: Record<string, string | number>): string {
   return Object.keys(params)
     .sort()
-    .map((key) => `${key}=${params[key]}`)
+    .map((key) => `${key}=${String(params[key])}`)
     .join('&');
 }
 

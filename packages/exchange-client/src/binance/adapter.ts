@@ -376,7 +376,7 @@ export class BinanceAdapter implements IExchange {
             msg.id,
             new ExchangeApiError(
               msg.error?.code ?? 0,
-              `WS API error ${msg.error?.code}: ${msg.error?.msg ?? 'Unknown error'}`,
+              `WS API error ${String(msg.error?.code)}: ${msg.error?.msg ?? 'Unknown error'}`,
             ),
           );
         }

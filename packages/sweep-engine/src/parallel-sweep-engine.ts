@@ -77,7 +77,7 @@ export function createParallelSweepEngine(config: ParallelSweepConfig): IParalle
 
             if (completed === paramSets.length) {
               if (errors.length > 0 && results.length === 0) {
-                reject(new Error(`All sweep runs failed. First error: ${errors[0]?.error}`));
+                reject(new Error(`All sweep runs failed. First error: ${errors[0]?.error ?? 'unknown'}`));
                 return;
               }
 
@@ -106,7 +106,7 @@ export function createParallelSweepEngine(config: ParallelSweepConfig): IParalle
 
             if (completed === paramSets.length) {
               if (results.length === 0) {
-                reject(new Error(`All sweep runs failed. First error: ${errors[0]?.error}`));
+                reject(new Error(`All sweep runs failed. First error: ${errors[0]?.error ?? 'unknown'}`));
               } else {
                 results.sort((a, b) => scorer(b.result) - scorer(a.result));
                 resolve({ results, errors });

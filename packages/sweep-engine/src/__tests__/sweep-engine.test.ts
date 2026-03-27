@@ -80,7 +80,7 @@ describe('createSweepEngine', () => {
     expect(calls.length).toBe(4);
     expect(results.length).toBe(4);
 
-    const paramSets = calls.map((c) => `${c['a']},${c['b']}`);
+    const paramSets = calls.map((c) => `${String(c['a'])},${String(c['b'])}`);
     expect(paramSets).toContain('1,3');
     expect(paramSets).toContain('1,4');
     expect(paramSets).toContain('2,3');
