@@ -1,5 +1,5 @@
-import type { BacktestConfig, BacktestResult, ExchangeConfig } from '@trading-bot/types';
 import type { SweepParamGrid } from '@trading-bot/strategy';
+import type { BacktestConfig, BacktestResult, ExchangeConfig } from '@trading-bot/types';
 
 import type { SweepResult } from './types';
 

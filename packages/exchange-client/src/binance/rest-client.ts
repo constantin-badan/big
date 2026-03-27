@@ -10,10 +10,7 @@ export class RestClient {
     this.apiKey = apiKey;
   }
 
-  async restGet(
-    path: string,
-    params: Record<string, string | number>,
-  ): Promise<unknown> {
+  async restGet(path: string, params: Record<string, string | number>): Promise<unknown> {
     const qs = buildQueryString(params);
     const url = `${this.restBase}${path}?${qs}`;
     const response = await fetch(url, {
@@ -21,15 +18,15 @@ export class RestClient {
     });
     if (!response.ok) {
       const body = await response.text();
-      throw new ExchangeApiError(response.status, `Binance REST ${response.status}: ${body.substring(0, 500)}`);
+      throw new ExchangeApiError(
+        response.status,
+        `Binance REST ${response.status}: ${body.substring(0, 500)}`,
+      );
     }
     return response.json();
   }
 
-  async restPost(
-    path: string,
-    params: Record<string, string | number>,
-  ): Promise<unknown> {
+  async restPost(path: string, params: Record<string, string | number>): Promise<unknown> {
     const url = `${this.restBase}${path}`;
     const body = buildQueryString(params);
     const response = await fetch(url, {
@@ -42,7 +39,10 @@ export class RestClient {
     });
     if (!response.ok) {
       const respBody = await response.text();
-      throw new ExchangeApiError(response.status, `Binance REST ${response.status}: ${respBody.substring(0, 500)}`);
+      throw new ExchangeApiError(
+        response.status,
+        `Binance REST ${response.status}: ${respBody.substring(0, 500)}`,
+      );
     }
     return response.json();
   }

@@ -3,12 +3,7 @@ import type { ITradeStore } from '@trading-bot/storage';
 import type { StrategyFactory } from '@trading-bot/strategy';
 import type { BacktestConfig, Timeframe, TradeRecord } from '@trading-bot/types';
 
-import type {
-  IParityChecker,
-  ParityMatchedPair,
-  ParityResult,
-  ParitySummary,
-} from './types';
+import type { IParityChecker, ParityMatchedPair, ParityResult, ParitySummary } from './types';
 
 // Timeframe durations in ms — for match tolerance
 const TIMEFRAME_MS: Record<string, number> = {
@@ -79,7 +74,10 @@ function matchTrades(
 
   for (const live of sortedLive) {
     // Advance btStart past trades that are too early to match any remaining live trade
-    while (btStart < sortedBt.length && sortedBt[btStart]!.entryTime < live.entryTime - toleranceMs) {
+    while (
+      btStart < sortedBt.length &&
+      sortedBt[btStart]!.entryTime < live.entryTime - toleranceMs
+    ) {
       btStart++;
     }
 
@@ -133,10 +131,7 @@ function matchTrades(
   return { matched, liveOnly: unmatchedLive, backtestOnly };
 }
 
-function computeSummary(
-  matched: ParityMatchedPair[],
-  totalUnique: number,
-): ParitySummary {
+function computeSummary(matched: ParityMatchedPair[], totalUnique: number): ParitySummary {
   if (matched.length === 0) {
     return {
       matchRate: 0,
@@ -178,9 +173,7 @@ export function createParityChecker(
   timeframes: Timeframe[],
 ): IParityChecker {
   // Use finest timeframe for match tolerance
-  const toleranceMs = Math.min(
-    ...timeframes.map((tf) => TIMEFRAME_MS[tf] ?? 60_000),
-  );
+  const toleranceMs = Math.min(...timeframes.map((tf) => TIMEFRAME_MS[tf] ?? 60_000));
 
   return {
     async compare(

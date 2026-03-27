@@ -12,10 +12,10 @@ import type {
   Tick,
   Timeframe,
 } from '@trading-bot/types';
+import { z } from 'zod';
 
-import type { IExchange } from '../types';
 import { ConnectionError, ExchangeApiError } from '../errors';
-
+import type { IExchange } from '../types';
 import {
   buildCombinedStreamUrl,
   buildStreamName,
@@ -36,19 +36,17 @@ import {
   parseAlgoUpdate,
   routeOrderType,
 } from './parsers';
-import { signRequest } from './signing';
-import { jsonParse } from './unsafe-cast';
-import { z } from 'zod';
+import { RequestTracker } from './request-tracker';
+import { RestClient } from './rest-client';
 import {
   PositionRiskSchema,
   BalanceEntrySchema,
   CommissionRateSchema,
   WsApiOrderResponseSchema,
 } from './schemas';
-
+import { signRequest } from './signing';
+import { jsonParse } from './unsafe-cast';
 import { WsConnection } from './ws-connection';
-import { RequestTracker } from './request-tracker';
-import { RestClient } from './rest-client';
 
 type StreamCallback = (data: unknown) => void;
 
@@ -187,10 +185,7 @@ export class BinanceAdapter implements IExchange {
     });
   }
 
-  subscribeOrderBookDiff(
-    symbol: string,
-    callback: (diff: OrderBookDiff) => void,
-  ): () => void {
+  subscribeOrderBookDiff(symbol: string, callback: (diff: OrderBookDiff) => void): () => void {
     const streamName = buildStreamName(symbol, 'depth@100ms');
     return this.addStreamCallback(streamName, (data) => {
       callback(parseDepthMessage(data));
@@ -234,9 +229,10 @@ export class BinanceAdapter implements IExchange {
     const params = { symbol };
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
     const data = await this.restClient.restGet('/fapi/v1/openOrders', signed);
-    return z.array(WsApiOrderResponseSchema).parse(data).map((o) =>
-      parseWsApiOrderResponse(o, Date.now()),
-    );
+    return z
+      .array(WsApiOrderResponseSchema)
+      .parse(data)
+      .map((o) => parseWsApiOrderResponse(o, Date.now()));
   }
 
   // === REST API: Positions ===
@@ -250,7 +246,9 @@ export class BinanceAdapter implements IExchange {
     const params = {};
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
     const data = await this.restClient.restGet('/fapi/v2/positionRisk', signed);
-    return z.array(PositionRiskSchema).parse(data)
+    return z
+      .array(PositionRiskSchema)
+      .parse(data)
       .filter((p) => Number(p.positionAmt) !== 0)
       .map((p): Position => {
         const amt = Number(p.positionAmt);
@@ -283,12 +281,15 @@ export class BinanceAdapter implements IExchange {
     const params = {};
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
     const data = await this.restClient.restGet('/fapi/v2/balance', signed);
-    return z.array(BalanceEntrySchema).parse(data).map((b) => ({
-      asset: b.asset,
-      free: Number(b.availableBalance),
-      locked: Number(b.balance) - Number(b.availableBalance),
-      total: Number(b.balance),
-    }));
+    return z
+      .array(BalanceEntrySchema)
+      .parse(data)
+      .map((b) => ({
+        asset: b.asset,
+        free: Number(b.availableBalance),
+        locked: Number(b.balance) - Number(b.availableBalance),
+        total: Number(b.balance),
+      }));
   }
 
   async getFees(symbol: string): Promise<FeeStructure> {

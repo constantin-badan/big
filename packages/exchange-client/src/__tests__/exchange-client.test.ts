@@ -2,8 +2,6 @@ import { describe, test, expect } from 'bun:test';
 
 import type { ExchangeConfig } from '@trading-bot/types';
 
-import { createExchange } from '../factory';
-import { BinanceAdapter } from '../binance/adapter';
 import {
   buildQueryString,
   parseCombinedStreamMessage,
@@ -16,6 +14,8 @@ import {
   routeOrderType,
   parseRestCandles,
 } from '../binance';
+import { BinanceAdapter } from '../binance/adapter';
+import { createExchange } from '../factory';
 
 describe('exchange-client', () => {
   test('module exports are importable', async () => {
@@ -125,8 +125,16 @@ describe('parseKlineMessage', () => {
     const data = {
       e: 'kline',
       k: {
-        t: 0, T: 0, o: '1', h: '1', l: '1', c: '1',
-        v: '1', q: '1', n: 0, x: false,
+        t: 0,
+        T: 0,
+        o: '1',
+        h: '1',
+        l: '1',
+        c: '1',
+        v: '1',
+        q: '1',
+        n: 0,
+        x: false,
       },
     };
     expect(parseKlineMessage(data).isClosed).toBe(false);
@@ -158,7 +166,10 @@ describe('parseDepthMessage', () => {
       e: 'depthUpdate',
       s: 'BTCUSDT',
       T: 1700000000000,
-      b: [['50000.00', '1.5'], ['49999.00', '0']],
+      b: [
+        ['50000.00', '1.5'],
+        ['49999.00', '0'],
+      ],
       a: [['50001.00', '2.0']],
       U: 100,
       u: 105,
@@ -166,7 +177,10 @@ describe('parseDepthMessage', () => {
     const diff = parseDepthMessage(data);
     expect(diff.symbol).toBe('BTCUSDT');
     expect(diff.timestamp).toBe(1700000000000);
-    expect(diff.bids).toEqual([[50000, 1.5], [49999, 0]]);
+    expect(diff.bids).toEqual([
+      [50000, 1.5],
+      [49999, 0],
+    ]);
     expect(diff.asks).toEqual([[50001, 2.0]]);
     expect(diff.firstUpdateId).toBe(100);
     expect(diff.lastUpdateId).toBe(105);

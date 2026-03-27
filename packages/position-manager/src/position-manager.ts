@@ -114,7 +114,14 @@ export class PositionManager implements IPositionManager {
     }
   }
 
-  private onCandleClose({ symbol, candle }: { symbol: string; timeframe: Timeframe; candle: Candle }): void {
+  private onCandleClose({
+    symbol,
+    candle,
+  }: {
+    symbol: string;
+    timeframe: Timeframe;
+    candle: Candle;
+  }): void {
     if (this.getState(symbol) !== 'OPEN') return;
     const symState = this.getSymbolState(symbol);
     const entryOrder = symState.entryOrder;
@@ -348,13 +355,7 @@ export class PositionManager implements IPositionManager {
 
     // Trailing stop
     if (this.config.trailingStopEnabled) {
-      const trailResult = this.checkTrailingStop(
-        symState,
-        isLong,
-        entry.avgPrice,
-        price,
-        price,
-      );
+      const trailResult = this.checkTrailingStop(symState, isLong, entry.avgPrice, price, price);
       if (trailResult === 'TRIGGERED') {
         this.triggerExit(symbol, 'TRAILING_STOP', price);
         return;

@@ -1,4 +1,5 @@
 import type { ExchangeStream, RiskRule, RiskSeverity } from '@trading-bot/types';
+
 import { ConnectionError } from '../errors';
 
 // Reconnection config
@@ -11,7 +12,10 @@ export const RECONNECT_KILL_AFTER = 10;
 export const MAINTENANCE_CLOSE_CODES = new Set([1001, 1012]);
 
 export function reconnectDelay(attempt: number): number {
-  const exponential = Math.min(RECONNECT_BASE_DELAY_MS * Math.pow(2, attempt), RECONNECT_MAX_DELAY_MS);
+  const exponential = Math.min(
+    RECONNECT_BASE_DELAY_MS * Math.pow(2, attempt),
+    RECONNECT_MAX_DELAY_MS,
+  );
   const jitter = Math.random() * RECONNECT_JITTER_MS;
   return exponential + jitter;
 }

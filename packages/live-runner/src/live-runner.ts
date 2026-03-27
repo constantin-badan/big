@@ -1,7 +1,7 @@
+import { LiveDataFeed, type IDataFeed } from '@trading-bot/data-feed';
 import { EventBus } from '@trading-bot/event-bus';
 import type { IEventBus } from '@trading-bot/event-bus';
 import { createExchange, type IExchange } from '@trading-bot/exchange-client';
-import { LiveDataFeed, type IDataFeed } from '@trading-bot/data-feed';
 import { LiveExecutor } from '@trading-bot/order-executor';
 import type { IOrderExecutor } from '@trading-bot/order-executor';
 import type { IStrategy, StrategyFactory } from '@trading-bot/strategy';
@@ -23,7 +23,15 @@ export interface LiveRunnerConfig {
   rateLimitPerMinute: number;
 }
 
-const DEFAULT_CONFIG: Pick<LiveRunnerConfig, 'shutdownBehavior' | 'healthCheckIntervalMs' | 'maxRetries' | 'retryDelayMs' | 'checkOrphanPositions' | 'rateLimitPerMinute'> = {
+const DEFAULT_CONFIG: Pick<
+  LiveRunnerConfig,
+  | 'shutdownBehavior'
+  | 'healthCheckIntervalMs'
+  | 'maxRetries'
+  | 'retryDelayMs'
+  | 'checkOrphanPositions'
+  | 'rateLimitPerMinute'
+> = {
   shutdownBehavior: 'leave-open',
   healthCheckIntervalMs: 30_000,
   maxRetries: 3,
@@ -55,7 +63,10 @@ export class LiveRunner implements ILiveRunner {
   private stopPromise: Promise<void> | null = null;
   private readonly logHandlers: Array<() => void> = [];
 
-  constructor(config: Partial<LiveRunnerConfig> & Pick<LiveRunnerConfig, 'factory' | 'params' | 'exchangeConfig' | 'symbols' | 'timeframes'>) {
+  constructor(
+    config: Partial<LiveRunnerConfig> &
+      Pick<LiveRunnerConfig, 'factory' | 'params' | 'exchangeConfig' | 'symbols' | 'timeframes'>,
+  ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
@@ -101,7 +112,7 @@ export class LiveRunner implements ILiveRunner {
         const symbols = positions.map((p) => `${p.symbol}(${p.side})`).join(', ');
         throw new Error(
           `Orphan positions detected: ${symbols}. ` +
-          'Close them manually or set checkOrphanPositions: false to proceed.',
+            'Close them manually or set checkOrphanPositions: false to proceed.',
         );
       }
     }
@@ -146,7 +157,6 @@ export class LiveRunner implements ILiveRunner {
   }
 
   private async doStop(): Promise<void> {
-
     this.log('info', 'runner:stopping', { uptime: this.uptime });
 
     // Stop heartbeat and unsubscribe logging handlers
@@ -179,7 +189,11 @@ export class LiveRunner implements ILiveRunner {
       try {
         const positions = await this.exchange.getPositions();
         for (const pos of positions) {
-          this.log('info', 'runner:closing-position', { symbol: pos.symbol, side: pos.side, quantity: pos.quantity });
+          this.log('info', 'runner:closing-position', {
+            symbol: pos.symbol,
+            side: pos.side,
+            quantity: pos.quantity,
+          });
           await this.exchange.placeOrder({
             symbol: pos.symbol,
             side: pos.side === 'LONG' ? 'SELL' : 'BUY',
@@ -244,9 +258,7 @@ export class LiveRunner implements ILiveRunner {
         uptime: this.uptime,
         wsConnected: this.exchange.isConnected(),
         pendingOrders: this.executor.getPendingCount(),
-        lastCandleAge: this.lastCandleTimestamp > 0
-          ? Date.now() - this.lastCandleTimestamp
-          : -1,
+        lastCandleAge: this.lastCandleTimestamp > 0 ? Date.now() - this.lastCandleTimestamp : -1,
       });
     }, this.config.healthCheckIntervalMs);
   }

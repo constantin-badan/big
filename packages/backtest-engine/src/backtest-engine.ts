@@ -69,7 +69,11 @@ export function createBacktestEngine(
         await strategy.stop();
       } finally {
         if (strategyStarted) {
-          try { await strategy.stop(); } catch { /* already stopped or stop failed */ }
+          try {
+            await strategy.stop();
+          } catch {
+            /* already stopped or stop failed */
+          }
         }
         bus.off('position:closed', tradeHandler);
         exchange.dispose();

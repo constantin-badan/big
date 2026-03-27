@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite';
+
 import type { Candle, Timeframe, TradeRecord } from '@trading-bot/types';
 
 import type { ICandleStore, ITradeStore, TradeFilter } from './types';
@@ -114,12 +115,7 @@ class CandleStore implements ICandleStore {
     insert();
   }
 
-  getCandles(
-    symbol: string,
-    timeframe: Timeframe,
-    startTime: number,
-    endTime: number,
-  ): Candle[] {
+  getCandles(symbol: string, timeframe: Timeframe, startTime: number, endTime: number): Candle[] {
     interface CandleRow {
       open_time: number;
       close_time: number;
@@ -132,32 +128,37 @@ class CandleStore implements ICandleStore {
       trades: number;
     }
 
-    const rows = unsafeCast<CandleRow[]>(this.selectStmt.all(symbol, timeframe, startTime, endTime));
-    return rows.map((r): Candle => ({
-      openTime: r.open_time,
-      closeTime: r.close_time,
-      open: r.open,
-      high: r.high,
-      low: r.low,
-      close: r.close,
-      volume: r.volume,
-      quoteVolume: r.quote_volume,
-      trades: r.trades,
-      isClosed: true,
-    }));
+    const rows = unsafeCast<CandleRow[]>(
+      this.selectStmt.all(symbol, timeframe, startTime, endTime),
+    );
+    return rows.map(
+      (r): Candle => ({
+        openTime: r.open_time,
+        closeTime: r.close_time,
+        open: r.open,
+        high: r.high,
+        low: r.low,
+        close: r.close,
+        volume: r.volume,
+        quoteVolume: r.quote_volume,
+        trades: r.trades,
+        isClosed: true,
+      }),
+    );
   }
 
   getLatestTimestamp(symbol: string, timeframe: Timeframe): number | null {
-    interface LatestRow { latest: number | null }
+    interface LatestRow {
+      latest: number | null;
+    }
     const row = unsafeCast<LatestRow | null>(this.latestStmt.get(symbol, timeframe));
     return row?.latest ?? null;
   }
 
-  getGaps(
-    symbol: string,
-    timeframe: Timeframe,
-  ): Array<{ from: number; to: number }> {
-    interface TimeRow { open_time: number }
+  getGaps(symbol: string, timeframe: Timeframe): Array<{ from: number; to: number }> {
+    interface TimeRow {
+      open_time: number;
+    }
     const rows = unsafeCast<TimeRow[]>(this.gapStmt.all(symbol, timeframe));
     const intervalMs = TIMEFRAME_MS[timeframe];
     if (intervalMs === undefined || rows.length < 2) return [];
@@ -257,10 +258,12 @@ class TradeStore implements ITradeStore {
 
     return rows.map((r): TradeRecord => {
       const side: TradeRecord['side'] = r.side === 'SHORT' ? 'SHORT' : 'LONG';
-      const exitReason: TradeRecord['exitReason'] =
-        unsafeCast<TradeRecord['exitReason']>(r.exit_reason);
-      const metadata: Record<string, unknown> =
-        r.metadata ? jsonParse<Record<string, unknown>>(r.metadata) : {};
+      const exitReason: TradeRecord['exitReason'] = unsafeCast<TradeRecord['exitReason']>(
+        r.exit_reason,
+      );
+      const metadata: Record<string, unknown> = r.metadata
+        ? jsonParse<Record<string, unknown>>(r.metadata)
+        : {};
       return {
         id: r.id,
         symbol: r.symbol,

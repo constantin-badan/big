@@ -58,7 +58,11 @@ export class LiveDataFeed implements IDataFeed {
     }
 
     // Listen for gap events to trigger backfill
-    const handleGap = (data: { symbol: string; fromTimestamp: number; toTimestamp: number }): void => {
+    const handleGap = (data: {
+      symbol: string;
+      fromTimestamp: number;
+      toTimestamp: number;
+    }): void => {
       // Backfill for each timeframe on this symbol
       for (const tf of timeframes) {
         void this.backfillGap(data.symbol, tf, data.fromTimestamp, data.toTimestamp);
@@ -68,8 +72,10 @@ export class LiveDataFeed implements IDataFeed {
     this.unsubscribes.push(() => this.bus.off('exchange:gap', handleGap));
 
     // Start the market data WebSocket (if the exchange adapter supports it)
-    if ('startMarketDataStream' in this.exchange &&
-        typeof this.exchange.startMarketDataStream === 'function') {
+    if (
+      'startMarketDataStream' in this.exchange &&
+      typeof this.exchange.startMarketDataStream === 'function'
+    ) {
       await this.exchange.startMarketDataStream();
     }
 

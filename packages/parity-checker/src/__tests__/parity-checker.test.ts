@@ -10,18 +10,36 @@ import { createParityChecker } from '../parity-checker';
 const BASE_TIME = 1700000000000;
 
 const ZERO_METRICS: PerformanceMetrics = {
-  totalTrades: 0, winRate: 0, profitFactor: 0, sharpeRatio: 0,
-  maxDrawdown: 0, maxDrawdownDuration: 0, avgWin: 0, avgLoss: 0,
-  expectancy: 0, avgHoldTime: 0, totalFees: 0, totalSlippage: 0,
+  totalTrades: 0,
+  winRate: 0,
+  profitFactor: 0,
+  sharpeRatio: 0,
+  maxDrawdown: 0,
+  maxDrawdownDuration: 0,
+  avgWin: 0,
+  avgLoss: 0,
+  expectancy: 0,
+  avgHoldTime: 0,
+  totalFees: 0,
+  totalSlippage: 0,
 };
 
 function makeTrade(id: string, overrides?: Partial<TradeRecord>): TradeRecord {
   return {
-    id, symbol: 'BTCUSDT', side: 'LONG',
-    entryPrice: 50000, exitPrice: 50500, quantity: 0.1,
-    entryTime: BASE_TIME, exitTime: BASE_TIME + 3600_000,
-    pnl: 50, fees: 2, slippage: 0.5, holdTimeMs: 3600_000,
-    exitReason: 'TAKE_PROFIT', metadata: {},
+    id,
+    symbol: 'BTCUSDT',
+    side: 'LONG',
+    entryPrice: 50000,
+    exitPrice: 50500,
+    quantity: 0.1,
+    entryTime: BASE_TIME,
+    exitTime: BASE_TIME + 3600_000,
+    pnl: 50,
+    fees: 2,
+    slippage: 0.5,
+    holdTimeMs: 3600_000,
+    exitReason: 'TAKE_PROFIT',
+    metadata: {},
     ...overrides,
   };
 }
@@ -32,14 +50,23 @@ function mockTradeStore(trades: TradeRecord[]): ITradeStore {
 
 function mockEngine(trades: TradeRecord[]): IBacktestEngine {
   const result: BacktestResult = {
-    trades, startTime: BASE_TIME, endTime: BASE_TIME + 86400_000,
-    initialBalance: 10000, finalBalance: 10050, metrics: { ...ZERO_METRICS, totalTrades: trades.length },
+    trades,
+    startTime: BASE_TIME,
+    endTime: BASE_TIME + 86400_000,
+    initialBalance: 10000,
+    finalBalance: 10050,
+    metrics: { ...ZERO_METRICS, totalTrades: trades.length },
   };
   return { run: async () => result };
 }
 
 function stubFactory(): IStrategy {
-  return { name: 'test', start: async () => {}, stop: async () => {}, getStats: () => ZERO_METRICS };
+  return {
+    name: 'test',
+    start: async () => {},
+    stop: async () => {},
+    getStats: () => ZERO_METRICS,
+  };
 }
 
 const PERIOD = { startTime: BASE_TIME, endTime: BASE_TIME + 86400_000 };
@@ -146,12 +173,16 @@ describe('parity-checker', () => {
     const liveTrade = makeTrade('t1', { entryTime: BASE_TIME + 7_200_000 });
     const btTrade = makeTrade('bt1', { entryTime: BASE_TIME });
 
-    const checker4h = createParityChecker(mockEngine([btTrade]), mockTradeStore([liveTrade]), ['4h']);
+    const checker4h = createParityChecker(mockEngine([btTrade]), mockTradeStore([liveTrade]), [
+      '4h',
+    ]);
     const result4h = await checker4h.compare('test', stubFactory, {}, PERIOD);
     expect(result4h.matched).toHaveLength(1);
 
     // 1m tolerance = 60_000ms — should NOT match
-    const checker1m = createParityChecker(mockEngine([btTrade]), mockTradeStore([liveTrade]), ['1m']);
+    const checker1m = createParityChecker(mockEngine([btTrade]), mockTradeStore([liveTrade]), [
+      '1m',
+    ]);
     const result1m = await checker1m.compare('test', stubFactory, {}, PERIOD);
     expect(result1m.matched).toHaveLength(0);
   });

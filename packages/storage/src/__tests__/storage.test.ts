@@ -311,9 +311,21 @@ describe('createStorage', () => {
       expect(s2.trades.getTrades({})).toHaveLength(1);
       s2.close();
     } finally {
-      try { unlinkSync(path); } catch { /* ignore */ }
-      try { unlinkSync(`${path}-wal`); } catch { /* ignore */ }
-      try { unlinkSync(`${path}-shm`); } catch { /* ignore */ }
+      try {
+        unlinkSync(path);
+      } catch {
+        /* ignore */
+      }
+      try {
+        unlinkSync(`${path}-wal`);
+      } catch {
+        /* ignore */
+      }
+      try {
+        unlinkSync(`${path}-shm`);
+      } catch {
+        /* ignore */
+      }
     }
   });
 });

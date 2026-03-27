@@ -9,12 +9,8 @@ import type {
   Tick,
 } from '@trading-bot/types';
 
+import { OrderTradeUpdateSchema, AlgoUpdateSchema, WsApiOrderResponseSchema } from './schemas';
 import { jsonParse, numPair, unsafeCast } from './unsafe-cast';
-import {
-  OrderTradeUpdateSchema,
-  AlgoUpdateSchema,
-  WsApiOrderResponseSchema,
-} from './schemas';
 
 // === Combined stream message parsing ===
 

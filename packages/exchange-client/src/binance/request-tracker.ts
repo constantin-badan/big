@@ -26,7 +26,11 @@ export class RequestTracker {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingRequests.delete(id);
-        reject(new RequestTimeoutError(`WS API request timed out after ${WS_REQUEST_TIMEOUT_MS}ms: ${method}`));
+        reject(
+          new RequestTimeoutError(
+            `WS API request timed out after ${WS_REQUEST_TIMEOUT_MS}ms: ${method}`,
+          ),
+        );
       }, WS_REQUEST_TIMEOUT_MS);
 
       this.pendingRequests.set(id, { resolve, reject, requestTime: Date.now(), timer });

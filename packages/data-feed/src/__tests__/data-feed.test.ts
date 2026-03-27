@@ -6,8 +6,8 @@ import { createTestBus, fixtures } from '@trading-bot/test-utils';
 import type { EventCapture } from '@trading-bot/test-utils';
 import type { Candle, Tick, Timeframe, OrderBookDiff } from '@trading-bot/types';
 
-import { ReplayDataFeed } from '../replay-data-feed';
 import { LiveDataFeed } from '../live-data-feed';
+import { ReplayDataFeed } from '../replay-data-feed';
 
 /**
  * Creates a mock exchange with overridable subscription behavior.
@@ -20,8 +20,7 @@ function createStreamableExchange(overrides: {
 }): IExchange {
   const noopCandles: IExchange['subscribeCandles'] =
     (_s: string, _tf: Timeframe, _cb: (c: Candle) => void) => () => {};
-  const noopTicks: IExchange['subscribeTicks'] =
-    (_s: string, _cb: (t: Tick) => void) => () => {};
+  const noopTicks: IExchange['subscribeTicks'] = (_s: string, _cb: (t: Tick) => void) => () => {};
   const noopDepth: IExchange['subscribeOrderBookDiff'] =
     (_s: string, _cb: (d: OrderBookDiff) => void) => () => {};
 
@@ -31,7 +30,9 @@ function createStreamableExchange(overrides: {
     subscribeCandles: overrides.subscribeCandles ?? noopCandles,
     subscribeTicks: overrides.subscribeTicks ?? noopTicks,
     subscribeOrderBookDiff: overrides.subscribeOrderBookDiff ?? noopDepth,
-    placeOrder: async () => { throw new Error('not configured'); },
+    placeOrder: async () => {
+      throw new Error('not configured');
+    },
     cancelOrder: async () => {},
     getOpenOrders: async () => [],
     getPosition: async () => null,
@@ -337,8 +338,12 @@ describe('LiveDataFeed', () => {
 
     let unsubCount = 0;
     const exchange = createStreamableExchange({
-      subscribeCandles: () => () => { unsubCount++; },
-      subscribeTicks: () => () => { unsubCount++; },
+      subscribeCandles: () => () => {
+        unsubCount++;
+      },
+      subscribeTicks: () => () => {
+        unsubCount++;
+      },
     });
 
     const feed = new LiveDataFeed(bus, exchange);

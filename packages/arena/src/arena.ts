@@ -5,10 +5,15 @@ import type { IEventBus, TradingEventMap } from '@trading-bot/event-bus';
 import { createExchange } from '@trading-bot/exchange-client';
 import type { IExchange } from '@trading-bot/exchange-client';
 import { BacktestExecutor } from '@trading-bot/order-executor';
-import { computeMetrics } from '@trading-bot/reporting';
 import type { IOrderExecutor } from '@trading-bot/order-executor';
+import { computeMetrics } from '@trading-bot/reporting';
 import type { IStrategy } from '@trading-bot/strategy';
-import type { ExchangeConfig, OrderRequest, SubmissionReceipt, TradeRecord } from '@trading-bot/types';
+import type {
+  ExchangeConfig,
+  OrderRequest,
+  SubmissionReceipt,
+  TradeRecord,
+} from '@trading-bot/types';
 
 import type { ArenaConfig, ArenaRanking, IArena } from './types';
 
@@ -199,9 +204,10 @@ export class Arena implements IArena {
     const rawExecutor = new BacktestExecutor(bus, simExchange);
 
     // Wrap executor with global position budget enforcement
-    const executor: IOrderExecutor = this.config.maxGlobalPositions !== undefined
-      ? this.wrapExecutorWithBudget(rawExecutor, bus)
-      : rawExecutor;
+    const executor: IOrderExecutor =
+      this.config.maxGlobalPositions !== undefined
+        ? this.wrapExecutorWithBudget(rawExecutor, bus)
+        : rawExecutor;
 
     // Collect trades from position:closed events
     const trades: TradeRecord[] = [];
@@ -324,10 +330,7 @@ export class Arena implements IArena {
 
     // Stop strategy with timeout — event flow is already severed so a hang is safe
     try {
-      await Promise.race([
-        instance.strategy.stop(),
-        new Promise<void>((r) => setTimeout(r, 5000)),
-      ]);
+      await Promise.race([instance.strategy.stop(), new Promise<void>((r) => setTimeout(r, 5000))]);
     } catch {
       // Strategy stop failed — event flow already cleaned up above
     }

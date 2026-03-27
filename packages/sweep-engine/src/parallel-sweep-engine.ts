@@ -1,7 +1,5 @@
 import type { SweepParamGrid } from '@trading-bot/strategy';
 
-import type { SweepResult, SweepScorer } from './types';
-import { unsafeCast } from './unsafe-cast';
 import type {
   IParallelSweepEngine,
   ParallelSweepConfig,
@@ -10,6 +8,8 @@ import type {
   WorkerResponse,
 } from './parallel-types';
 import { BUILT_IN_SCORERS } from './parallel-types';
+import type { SweepResult, SweepScorer } from './types';
+import { unsafeCast } from './unsafe-cast';
 
 function cartesianProduct(grid: SweepParamGrid): Record<string, number>[] {
   const keys = Object.keys(grid);
