@@ -14,6 +14,7 @@ import type {
 } from '@trading-bot/types';
 
 import type { IExchange } from '../types';
+import { ConnectionError, ExchangeApiError } from '../errors';
 
 import {
   buildCombinedStreamUrl,
@@ -35,17 +36,14 @@ import {
   parseAlgoUpdate,
   routeOrderType,
 } from './parsers';
-import { buildQueryString, signRequest } from './signing';
+import { signRequest } from './signing';
 import { jsonParse, unsafeCast } from './unsafe-cast';
 
-type StreamCallback = (data: unknown) => void;
+import { WsConnection } from './ws-connection';
+import { RequestTracker } from './request-tracker';
+import { RestClient } from './rest-client';
 
-interface PendingRequest {
-  resolve: (value: unknown) => void;
-  reject: (error: Error) => void;
-  requestTime: number;
-  timer: ReturnType<typeof setTimeout>;
-}
+type StreamCallback = (data: unknown) => void;
 
 // Binance REST response shapes (unvalidated — verified by integration tests)
 interface BinancePositionRisk {
@@ -77,57 +75,30 @@ interface BinanceTradingMessage {
   e?: string;
 }
 
-// Reconnection config
-const RECONNECT_BASE_DELAY_MS = 1000;
-const RECONNECT_MAX_DELAY_MS = 30_000;
-const RECONNECT_JITTER_MS = 500;
-const RECONNECT_KILL_AFTER = 10;
-const WS_REQUEST_TIMEOUT_MS = 30_000;
-
-// Binance close codes indicating scheduled maintenance (skip reconnect loop)
-const MAINTENANCE_CLOSE_CODES = new Set([1001, 1012]);
-
-function isMaintenanceClose(code: number): boolean {
-  return MAINTENANCE_CLOSE_CODES.has(code);
-}
-
-function reconnectDelay(attempt: number): number {
-  const exponential = Math.min(RECONNECT_BASE_DELAY_MS * Math.pow(2, attempt), RECONNECT_MAX_DELAY_MS);
-  const jitter = Math.random() * RECONNECT_JITTER_MS;
-  return exponential + jitter;
-}
-
 export class BinanceAdapter implements IExchange {
   private readonly endpoints: BinanceEndpoints;
-  private readonly apiKey: string;
-  private readonly privateKey: string;
+  private apiKey: string;
+  private privateKey: string;
   private readonly recvWindow: number;
   private readonly bus: IEventBus | null;
 
-  private marketDataWs: WebSocket | null = null;
-  private tradingWs: WebSocket | null = null;
+  private readonly tradingConn: WsConnection;
+  private marketDataConn: WsConnection | null = null;
   private tradingConnected = false;
   private marketDataConnected = false;
-  private intentionalDisconnect = false;
-
-  // Reconnection locks — prevent concurrent reconnect loops
-  private reconnectingTrading = false;
-  private reconnectingMarketData = false;
 
   // Combined stream dispatch: stream name → callback
   private readonly streamCallbacks = new Map<string, StreamCallback[]>();
   private readonly activeStreams = new Set<string>();
 
-  // WS API request tracking: id → pending promise
-  private readonly pendingRequests = new Map<string, PendingRequest>();
-  private requestIdCounter = 0;
+  // WS API request tracking
+  private readonly requestTracker = new RequestTracker();
 
   // Fill dedup: orderId → already emitted
   private readonly emittedFills = new Set<string>();
 
-  // Reconnection state
-  private marketDataReconnectAttempt = 0;
-  private tradingReconnectAttempt = 0;
+  // REST client
+  private readonly restClient: RestClient;
 
   // Per-stream-key last message timestamp for gap detection
   private readonly lastMessageTimestamp = new Map<string, number>();
@@ -141,6 +112,22 @@ export class BinanceAdapter implements IExchange {
     this.privateKey = config.privateKey;
     this.recvWindow = config.recvWindow ?? 5000;
     this.bus = bus ?? null;
+
+    this.restClient = new RestClient(this.endpoints.restBase, this.apiKey);
+
+    this.tradingConn = new WsConnection('userData', {
+      onConnected: (p) => this.bus?.emit('exchange:connected', p),
+      onDisconnected: (p) => this.bus?.emit('exchange:disconnected', p),
+      onReconnecting: (p) => this.bus?.emit('exchange:reconnecting', p),
+      onReconnectExhausted: (p) => this.bus?.emit('risk:breach', p),
+      onMessage: (data) => this.handleTradingMessage(data),
+    });
+
+    // After reconnect, re-authenticate and mark connected
+    this.tradingConn.onReconnected = async () => {
+      await this.sessionLogon();
+      this.tradingConnected = true;
+    };
   }
 
   // === Connection lifecycle ===
@@ -149,39 +136,44 @@ export class BinanceAdapter implements IExchange {
     if (this.tradingConnected) return;
 
     // Open trading WS API first (for auth)
-    await this.connectTradingWs();
+    await this.tradingConn.open(this.endpoints.wsApi);
 
     // Authenticate via session.logon
     await this.sessionLogon();
+
+    // Verify API key can trade by fetching account info
+    try {
+      await this.getBalance();
+    } catch (err) {
+      this.tradingConn.close();
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new ConnectionError(`API key verification failed (cannot fetch balance): ${msg}`);
+    }
 
     this.tradingConnected = true;
   }
 
   async disconnect(): Promise<void> {
-    this.intentionalDisconnect = true;
     this.tradingConnected = false;
     this.marketDataConnected = false;
 
     // Reject all pending WS API requests and clear their timers
-    for (const [, pending] of this.pendingRequests) {
-      clearTimeout(pending.timer);
-      pending.reject(new Error('Disconnected'));
-    }
-    this.pendingRequests.clear();
+    this.requestTracker.rejectAll('Disconnected');
 
-    if (this.marketDataWs) {
-      this.marketDataWs.close();
-      this.marketDataWs = null;
+    if (this.marketDataConn) {
+      this.marketDataConn.close();
+      this.marketDataConn = null;
     }
 
-    if (this.tradingWs) {
-      this.tradingWs.close();
-      this.tradingWs = null;
-    }
+    this.tradingConn.close();
 
     this.streamCallbacks.clear();
     this.activeStreams.clear();
     this.emittedFills.clear();
+
+    // Clear private keys from memory on intentional disconnect
+    this.apiKey = '';
+    this.privateKey = '';
   }
 
   isConnected(): boolean {
@@ -228,14 +220,14 @@ export class BinanceAdapter implements IExchange {
       interval: toBinanceInterval(timeframe),
       limit: String(limit),
     };
-    const data = await this.restGet('/fapi/v1/klines', params);
+    const data = await this.restClient.restGet('/fapi/v1/klines', params);
     return parseRestCandles(data);
   }
 
   async getOrderBook(symbol: string, depth?: number): Promise<OrderBookSnapshot> {
     const params: Record<string, string> = { symbol };
     if (depth !== undefined) params.limit = String(depth);
-    const data = await this.restGet('/fapi/v1/depth', params);
+    const data = await this.restClient.restGet('/fapi/v1/depth', params);
     return parseRestOrderBook(data, symbol);
   }
 
@@ -256,7 +248,7 @@ export class BinanceAdapter implements IExchange {
   async getOpenOrders(symbol: string): Promise<OrderResult[]> {
     const params = { symbol };
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
-    const data = await this.restGet('/fapi/v1/openOrders', signed);
+    const data = await this.restClient.restGet('/fapi/v1/openOrders', signed);
     return unsafeCast<Array<Record<string, unknown>>>(data).map((o) =>
       parseWsApiOrderResponse(o, Date.now()),
     );
@@ -272,7 +264,7 @@ export class BinanceAdapter implements IExchange {
   async getPositions(): Promise<Position[]> {
     const params = {};
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
-    const data = await this.restGet('/fapi/v2/positionRisk', signed);
+    const data = await this.restClient.restGet('/fapi/v2/positionRisk', signed);
     return unsafeCast<BinancePositionRisk[]>(data)
       .filter((p) => Number(p.positionAmt) !== 0)
       .map((p): Position => {
@@ -297,7 +289,7 @@ export class BinanceAdapter implements IExchange {
   async setLeverage(symbol: string, leverage: number): Promise<void> {
     const params = { symbol, leverage };
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
-    await this.restPost('/fapi/v1/leverage', signed);
+    await this.restClient.restPost('/fapi/v1/leverage', signed);
   }
 
   // === REST API: Account ===
@@ -305,7 +297,7 @@ export class BinanceAdapter implements IExchange {
   async getBalance(): Promise<AccountBalance[]> {
     const params = {};
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
-    const data = await this.restGet('/fapi/v2/balance', signed);
+    const data = await this.restClient.restGet('/fapi/v2/balance', signed);
     return unsafeCast<BinanceBalanceEntry[]>(data).map((b) => ({
       asset: b.asset,
       free: Number(b.availableBalance),
@@ -317,7 +309,7 @@ export class BinanceAdapter implements IExchange {
   async getFees(symbol: string): Promise<FeeStructure> {
     const params = { symbol };
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
-    const data = await this.restGet('/fapi/v1/commissionRate', signed);
+    const data = await this.restClient.restGet('/fapi/v1/commissionRate', signed);
     const resp = unsafeCast<BinanceCommissionRate>(data);
     return {
       maker: Number(resp.makerCommissionRate),
@@ -325,198 +317,40 @@ export class BinanceAdapter implements IExchange {
     };
   }
 
-  // === Internal: WebSocket management ===
-
-  private connectTradingWs(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const ws = new WebSocket(this.endpoints.wsApi);
-      let resolved = false;
-
-      ws.addEventListener('open', () => {
-        this.tradingWs = ws;
-        this.tradingReconnectAttempt = 0;
-        if (!resolved) {
-          resolved = true;
-          resolve();
-        }
-        this.bus?.emit('exchange:connected', {
-          stream: 'userData',
-          symbol: '*',
-          timestamp: Date.now(),
-        });
-      });
-
-      ws.addEventListener('error', () => {
-        if (!resolved) {
-          resolved = true;
-          reject(new Error('Trading WS connection failed'));
-        }
-      });
-
-      ws.addEventListener('message', (event) => {
-        this.handleTradingMessage(String(event.data));
-      });
-
-      ws.addEventListener('close', (event: CloseEvent) => {
-        this.tradingWs = null;
-        this.tradingConnected = false;
-        if (this.intentionalDisconnect) return;
-
-        const maintenance = isMaintenanceClose(event.code);
-        this.bus?.emit('exchange:disconnected', {
-          stream: 'userData',
-          symbol: '*',
-          reason: maintenance ? 'maintenance' : 'server_close',
-          timestamp: Date.now(),
-        });
-
-        if (!maintenance) {
-          void this.reconnectTrading();
-        }
-      });
-    });
-  }
-
-  private async reconnectTrading(): Promise<void> {
-    if (this.reconnectingTrading) return;
-    this.reconnectingTrading = true;
-    try {
-      while (!this.intentionalDisconnect) {
-        this.tradingReconnectAttempt++;
-        const delay = reconnectDelay(this.tradingReconnectAttempt);
-
-        this.bus?.emit('exchange:reconnecting', {
-          stream: 'userData',
-          symbol: '*',
-          attempt: this.tradingReconnectAttempt,
-          timestamp: Date.now(),
-        });
-
-        if (this.tradingReconnectAttempt >= RECONNECT_KILL_AFTER) {
-          this.bus?.emit('risk:breach', {
-            rule: 'MAX_DAILY_LOSS',
-            message: `Trading WS reconnect failed after ${this.tradingReconnectAttempt} attempts`,
-            severity: 'KILL',
-          });
-        }
-
-        await new Promise<void>((r) => setTimeout(r, delay));
-        if (this.intentionalDisconnect) return;
-
-        try {
-          await this.connectTradingWs();
-          await this.sessionLogon();
-          this.tradingConnected = true;
-          return;
-        } catch {
-          // retry
-        }
-      }
-    } finally {
-      this.reconnectingTrading = false;
-    }
-  }
+  // === Internal: Market data WS management ===
 
   private connectMarketDataWs(streams: string[]): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const url = buildCombinedStreamUrl(this.endpoints.wsStreams, streams);
-      const ws = new WebSocket(url);
-      let resolved = false;
-
-      ws.addEventListener('open', () => {
-        this.marketDataWs = ws;
+    const url = buildCombinedStreamUrl(this.endpoints.wsStreams, streams);
+    const conn = new WsConnection('kline', {
+      onConnected: (p) => {
         this.marketDataConnected = true;
-        this.marketDataReconnectAttempt = 0;
-        if (!resolved) {
-          resolved = true;
-          resolve();
-        }
-        this.bus?.emit('exchange:connected', {
-          stream: 'kline',
-          symbol: '*',
-          timestamp: Date.now(),
-        });
-      });
-
-      ws.addEventListener('error', () => {
-        if (!resolved) {
-          resolved = true;
-          reject(new Error('Market data WS connection failed'));
-        }
-      });
-
-      ws.addEventListener('message', (event) => {
-        this.handleMarketDataMessage(String(event.data));
-      });
-
-      ws.addEventListener('close', (event: CloseEvent) => {
-        this.marketDataWs = null;
+        this.bus?.emit('exchange:connected', p);
+      },
+      onDisconnected: (p) => {
         this.marketDataConnected = false;
-        if (this.intentionalDisconnect) return;
-
-        const maintenance = isMaintenanceClose(event.code);
-        this.bus?.emit('exchange:disconnected', {
-          stream: 'kline',
-          symbol: '*',
-          reason: maintenance ? 'maintenance' : 'server_close',
-          timestamp: Date.now(),
-        });
-
-        if (!maintenance) {
-          void this.reconnectMarketData(streams);
-        }
-      });
+        this.bus?.emit('exchange:disconnected', p);
+      },
+      onReconnecting: (p) => this.bus?.emit('exchange:reconnecting', p),
+      onReconnectExhausted: (p) => this.bus?.emit('risk:breach', p),
+      onMessage: (data) => this.handleMarketDataMessage(data),
     });
-  }
 
-  private async reconnectMarketData(streams: string[]): Promise<void> {
-    if (this.reconnectingMarketData) return;
-    this.reconnectingMarketData = true;
-    try {
-      while (!this.intentionalDisconnect) {
-        this.marketDataReconnectAttempt++;
-        const delay = reconnectDelay(this.marketDataReconnectAttempt);
-
-        this.bus?.emit('exchange:reconnecting', {
+    // After reconnect, emit gap events for each tracked stream
+    conn.onReconnected = async () => {
+      const reconnectTime = Date.now();
+      for (const [streamKey, lastTs] of this.lastMessageTimestamp) {
+        this.bus?.emit('exchange:gap', {
           stream: 'kline',
-          symbol: '*',
-          attempt: this.marketDataReconnectAttempt,
-          timestamp: Date.now(),
+          symbol: streamKey.split('@')[0]?.toUpperCase() ?? '*',
+          fromTimestamp: lastTs,
+          toTimestamp: reconnectTime,
+          timestamp: reconnectTime,
         });
-
-        if (this.marketDataReconnectAttempt >= RECONNECT_KILL_AFTER) {
-          this.bus?.emit('risk:breach', {
-            rule: 'MAX_DAILY_LOSS',
-            message: `Market data WS reconnect failed after ${this.marketDataReconnectAttempt} attempts`,
-            severity: 'KILL',
-          });
-        }
-
-        await new Promise<void>((r) => setTimeout(r, delay));
-        if (this.intentionalDisconnect) return;
-
-        try {
-          await this.connectMarketDataWs(streams);
-
-          // Emit gap events for each tracked stream
-          const reconnectTime = Date.now();
-          for (const [streamKey, lastTs] of this.lastMessageTimestamp) {
-            this.bus?.emit('exchange:gap', {
-              stream: 'kline',
-              symbol: streamKey.split('@')[0]?.toUpperCase() ?? '*',
-              fromTimestamp: lastTs,
-              toTimestamp: reconnectTime,
-              timestamp: reconnectTime,
-            });
-          }
-          return;
-        } catch {
-          // retry
-        }
       }
-    } finally {
-      this.reconnectingMarketData = false;
-    }
+    };
+
+    this.marketDataConn = conn;
+    return conn.open(url);
   }
 
   private handleMarketDataMessage(raw: string): void {
@@ -532,14 +366,16 @@ export class BinanceAdapter implements IExchange {
           try {
             cb(data);
           } catch (err) {
-            console.error(`[BinanceAdapter] Stream callback error for ${stream}:`, err);
+            this.logError('stream-callback', err, { stream });
           }
         }
       }
     } catch (err) {
-      console.error('[BinanceAdapter] Failed to parse market data message:', err);
+      this.logError('parse-market-data', err);
     }
   }
+
+  // === Internal: Trading WS message handling ===
 
   private handleTradingMessage(raw: string): void {
     try {
@@ -547,17 +383,16 @@ export class BinanceAdapter implements IExchange {
 
       // WS API response (has 'id' field matching our request)
       if (typeof msg.id === 'string') {
-        const pending = this.pendingRequests.get(msg.id);
-        if (pending) {
-          clearTimeout(pending.timer);
-          this.pendingRequests.delete(msg.id);
-          if (msg.status === 200) {
-            pending.resolve(msg.result);
-          } else {
-            pending.reject(
-              new Error(`WS API error ${msg.error?.code}: ${msg.error?.msg ?? 'Unknown error'}`),
-            );
-          }
+        if (msg.status === 200) {
+          this.requestTracker.resolve(msg.id, msg.result);
+        } else {
+          this.requestTracker.reject(
+            msg.id,
+            new ExchangeApiError(
+              msg.error?.code ?? 0,
+              `WS API error ${msg.error?.code}: ${msg.error?.msg ?? 'Unknown error'}`,
+            ),
+          );
         }
         return;
       }
@@ -571,7 +406,7 @@ export class BinanceAdapter implements IExchange {
         this.emitOrderEvent(order);
       }
     } catch (err) {
-      console.error('[BinanceAdapter] Failed to parse trading message:', err);
+      this.logError('parse-trading-message', err);
     }
   }
 
@@ -612,11 +447,7 @@ export class BinanceAdapter implements IExchange {
     method: string,
     params: Record<string, string | number>,
   ): Promise<unknown> {
-    if (!this.tradingWs) {
-      throw new Error('Trading WS not connected');
-    }
-
-    const id = String(++this.requestIdCounter);
+    const id = this.requestTracker.nextId();
 
     // Sign the params (add timestamp + signature) — async for Ed25519
     const signedParams = await signRequest(params, this.privateKey, this.recvWindow);
@@ -627,54 +458,9 @@ export class BinanceAdapter implements IExchange {
       params: signedParams,
     };
 
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingRequests.delete(id);
-        reject(new Error(`WS API request timed out after ${WS_REQUEST_TIMEOUT_MS}ms: ${method}`));
-      }, WS_REQUEST_TIMEOUT_MS);
-
-      this.pendingRequests.set(id, { resolve, reject, requestTime: Date.now(), timer });
-      this.tradingWs!.send(JSON.stringify(request));
-    });
-  }
-
-  // === Internal: REST requests ===
-
-  private async restGet(
-    path: string,
-    params: Record<string, string | number>,
-  ): Promise<unknown> {
-    const qs = buildQueryString(params);
-    const url = `${this.endpoints.restBase}${path}?${qs}`;
-    const response = await fetch(url, {
-      headers: { 'X-MBX-APIKEY': this.apiKey },
-    });
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`Binance REST ${response.status}: ${body.substring(0, 500)}`);
-    }
-    return response.json();
-  }
-
-  private async restPost(
-    path: string,
-    params: Record<string, string | number>,
-  ): Promise<unknown> {
-    const url = `${this.endpoints.restBase}${path}`;
-    const body = buildQueryString(params);
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'X-MBX-APIKEY': this.apiKey,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body,
-    });
-    if (!response.ok) {
-      const respBody = await response.text();
-      throw new Error(`Binance REST ${response.status}: ${respBody.substring(0, 500)}`);
-    }
-    return response.json();
+    const promise = this.requestTracker.track(id, method);
+    this.tradingConn.send(JSON.stringify(request));
+    return promise;
   }
 
   // === Internal: Stream subscription management ===
@@ -691,7 +477,7 @@ export class BinanceAdapter implements IExchange {
     this.activeStreams.add(streamName);
 
     // If we're connected but the WS isn't open (first subscription), open it
-    if (this.tradingConnected && !this.marketDataWs) {
+    if (this.tradingConnected && !this.marketDataConn) {
       void this.connectMarketDataWs([...this.activeStreams]);
     }
 
@@ -714,7 +500,14 @@ export class BinanceAdapter implements IExchange {
    */
   async startMarketDataStream(): Promise<void> {
     if (this.activeStreams.size === 0) return;
-    if (this.marketDataWs) return;
+    if (this.marketDataConn) return;
     await this.connectMarketDataWs([...this.activeStreams]);
+  }
+
+  private logError(action: string, err: unknown, context?: Record<string, unknown>): void {
+    const error = err instanceof Error ? err : new Error(String(err));
+    if (this.bus) {
+      this.bus.emit('error', { source: 'exchange-client', error, context: { action, ...context } });
+    }
   }
 }

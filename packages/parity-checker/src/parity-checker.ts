@@ -67,27 +67,47 @@ function matchTrades(
   const usedBacktest = new Set<number>();
   const unmatchedLive: TradeRecord[] = [];
 
-  for (const live of liveTrades) {
-    let bestIdx = -1;
+  // Sort both arrays by entryTime for sliding-window matching
+  const sortedLive = [...liveTrades].sort((a, b) => a.entryTime - b.entryTime);
+  const sortedBt = [...backtestTrades].sort((a, b) => a.entryTime - b.entryTime);
+
+  // Map from sorted backtest index back to original index (for usedBacktest tracking)
+  const btOriginalIndices = sortedBt.map((bt) => backtestTrades.indexOf(bt));
+
+  // Sliding window pointer: advance as live trades move past the tolerance window
+  let btStart = 0;
+
+  for (const live of sortedLive) {
+    // Advance btStart past trades that are too early to match any remaining live trade
+    while (btStart < sortedBt.length && sortedBt[btStart]!.entryTime < live.entryTime - toleranceMs) {
+      btStart++;
+    }
+
+    let bestOrigIdx = -1;
     let bestTimeDiff = Infinity;
 
-    for (let i = 0; i < backtestTrades.length; i++) {
-      if (usedBacktest.has(i)) continue;
-      const bt = backtestTrades[i]!;
+    for (let i = btStart; i < sortedBt.length; i++) {
+      const bt = sortedBt[i]!;
+
+      // If we've gone past the tolerance window, no further matches possible
+      if (bt.entryTime > live.entryTime + toleranceMs) break;
+
+      const origIdx = btOriginalIndices[i]!;
+      if (usedBacktest.has(origIdx)) continue;
 
       if (bt.symbol !== live.symbol) continue;
       if (bt.side !== live.side) continue;
 
       const timeDiff = Math.abs(live.entryTime - bt.entryTime);
       if (timeDiff <= toleranceMs && timeDiff < bestTimeDiff) {
-        bestIdx = i;
+        bestOrigIdx = origIdx;
         bestTimeDiff = timeDiff;
       }
     }
 
-    if (bestIdx >= 0) {
-      const bt = backtestTrades[bestIdx]!;
-      usedBacktest.add(bestIdx);
+    if (bestOrigIdx >= 0) {
+      const bt = backtestTrades[bestOrigIdx]!;
+      usedBacktest.add(bestOrigIdx);
       matched.push({
         live,
         backtest: bt,

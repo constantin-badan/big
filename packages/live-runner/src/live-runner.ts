@@ -20,14 +20,16 @@ export interface LiveRunnerConfig {
   maxRetries: number; // order executor retries on transport failure
   retryDelayMs: number;
   checkOrphanPositions: boolean; // refuse to start if orphaned positions exist
+  rateLimitPerMinute: number;
 }
 
-const DEFAULT_CONFIG: Pick<LiveRunnerConfig, 'shutdownBehavior' | 'healthCheckIntervalMs' | 'maxRetries' | 'retryDelayMs' | 'checkOrphanPositions'> = {
+const DEFAULT_CONFIG: Pick<LiveRunnerConfig, 'shutdownBehavior' | 'healthCheckIntervalMs' | 'maxRetries' | 'retryDelayMs' | 'checkOrphanPositions' | 'rateLimitPerMinute'> = {
   shutdownBehavior: 'leave-open',
   healthCheckIntervalMs: 30_000,
   maxRetries: 3,
   retryDelayMs: 1000,
   checkOrphanPositions: true,
+  rateLimitPerMinute: 1200,
 };
 
 export interface ILiveRunner {
@@ -50,6 +52,7 @@ export class LiveRunner implements ILiveRunner {
   private dataFeed!: IDataFeed;
   private executor!: IOrderExecutor;
   private _strategy!: IStrategy;
+  private stopPromise: Promise<void> | null = null;
   private readonly logHandlers: Array<() => void> = [];
 
   constructor(config: Partial<LiveRunnerConfig> & Pick<LiveRunnerConfig, 'factory' | 'params' | 'exchangeConfig' | 'symbols' | 'timeframes'>) {
@@ -80,7 +83,7 @@ export class LiveRunner implements ILiveRunner {
     this.executor = new LiveExecutor(this.bus, this.exchange, {
       maxRetries: this.config.maxRetries,
       retryDelayMs: this.config.retryDelayMs,
-      rateLimitPerMinute: 1200,
+      rateLimitPerMinute: this.config.rateLimitPerMinute,
     });
     this.dataFeed = new LiveDataFeed(this.bus, this.exchange);
 
@@ -133,8 +136,16 @@ export class LiveRunner implements ILiveRunner {
   }
 
   async stop(): Promise<void> {
+    if (this._status === 'stopping' && this.stopPromise) {
+      return this.stopPromise;
+    }
     if (this._status !== 'running') return;
     this._status = 'stopping';
+    this.stopPromise = this.doStop();
+    return this.stopPromise;
+  }
+
+  private async doStop(): Promise<void> {
 
     this.log('info', 'runner:stopping', { uptime: this.uptime });
 

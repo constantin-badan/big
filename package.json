@@ -8,7 +8,8 @@
     "lint:boundaries": "eslint 'packages/*/src/**/*.ts'",
     "lint": "nx run-many -t lint",
     "typecheck": "nx run-many -t typecheck",
-    "test": "nx run-many -t test"
+    "test": "nx run-many -t test",
+    "audit": "npm audit --omit=dev || true"
   },
   "devDependencies": {
     "@nx/eslint-plugin": "^22.6.1",

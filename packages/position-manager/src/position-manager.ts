@@ -89,178 +89,13 @@ export class PositionManager implements IPositionManager {
         );
       }
     }
-    this.handleTick = ({ symbol, tick }) => {
-      this.lastTickPrice.set(symbol, tick.price);
-      if (this.getState(symbol) === 'OPEN') {
-        this.evaluateSLTP(symbol, tick.price, tick.timestamp);
-      }
-    };
 
-    this.handleCandleClose = ({ symbol, candle }) => {
-      if (this.getState(symbol) !== 'OPEN') return;
-      const symState = this.getSymbolState(symbol);
-      const entryOrder = symState.entryOrder;
-      if (!entryOrder) return;
-
-      const isLong = entryOrder.side === 'BUY';
-      const closeTimestamp = candle.closeTime;
-      const entryTime = symState.entryTime ?? closeTimestamp;
-
-      // Check timeout
-      if (closeTimestamp - entryTime > this.config.maxHoldTimeMs) {
-        this.triggerExit(symbol, 'TIMEOUT', candle.close);
-        return;
-      }
-
-      // Check trailing stop
-      if (this.config.trailingStopEnabled) {
-        const entryPrice = entryOrder.avgPrice;
-
-        if (!symState.trailingActive) {
-          const activated = isLong
-            ? (candle.high - entryPrice) / entryPrice >= this.config.trailingStopActivationPct / 100
-            : (entryPrice - candle.low) / entryPrice >= this.config.trailingStopActivationPct / 100;
-          if (activated) {
-            symState.trailingActive = true;
-            symState.peakPrice = isLong ? candle.high : candle.low;
-          }
-        }
-
-        if (symState.trailingActive && symState.peakPrice !== null) {
-          symState.peakPrice = isLong
-            ? Math.max(symState.peakPrice, candle.high)
-            : Math.min(symState.peakPrice, candle.low);
-
-          const trailBreached = isLong
-            ? (symState.peakPrice - candle.low) / symState.peakPrice >=
-              this.config.trailingStopDistancePct / 100
-            : (candle.high - symState.peakPrice) / symState.peakPrice >=
-              this.config.trailingStopDistancePct / 100;
-
-          if (trailBreached) {
-            this.triggerExit(symbol, 'TRAILING_STOP', isLong ? candle.low : candle.high);
-            return;
-          }
-        }
-      }
-
-      // Check SL and TP — SL wins tiebreak
-      const slHit =
-        symState.stopPrice !== null &&
-        (isLong ? candle.low <= symState.stopPrice : candle.high >= symState.stopPrice);
-      const tpHit =
-        symState.takeProfitPrice !== null &&
-        (isLong ? candle.high >= symState.takeProfitPrice : candle.low <= symState.takeProfitPrice);
-
-      if (slHit) {
-        this.triggerExit(symbol, 'STOP_LOSS', symState.stopPrice ?? candle.close);
-        return;
-      }
-      if (tpHit) {
-        this.triggerExit(symbol, 'TAKE_PROFIT', symState.takeProfitPrice ?? candle.close);
-      }
-    };
-
-    this.handleSignal = ({ signal }) => {
-      const { symbol, action } = signal;
-
-      if (this.getState(symbol) !== 'IDLE') return;
-      if (action === 'NO_ACTION') return;
-      if (action === 'EXIT') return;
-
-      const entryPrice = this.lastTickPrice.get(symbol) ?? signal.price;
-      const result = this.riskManager.checkEntry(signal, entryPrice);
-
-      if (!result.allowed) {
-        if (result.severity === 'KILL') {
-          this.eventBus.emit('risk:breach', {
-            rule: result.rule,
-            message: result.reason,
-            severity: result.severity,
-          });
-        }
-        return;
-      }
-
-      const symState = this.getSymbolState(symbol);
-      const side = action === 'ENTER_LONG' ? 'BUY' : 'SELL';
-      const isLong = action === 'ENTER_LONG';
-
-      const stopPrice = isLong
-        ? entryPrice * (1 - this.config.defaultStopLossPct / 100)
-        : entryPrice * (1 + this.config.defaultStopLossPct / 100);
-      const takeProfitPrice = isLong
-        ? entryPrice * (1 + this.config.defaultTakeProfitPct / 100)
-        : entryPrice * (1 - this.config.defaultTakeProfitPct / 100);
-
-      // Generate clientOrderId upfront so it's stored BEFORE submit() is called
-      // This ensures re-entrant order:filled can match it correctly (ADR-2)
-      const clientOrderId = crypto.randomUUID();
-
-      // State-before-emit: update all state before calling submit()
-      symState.state = 'PENDING_ENTRY';
-      symState.pendingClientOrderId = clientOrderId;
-      symState.stopPrice = stopPrice;
-      symState.takeProfitPrice = takeProfitPrice;
-      symState.entryTime = signal.timestamp;
-      symState.trailingActive = false;
-      symState.exitReason = null;
-
-      const request: OrderRequest = {
-        symbol,
-        side,
-        type: 'MARKET',
-        quantity: result.quantity,
-        clientOrderId,
-      };
-
-      this.executor.submit(request);
-    };
-
-    this.handleOrderFilled = ({ order }) => {
-      const symbol = order.symbol;
-      const symState = this.symbolStates.get(symbol);
-      if (!symState) return;
-
-      // Match by the pre-stored clientOrderId
-      if (symState.pendingClientOrderId !== order.clientOrderId) return;
-
-      if (symState.state === 'PENDING_ENTRY') {
-        // Transition PENDING_ENTRY → OPEN
-        symState.entryOrder = order;
-        symState.peakPrice = order.avgPrice;
-        symState.state = 'OPEN';
-        symState.pendingClientOrderId = null;
-
-        const position = this.buildPositionFromEntry(symbol, order);
-        this.eventBus.emit('position:opened', { position });
-      } else if (symState.state === 'PENDING_EXIT') {
-        const entry = symState.entryOrder;
-        if (!entry) return;
-
-        const trade = this.buildTradeRecord(symbol, symState, entry, order);
-        const positionForClose = this.buildPositionFromEntry(symbol, entry);
-
-        // State-before-emit: clear to IDLE before emitting
-        this.resetToIdle(symState);
-
-        this.eventBus.emit('position:closed', { position: positionForClose, trade });
-      }
-    };
-
-    this.handleOrderRejected = ({ clientOrderId }) => {
-      for (const [, symState] of this.symbolStates) {
-        if (symState.pendingClientOrderId !== clientOrderId) continue;
-
-        if (symState.state === 'PENDING_ENTRY') {
-          this.resetToIdle(symState);
-        } else if (symState.state === 'PENDING_EXIT') {
-          symState.state = 'OPEN';
-          symState.pendingClientOrderId = null;
-        }
-        break;
-      }
-    };
+    // Bind handlers to named private methods
+    this.handleTick = (data) => this.onTick(data);
+    this.handleCandleClose = (data) => this.onCandleClose(data);
+    this.handleSignal = (data) => this.onSignal(data);
+    this.handleOrderFilled = (data) => this.onOrderFilled(data);
+    this.handleOrderRejected = (data) => this.onOrderRejected(data);
 
     // ADR-8: Subscribe immediately in constructor
     this.eventBus.on('tick', this.handleTick);
@@ -269,6 +104,210 @@ export class PositionManager implements IPositionManager {
     this.eventBus.on('order:filled', this.handleOrderFilled);
     this.eventBus.on('order:rejected', this.handleOrderRejected);
   }
+
+  // === Event handler methods ===
+
+  private onTick({ symbol, tick }: { symbol: string; tick: Tick }): void {
+    this.lastTickPrice.set(symbol, tick.price);
+    if (this.getState(symbol) === 'OPEN') {
+      this.evaluateSLTP(symbol, tick.price, tick.timestamp);
+    }
+  }
+
+  private onCandleClose({ symbol, candle }: { symbol: string; timeframe: Timeframe; candle: Candle }): void {
+    if (this.getState(symbol) !== 'OPEN') return;
+    const symState = this.getSymbolState(symbol);
+    const entryOrder = symState.entryOrder;
+    if (!entryOrder) return;
+
+    const isLong = entryOrder.side === 'BUY';
+    const closeTimestamp = candle.closeTime;
+    const entryTime = symState.entryTime ?? closeTimestamp;
+
+    // Check timeout
+    if (closeTimestamp - entryTime > this.config.maxHoldTimeMs) {
+      this.triggerExit(symbol, 'TIMEOUT', candle.close);
+      return;
+    }
+
+    // Check trailing stop
+    if (this.config.trailingStopEnabled) {
+      const trailResult = this.checkTrailingStop(
+        symState,
+        isLong,
+        entryOrder.avgPrice,
+        candle.high,
+        candle.low,
+      );
+      if (trailResult === 'TRIGGERED') {
+        this.triggerExit(symbol, 'TRAILING_STOP', isLong ? candle.low : candle.high);
+        return;
+      }
+    }
+
+    // Check SL and TP — SL wins tiebreak
+    const slHit =
+      symState.stopPrice !== null &&
+      (isLong ? candle.low <= symState.stopPrice : candle.high >= symState.stopPrice);
+    const tpHit =
+      symState.takeProfitPrice !== null &&
+      (isLong ? candle.high >= symState.takeProfitPrice : candle.low <= symState.takeProfitPrice);
+
+    if (slHit) {
+      this.triggerExit(symbol, 'STOP_LOSS', symState.stopPrice ?? candle.close);
+      return;
+    }
+    if (tpHit) {
+      this.triggerExit(symbol, 'TAKE_PROFIT', symState.takeProfitPrice ?? candle.close);
+    }
+  }
+
+  private onSignal({ signal }: { signal: Signal }): void {
+    const { symbol, action } = signal;
+
+    if (this.getState(symbol) !== 'IDLE') return;
+    if (action === 'NO_ACTION') return;
+    if (action === 'EXIT') return;
+
+    const entryPrice = this.lastTickPrice.get(symbol) ?? signal.price;
+    const result = this.riskManager.checkEntry(signal, entryPrice);
+
+    if (!result.allowed) {
+      if (result.severity === 'KILL') {
+        this.eventBus.emit('risk:breach', {
+          rule: result.rule,
+          message: result.reason,
+          severity: result.severity,
+        });
+      }
+      return;
+    }
+
+    const symState = this.getSymbolState(symbol);
+    const side = action === 'ENTER_LONG' ? 'BUY' : 'SELL';
+    const isLong = action === 'ENTER_LONG';
+
+    const stopPrice = isLong
+      ? entryPrice * (1 - this.config.defaultStopLossPct / 100)
+      : entryPrice * (1 + this.config.defaultStopLossPct / 100);
+    const takeProfitPrice = isLong
+      ? entryPrice * (1 + this.config.defaultTakeProfitPct / 100)
+      : entryPrice * (1 - this.config.defaultTakeProfitPct / 100);
+
+    // Generate clientOrderId upfront so it's stored BEFORE submit() is called
+    // This ensures re-entrant order:filled can match it correctly (ADR-2)
+    const clientOrderId = crypto.randomUUID();
+
+    // State-before-emit: update all state before calling submit()
+    symState.state = 'PENDING_ENTRY';
+    symState.pendingClientOrderId = clientOrderId;
+    symState.stopPrice = stopPrice;
+    symState.takeProfitPrice = takeProfitPrice;
+    symState.entryTime = signal.timestamp;
+    symState.trailingActive = false;
+    symState.exitReason = null;
+
+    const request: OrderRequest = {
+      symbol,
+      side,
+      type: 'MARKET',
+      quantity: result.quantity,
+      clientOrderId,
+    };
+
+    this.executor.submit(request);
+  }
+
+  private onOrderFilled({ order }: { order: OrderResult }): void {
+    const symbol = order.symbol;
+    const symState = this.symbolStates.get(symbol);
+    if (!symState) return;
+
+    // Match by the pre-stored clientOrderId
+    if (symState.pendingClientOrderId !== order.clientOrderId) return;
+
+    if (symState.state === 'PENDING_ENTRY') {
+      // Transition PENDING_ENTRY → OPEN
+      symState.entryOrder = order;
+      symState.peakPrice = order.avgPrice;
+      symState.state = 'OPEN';
+      symState.pendingClientOrderId = null;
+
+      const position = this.buildPositionFromEntry(symbol, order);
+      this.eventBus.emit('position:opened', { position });
+    } else if (symState.state === 'PENDING_EXIT') {
+      const entry = symState.entryOrder;
+      if (!entry) return;
+
+      const trade = this.buildTradeRecord(symbol, symState, entry, order);
+      const positionForClose = this.buildPositionFromEntry(symbol, entry);
+
+      // State-before-emit: clear to IDLE before emitting
+      this.resetToIdle(symState);
+
+      this.eventBus.emit('position:closed', { position: positionForClose, trade });
+    }
+  }
+
+  private onOrderRejected({ clientOrderId }: { clientOrderId: string; reason: string }): void {
+    for (const [, symState] of this.symbolStates) {
+      if (symState.pendingClientOrderId !== clientOrderId) continue;
+
+      if (symState.state === 'PENDING_ENTRY') {
+        this.resetToIdle(symState);
+      } else if (symState.state === 'PENDING_EXIT') {
+        symState.state = 'OPEN';
+        symState.pendingClientOrderId = null;
+      }
+      break;
+    }
+  }
+
+  // === Trailing stop extraction ===
+
+  /**
+   * Check trailing stop activation and breach.
+   * Returns 'TRIGGERED' if trail breached, 'ACTIVATED' if just activated, null otherwise.
+   */
+  private checkTrailingStop(
+    symState: SymbolState,
+    isLong: boolean,
+    entryPrice: number,
+    currentHigh: number,
+    currentLow: number,
+  ): 'TRIGGERED' | 'ACTIVATED' | null {
+    if (!symState.trailingActive) {
+      const activated = isLong
+        ? (currentHigh - entryPrice) / entryPrice >= this.config.trailingStopActivationPct / 100
+        : (entryPrice - currentLow) / entryPrice >= this.config.trailingStopActivationPct / 100;
+      if (activated) {
+        symState.trailingActive = true;
+        symState.peakPrice = isLong ? currentHigh : currentLow;
+        return 'ACTIVATED';
+      }
+      return null;
+    }
+
+    if (symState.peakPrice !== null) {
+      symState.peakPrice = isLong
+        ? Math.max(symState.peakPrice, currentHigh)
+        : Math.min(symState.peakPrice, currentLow);
+
+      const trailBreached = isLong
+        ? (symState.peakPrice - currentLow) / symState.peakPrice >=
+          this.config.trailingStopDistancePct / 100
+        : (currentHigh - symState.peakPrice) / symState.peakPrice >=
+          this.config.trailingStopDistancePct / 100;
+
+      if (trailBreached) {
+        return 'TRIGGERED';
+      }
+    }
+
+    return null;
+  }
+
+  // === Private helpers ===
 
   private getSymbolState(symbol: string): SymbolState {
     let state = this.symbolStates.get(symbol);
@@ -309,33 +348,16 @@ export class PositionManager implements IPositionManager {
 
     // Trailing stop
     if (this.config.trailingStopEnabled) {
-      const entryPrice = entry.avgPrice;
-
-      if (!symState.trailingActive) {
-        const activated = isLong
-          ? (price - entryPrice) / entryPrice >= this.config.trailingStopActivationPct / 100
-          : (entryPrice - price) / entryPrice >= this.config.trailingStopActivationPct / 100;
-        if (activated) {
-          symState.trailingActive = true;
-          symState.peakPrice = price;
-        }
-      }
-
-      if (symState.trailingActive && symState.peakPrice !== null) {
-        symState.peakPrice = isLong
-          ? Math.max(symState.peakPrice, price)
-          : Math.min(symState.peakPrice, price);
-
-        const trailBreached = isLong
-          ? (symState.peakPrice - price) / symState.peakPrice >=
-            this.config.trailingStopDistancePct / 100
-          : (price - symState.peakPrice) / symState.peakPrice >=
-            this.config.trailingStopDistancePct / 100;
-
-        if (trailBreached) {
-          this.triggerExit(symbol, 'TRAILING_STOP', price);
-          return;
-        }
+      const trailResult = this.checkTrailingStop(
+        symState,
+        isLong,
+        entry.avgPrice,
+        price,
+        price,
+      );
+      if (trailResult === 'TRIGGERED') {
+        this.triggerExit(symbol, 'TRAILING_STOP', price);
+        return;
       }
     }
 
