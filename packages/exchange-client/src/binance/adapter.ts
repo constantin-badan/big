@@ -52,28 +52,6 @@ import { RestClient } from './rest-client';
 
 type StreamCallback = (data: unknown) => void;
 
-// Binance REST response shapes (unvalidated — verified by integration tests)
-interface BinancePositionRisk {
-  symbol: string;
-  positionAmt: string;
-  entryPrice: string;
-  unRealizedProfit: string;
-  leverage: string;
-  liquidationPrice: string;
-  marginType: string;
-}
-
-interface BinanceBalanceEntry {
-  asset: string;
-  balance: string;
-  availableBalance: string;
-}
-
-interface BinanceCommissionRate {
-  makerCommissionRate: string;
-  takerCommissionRate: string;
-}
-
 interface BinanceTradingMessage {
   id?: string;
   status?: number;

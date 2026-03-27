@@ -181,26 +181,6 @@ const ORDER_TYPE_MAP: Record<string, OrderType> = {
   TAKE_PROFIT_MARKET: 'TAKE_PROFIT_MARKET',
 };
 
-interface BinanceOrderTradeUpdate {
-  e: 'ORDER_TRADE_UPDATE';
-  T: number; // transaction time
-  o: {
-    s: string; // symbol
-    c: string; // client order ID
-    S: string; // side
-    o: string; // order type
-    q: string; // original quantity
-    p: string; // original price
-    ap: string; // average price
-    X: string; // order status
-    i: number; // order ID
-    z: string; // order filled accumulated quantity
-    n: string; // commission
-    N: string; // commission asset
-    T: number; // order trade time
-  };
-}
-
 export function parseOrderTradeUpdate(data: unknown): OrderResult {
   const event = OrderTradeUpdateSchema.parse(data);
   const o = event.o;
@@ -219,26 +199,6 @@ export function parseOrderTradeUpdate(data: unknown): OrderResult {
     commissionAsset: o.N,
     timestamp: o.T,
     latencyMs: 0,
-  };
-}
-
-interface BinanceAlgoUpdate {
-  e: 'ALGO_UPDATE';
-  T: number;
-  o: {
-    s: string;
-    c: string;
-    S: string;
-    o: string;
-    q: string;
-    p: string;
-    ap: string;
-    X: string;
-    i: number;
-    z: string;
-    n: string;
-    N: string;
-    T: number;
   };
 }
 
@@ -264,22 +224,6 @@ export function parseAlgoUpdate(data: unknown): OrderResult {
 }
 
 // === WS API response parsing ===
-
-interface BinanceWsApiOrderResponse {
-  orderId: number;
-  clientOrderId: string;
-  symbol: string;
-  side: string;
-  type: string;
-  status: string;
-  price: string;
-  avgPrice: string;
-  origQty: string;
-  executedQty: string;
-  cumQuote: string;
-  timeInForce: string;
-  updateTime: number;
-}
 
 export function parseWsApiOrderResponse(data: unknown, requestTime: number): OrderResult {
   const r = WsApiOrderResponseSchema.parse(data);
