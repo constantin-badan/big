@@ -6,42 +6,44 @@ Full audit conducted 2026-03-27. Items ordered by priority within each section.
 
 ## Critical — Fix Before Live Capital
 
-- [ ] **Add WS request timeout** — `pendingRequests` map in `binance/adapter.ts:43-46,588` records `requestTime` but never enforces a deadline; hung requests leak memory and starve the queue. Auto-reject after N seconds, clean map on disconnect/reconnect.
-- [ ] **Split `connected` into two flags** — single boolean in `adapter.ts:100` covers both trading WS and market-data WS. Market data down + trading up → `isConnected() === true` → strategies trade blind. Replace with `tradingConnected` + `marketDataConnected`; `isConnected()` = both true.
-- [ ] **Fix arena event listener cleanup** — `removeInstance()` at `arena.ts:159` uses fire-and-forget `void`; if `destroyInstance()` throws, forwarders leak and instance is deleted from map anyway. Make async, handle errors, ensure forwarder disposal.
-- [ ] **Guard against NaN/Infinity in risk sizing** — `risk-manager.ts:211-212` computes `quantity = balance * pct * leverage / entryPrice` with no check for `entryPrice === 0` or NaN. Add: `if (!Number.isFinite(quantity) || quantity <= 0) return { allowed: false, ... }`.
-- [ ] **Add concurrent reconnection lock** — `reconnectTrading()` and `reconnectMarketData()` in `adapter.ts:353-478` can run concurrently with no mutex. If disconnect is called mid-reconnect, a race allows reconnection to continue despite intentional shutdown. Add per-stream lock or atomic flag.
+- [x] **Add WS request timeout** — 30s per-request setTimeout, cleared on response, all pending rejected on disconnect.
+- [x] **Split `connected` into two flags** — `tradingConnected` + `marketDataConnected`; `isConnected()` = trading up AND (no active streams OR market data up).
+- [x] **Fix arena event listener cleanup** — `removeInstance()` severs event flow synchronously, strategy.stop() fire-and-forget with catch. `destroyInstance()` wrapped in try-catch.
+- [x] **Guard against NaN/Infinity in risk sizing** — `Number.isFinite(quantity)` check before allowing entry.
+- [x] **Add concurrent reconnection lock** — `reconnectingTrading` / `reconnectingMarketData` flags with finally-block release.
 
 ---
 
 ## High — Address Before Extended Live Runs
 
-- [ ] **Update `.gitignore`** — missing `.env*`, `*.pem`, `*.key`, `*.p8`, `*.db`, `*.sqlite`, `credentials*`, `secrets/`, `config.prod.*`. Add these patterns to prevent accidental secret/database commits.
-- [ ] **Add runtime schema validation for Binance responses** — `unsafeCast<T>()` in `binance/unsafe-cast.ts` trusts API shape blindly. Add `zod` or similar validation for critical responses: order fills, account balance, position data. Silent shape changes from Binance could cause wrong trades.
-- [ ] **Propagate backfill failures via existing events** — `live-data-feed.ts:61-66` fires-and-forgets gap backfill; errors logged at line 149 but strategies never notified. Emit `error` with `{ source: 'data-feed', ... }` for observability. If a failed backfill should halt trading, emit `risk:breach` with `severity: 'KILL'` — don't add a new event type to `TradingEventMap` for infrastructure failures; the bus is for trading domain events.
-- [ ] **Wrap evolver loop in try-catch** — `evolver.ts:136-139` schedules `void this.evolve()` with no error boundary. If `evolve()` throws, the timer keeps firing. Catch errors, emit an event, and set `running = false` on unrecoverable failure.
-- [ ] **Expand live-runner test coverage** — currently 1 test for 243 LOC of critical startup/shutdown/orphan-detection logic. Add tests for: orphan position detection, health check interval, `close-all` vs `leave-open` shutdown, duplicate `start()`/`stop()` calls.
-- [ ] **Add timeout on `strategy.stop()` in arena** — `arena.ts:248` awaits `strategy.stop()` indefinitely. A hung strategy blocks entire arena shutdown. Use `Promise.race([strategy.stop(), timeout(5000)])`.
-- [ ] **Truncate REST error messages** — `adapter.ts:606,627` includes full response body in thrown Error. If Binance returns a large response, this bloats error objects and logs. Truncate to first 500 chars.
-- [ ] **Add cross-arena risk limits** — each arena instance has independent risk limits. 10 instances × `maxConcurrentPositions` = 10× intended total exposure. Even in paper-trade mode, this produces misleading metrics since each instance assumes exclusive capital access. Add a shared `ArenaRiskBudget` that tracks total exposure across instances and rejects entries when the global limit is hit.
-- [ ] **Handle Binance maintenance windows** — Binance announces scheduled maintenance via status API and sometimes via a WS message before disconnecting. The adapter should detect these (status endpoint check on heartbeat, or recognizing the specific disconnect code) and emit `exchange:disconnected` with `reason: 'maintenance'` instead of entering reconnection loops that will fail for the entire window. Without this, every scheduled maintenance triggers 10 consecutive reconnect failures → KILL switch → manual restart.
+- [x] **Update `.gitignore`** — added `.env*`, `*.pem`, `*.key`, `*.p8`, `*.db`, `*.sqlite`, `credentials*`, `secrets/`, `config.prod.*`.
+- [ ] **Add runtime schema validation for Binance responses** — deferred: requires adding `zod` as first external runtime dependency. Needs architectural decision on zero-dep policy.
+- [x] **Propagate backfill failures via existing events** — emits `error` event with `source: 'data-feed'` and context object.
+- [x] **Wrap evolver loop in try-catch** — `.catch()` on evolve() sets `running = false` and stops the loop.
+- [x] **Expand live-runner test coverage** — 12 tests (up from 1): status lifecycle, orphan detection, close-all shutdown, config defaults.
+- [x] **Add timeout on `strategy.stop()` in arena** — `Promise.race` with 5s timeout in `destroyInstance()`.
+- [x] **Truncate REST error messages** — `body.substring(0, 500)` on both `restGet` and `restPost`.
+- [x] **Add cross-arena risk limits** — `ArenaConfig.maxGlobalPositions` enforced via executor wrapper; global count tracked via position:opened/closed events.
+- [x] **Handle Binance maintenance windows** — close codes 1001/1012 emit `exchange:disconnected` with `reason: 'maintenance'`, skip reconnect loop.
 
 ---
 
 ## Medium — Improve Robustness
-- [ ] **Add signal merge timeout** — `strategy.ts:50` calls user-provided merge function synchronously with no timeout. An infinite loop in merge hangs the entire bot. Wrap in a try-catch at minimum; consider a deadline.
-- [ ] **Deduplicate stream callbacks** — `adapter.ts:640` pushes callbacks without dedup check; `indexOf` at line 654 removes only the first match. Use a Set instead of array, or check before push.
-- [ ] **Unsubscribe logging handlers in live-runner** — `live-runner.ts:209-212` registers event handlers in `setupLogging()` but never unsubscribes in `stop()`. If runner is restarted, duplicate handlers accumulate. Store handler references and clean up.
-- [ ] **Surface partial sweep failures** — `parallel-sweep-engine.ts:78-112` silently drops errors when some workers succeed. Return both results and errors, or at minimum emit a warning with failed parameter sets.
-- [ ] **Validate rate limit config** — `live-executor.ts:55-57` computes `refillRate = rateLimitPerMinute / 60_000`. If config value is 0 or negative, `consumeToken()` sleeps forever. Add constructor validation: `if (rateLimitPerMinute <= 0) throw`.
-- [ ] **Account for slippage in risk sizing** — `risk-manager.ts:211-212` sizes positions at exact `entryPrice`. Actual fill includes slippage, meaning real risk is slightly larger than calculated. Adjust by expected slippage bps.
-- [ ] **Add backtest cleanup on partial failure** — `backtest-engine.ts:64-71` finally block cleans event handler and exchange, but if `strategy.start()` throws, strategy is never stopped. If `dataFeed.start()` throws, strategy is left running. Add per-component teardown.
+
+- [x] **Add signal merge try-catch** — merge function wrapped in try-catch; throwing merge drops the signal.
+- [x] **~~Deduplicate stream callbacks~~** — not needed: each subscription creates a unique closure, so reference-level duplicates can't occur.
+- [x] **Unsubscribe logging handlers in live-runner** — handlers stored in array, unsubscribed in `stop()`.
+- [x] **Surface partial sweep failures** — `ParallelSweepResult` returns `{ results, errors }` with per-param-set error detail.
+- [x] **Validate rate limit config** — `LiveExecutor` constructor throws if `rateLimitPerMinute <= 0`.
+- [x] **Account for slippage in risk sizing** — `RiskConfig.expectedSlippageBps` adjusts entry price before sizing. Default 0.
+- [x] **Add backtest cleanup on partial failure** — tracks `strategyStarted` flag, ensures `strategy.stop()` in finally.
 
 ---
 
 ## Deferred — Requires Architectural Discussion
 
 - [ ] **Account-level unrealized drawdown protection** — risk-manager deliberately tracks realized balance only (ADR-7); intra-trade risk is position-manager's job via SL/TP. Adding mark-to-market unrealized PnL to risk-manager would require tick subscriptions for every open position, making it the most expensive component and duplicating position-manager's responsibility. If account-level unrealized drawdown protection is needed, design a separate `MarginGuard` component rather than modifying risk-manager. Contradicts ADR-7 — do not implement without explicit architectural decision.
+- [ ] **Add runtime schema validation for Binance responses** — requires adding `zod` as first external runtime dependency. Needs decision on zero-dep policy vs. silent shape change risk.
 
 ---
 
