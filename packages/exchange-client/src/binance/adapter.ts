@@ -44,6 +44,7 @@ interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   requestTime: number;
+  timer: ReturnType<typeof setTimeout>;
 }
 
 // Binance REST response shapes (unvalidated — verified by integration tests)
@@ -81,6 +82,7 @@ const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 30_000;
 const RECONNECT_JITTER_MS = 500;
 const RECONNECT_KILL_AFTER = 10;
+const WS_REQUEST_TIMEOUT_MS = 30_000;
 
 function reconnectDelay(attempt: number): number {
   const exponential = Math.min(RECONNECT_BASE_DELAY_MS * Math.pow(2, attempt), RECONNECT_MAX_DELAY_MS);
@@ -97,8 +99,13 @@ export class BinanceAdapter implements IExchange {
 
   private marketDataWs: WebSocket | null = null;
   private tradingWs: WebSocket | null = null;
-  private connected = false;
+  private tradingConnected = false;
+  private marketDataConnected = false;
   private intentionalDisconnect = false;
+
+  // Reconnection locks — prevent concurrent reconnect loops
+  private reconnectingTrading = false;
+  private reconnectingMarketData = false;
 
   // Combined stream dispatch: stream name → callback
   private readonly streamCallbacks = new Map<string, StreamCallback[]>();
@@ -132,7 +139,7 @@ export class BinanceAdapter implements IExchange {
   // === Connection lifecycle ===
 
   async connect(): Promise<void> {
-    if (this.connected) return;
+    if (this.tradingConnected) return;
 
     // Open trading WS API first (for auth)
     await this.connectTradingWs();
@@ -140,12 +147,20 @@ export class BinanceAdapter implements IExchange {
     // Authenticate via session.logon
     await this.sessionLogon();
 
-    this.connected = true;
+    this.tradingConnected = true;
   }
 
   async disconnect(): Promise<void> {
     this.intentionalDisconnect = true;
-    this.connected = false;
+    this.tradingConnected = false;
+    this.marketDataConnected = false;
+
+    // Reject all pending WS API requests and clear their timers
+    for (const [, pending] of this.pendingRequests) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error('Disconnected'));
+    }
+    this.pendingRequests.clear();
 
     if (this.marketDataWs) {
       this.marketDataWs.close();
@@ -159,12 +174,13 @@ export class BinanceAdapter implements IExchange {
 
     this.streamCallbacks.clear();
     this.activeStreams.clear();
-    this.pendingRequests.clear();
     this.emittedFills.clear();
   }
 
   isConnected(): boolean {
-    return this.connected;
+    if (!this.tradingConnected) return false;
+    if (this.activeStreams.size > 0 && !this.marketDataConnected) return false;
+    return true;
   }
 
   // === Market data subscriptions ===
@@ -336,6 +352,7 @@ export class BinanceAdapter implements IExchange {
 
       ws.addEventListener('close', () => {
         this.tradingWs = null;
+        this.tradingConnected = false;
         if (this.intentionalDisconnect) return;
 
         this.bus?.emit('exchange:disconnected', {
@@ -351,36 +368,42 @@ export class BinanceAdapter implements IExchange {
   }
 
   private async reconnectTrading(): Promise<void> {
-    while (!this.intentionalDisconnect) {
-      this.tradingReconnectAttempt++;
-      const delay = reconnectDelay(this.tradingReconnectAttempt);
+    if (this.reconnectingTrading) return;
+    this.reconnectingTrading = true;
+    try {
+      while (!this.intentionalDisconnect) {
+        this.tradingReconnectAttempt++;
+        const delay = reconnectDelay(this.tradingReconnectAttempt);
 
-      this.bus?.emit('exchange:reconnecting', {
-        stream: 'userData',
-        symbol: '*',
-        attempt: this.tradingReconnectAttempt,
-        timestamp: Date.now(),
-      });
-
-      if (this.tradingReconnectAttempt >= RECONNECT_KILL_AFTER) {
-        this.bus?.emit('risk:breach', {
-          rule: 'MAX_DAILY_LOSS',
-          message: `Trading WS reconnect failed after ${this.tradingReconnectAttempt} attempts`,
-          severity: 'KILL',
+        this.bus?.emit('exchange:reconnecting', {
+          stream: 'userData',
+          symbol: '*',
+          attempt: this.tradingReconnectAttempt,
+          timestamp: Date.now(),
         });
-      }
 
-      await new Promise<void>((r) => setTimeout(r, delay));
-      if (this.intentionalDisconnect) return;
+        if (this.tradingReconnectAttempt >= RECONNECT_KILL_AFTER) {
+          this.bus?.emit('risk:breach', {
+            rule: 'MAX_DAILY_LOSS',
+            message: `Trading WS reconnect failed after ${this.tradingReconnectAttempt} attempts`,
+            severity: 'KILL',
+          });
+        }
 
-      try {
-        await this.connectTradingWs();
-        await this.sessionLogon();
-        this.connected = true;
-        return;
-      } catch {
-        // retry
+        await new Promise<void>((r) => setTimeout(r, delay));
+        if (this.intentionalDisconnect) return;
+
+        try {
+          await this.connectTradingWs();
+          await this.sessionLogon();
+          this.tradingConnected = true;
+          return;
+        } catch {
+          // retry
+        }
       }
+    } finally {
+      this.reconnectingTrading = false;
     }
   }
 
@@ -392,6 +415,7 @@ export class BinanceAdapter implements IExchange {
 
       ws.addEventListener('open', () => {
         this.marketDataWs = ws;
+        this.marketDataConnected = true;
         this.marketDataReconnectAttempt = 0;
         if (!resolved) {
           resolved = true;
@@ -417,9 +441,9 @@ export class BinanceAdapter implements IExchange {
 
       ws.addEventListener('close', () => {
         this.marketDataWs = null;
+        this.marketDataConnected = false;
         if (this.intentionalDisconnect) return;
 
-        this.connected = false;
         this.bus?.emit('exchange:disconnected', {
           stream: 'kline',
           symbol: '*',
@@ -433,47 +457,52 @@ export class BinanceAdapter implements IExchange {
   }
 
   private async reconnectMarketData(streams: string[]): Promise<void> {
-    while (!this.intentionalDisconnect) {
-      this.marketDataReconnectAttempt++;
-      const delay = reconnectDelay(this.marketDataReconnectAttempt);
+    if (this.reconnectingMarketData) return;
+    this.reconnectingMarketData = true;
+    try {
+      while (!this.intentionalDisconnect) {
+        this.marketDataReconnectAttempt++;
+        const delay = reconnectDelay(this.marketDataReconnectAttempt);
 
-      this.bus?.emit('exchange:reconnecting', {
-        stream: 'kline',
-        symbol: '*',
-        attempt: this.marketDataReconnectAttempt,
-        timestamp: Date.now(),
-      });
-
-      if (this.marketDataReconnectAttempt >= RECONNECT_KILL_AFTER) {
-        this.bus?.emit('risk:breach', {
-          rule: 'MAX_DAILY_LOSS',
-          message: `Market data WS reconnect failed after ${this.marketDataReconnectAttempt} attempts`,
-          severity: 'KILL',
+        this.bus?.emit('exchange:reconnecting', {
+          stream: 'kline',
+          symbol: '*',
+          attempt: this.marketDataReconnectAttempt,
+          timestamp: Date.now(),
         });
-      }
 
-      await new Promise<void>((r) => setTimeout(r, delay));
-      if (this.intentionalDisconnect) return;
-
-      try {
-        await this.connectMarketDataWs(streams);
-        this.connected = true;
-
-        // Emit gap events for each tracked stream
-        const reconnectTime = Date.now();
-        for (const [streamKey, lastTs] of this.lastMessageTimestamp) {
-          this.bus?.emit('exchange:gap', {
-            stream: 'kline',
-            symbol: streamKey.split('@')[0]?.toUpperCase() ?? '*',
-            fromTimestamp: lastTs,
-            toTimestamp: reconnectTime,
-            timestamp: reconnectTime,
+        if (this.marketDataReconnectAttempt >= RECONNECT_KILL_AFTER) {
+          this.bus?.emit('risk:breach', {
+            rule: 'MAX_DAILY_LOSS',
+            message: `Market data WS reconnect failed after ${this.marketDataReconnectAttempt} attempts`,
+            severity: 'KILL',
           });
         }
-        return;
-      } catch {
-        // retry
+
+        await new Promise<void>((r) => setTimeout(r, delay));
+        if (this.intentionalDisconnect) return;
+
+        try {
+          await this.connectMarketDataWs(streams);
+
+          // Emit gap events for each tracked stream
+          const reconnectTime = Date.now();
+          for (const [streamKey, lastTs] of this.lastMessageTimestamp) {
+            this.bus?.emit('exchange:gap', {
+              stream: 'kline',
+              symbol: streamKey.split('@')[0]?.toUpperCase() ?? '*',
+              fromTimestamp: lastTs,
+              toTimestamp: reconnectTime,
+              timestamp: reconnectTime,
+            });
+          }
+          return;
+        } catch {
+          // retry
+        }
       }
+    } finally {
+      this.reconnectingMarketData = false;
     }
   }
 
@@ -507,6 +536,7 @@ export class BinanceAdapter implements IExchange {
       if (typeof msg.id === 'string') {
         const pending = this.pendingRequests.get(msg.id);
         if (pending) {
+          clearTimeout(pending.timer);
           this.pendingRequests.delete(msg.id);
           if (msg.status === 200) {
             pending.resolve(msg.result);
@@ -585,7 +615,12 @@ export class BinanceAdapter implements IExchange {
     };
 
     return new Promise((resolve, reject) => {
-      this.pendingRequests.set(id, { resolve, reject, requestTime: Date.now() });
+      const timer = setTimeout(() => {
+        this.pendingRequests.delete(id);
+        reject(new Error(`WS API request timed out after ${WS_REQUEST_TIMEOUT_MS}ms: ${method}`));
+      }, WS_REQUEST_TIMEOUT_MS);
+
+      this.pendingRequests.set(id, { resolve, reject, requestTime: Date.now(), timer });
       this.tradingWs!.send(JSON.stringify(request));
     });
   }
@@ -643,7 +678,7 @@ export class BinanceAdapter implements IExchange {
     this.activeStreams.add(streamName);
 
     // If we're connected but the WS isn't open (first subscription), open it
-    if (this.connected && !this.marketDataWs) {
+    if (this.tradingConnected && !this.marketDataWs) {
       void this.connectMarketDataWs([...this.activeStreams]);
     }
 

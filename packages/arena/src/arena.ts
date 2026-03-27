@@ -154,10 +154,19 @@ export class Arena implements IArena {
     const key = paramsKey(params);
     const instance = this.instances.get(key);
     if (instance === undefined) return;
-
-    // Fire-and-forget cleanup since interface is sync
-    void this.destroyInstance(instance);
     this.instances.delete(key);
+
+    // Immediately stop event flow (all synchronous)
+    for (const dispose of instance.forwarders) {
+      dispose();
+    }
+    instance.bus.off('position:closed', instance.tradeHandler);
+    instance.simExchange.dispose();
+
+    // Strategy stop is async — fire-and-forget with error boundary
+    instance.strategy.stop().catch(() => {
+      // Strategy stop failed — event flow already cleaned up above
+    });
   }
 
   private createInstance(params: Record<string, number>): void {
@@ -239,18 +248,18 @@ export class Arena implements IArena {
   }
 
   private async destroyInstance(instance: ArenaInstance): Promise<void> {
-    // Remove forwarding
+    // Remove forwarding and event handlers (synchronous — always succeeds)
     for (const dispose of instance.forwarders) {
       dispose();
     }
-
-    // Stop strategy
-    await instance.strategy.stop();
-
-    // Remove trade handler
     instance.bus.off('position:closed', instance.tradeHandler);
-
-    // Dispose sim exchange (unsubscribes from bus)
     instance.simExchange.dispose();
+
+    // Stop strategy (async — may fail, but event flow is already severed)
+    try {
+      await instance.strategy.stop();
+    } catch {
+      // Strategy stop failed — event flow already cleaned up above
+    }
   }
 }

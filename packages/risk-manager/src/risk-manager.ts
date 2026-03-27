@@ -211,11 +211,11 @@ export class RiskManager implements IRiskManager {
       (((this.balance.value * this.config.maxPositionSizePct) / 100) * this.config.leverage) /
       entryPrice;
 
-    if (quantity <= 0) {
+    if (!Number.isFinite(quantity) || quantity <= 0) {
       return {
         allowed: false,
         rule: 'MAX_POSITION_SIZE',
-        reason: `Computed quantity (${quantity}) <= 0`,
+        reason: `Computed quantity is not valid: ${quantity}`,
         severity: 'REJECT',
       };
     }
