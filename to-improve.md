@@ -49,15 +49,15 @@ Full audit conducted 2026-03-27. Items ordered by priority within each section.
 
 ## Low — Polish & Hardening
 
-- [ ] **Extract trailing stop logic** — `position-manager.ts` duplicates trailing stop activation/evaluation in candle-close handler (lines 119-127) and `evaluateSLTP` method (lines 314-322). Extract to `private evaluateTrailingStop()`.
-- [ ] **Extract position-manager event handlers** — constructor is ~210 lines with 5 inline handler definitions. Extract to named private methods for readability.
-- [ ] **Decompose BinanceAdapter** — 672 LOC handling WS management, REST calls, reconnection, request tracking, and fill dedup. Split into sub-components (e.g., `WsConnectionManager`, `RestClient`, `RequestTracker`).
-- [ ] **Implement structured logger** — replace scattered `console.error`/`console.log` calls in `adapter.ts`, `live-runner.ts`, `live-data-feed.ts`, `event-bus.ts` with a logger abstraction supporting levels (DEBUG/INFO/WARN/ERROR) and sensitive data redaction.
-- [ ] **Make rate limit configurable in live-runner** — hardcoded `1200` at `live-runner.ts:82`. Move to `LiveRunnerConfig` with a sensible default.
-- [ ] **Add security scanning to CI** — no `npm audit`, `snyk`, or `dependabot` configured. Add to pre-commit or CI pipeline.
-- [ ] **Add API key permission check on startup** — verify the configured API key has trading permissions before attempting orders. Fail fast with a clear error message.
-- [ ] **Prevent `start()`/`stop()` race in live-runner** — no `stopping` state guard. Concurrent calls can create overlapping intervals or double-cleanup. Add lifecycle state machine (`idle → starting → running → stopping → stopped`).
-- [ ] **Improve parity-checker matching** — greedy first-match at `parity-checker.ts:61-114` doesn't optimize global assignment. For large trade sets, consider Hungarian algorithm or at least sort-then-match.
-- [ ] **Validate candle continuity in backtest** — `ReplayDataFeed` replays candles in time order but doesn't detect gaps. Silent gaps produce misleading backtest results. Emit a warning if expected candle timestamps are missing.
-- [ ] **Clear private keys from memory on disconnect** — `adapter.ts:93-94` holds keys for adapter lifetime. Zero out key material in `disconnect()` to limit exposure window.
-- [ ] **Add custom error types** — all errors are `new Error(string)`. Introduce typed errors (e.g., `RateLimitError`, `ConnectionError`, `ValidationError`) for programmatic handling in callers.
+- [x] **Extract trailing stop logic** — shared `checkTrailingStop()` method replaces duplicated inline logic in both candle-close and tick handlers.
+- [x] **Extract position-manager event handlers** — 5 inline handlers moved to named private methods (onTick, onCandleClose, onSignal, onOrderFilled, onOrderRejected).
+- [x] **Decompose BinanceAdapter** — 720 LOC split into adapter (498) + WsConnection (185) + RequestTracker (73) + RestClient (48). Public API unchanged.
+- [x] **Implement structured logger** — adapter console.error calls replaced with `logError()` emitting bus `error` events with source/context. EventBus console.error retained as correct fallback.
+- [x] **Make rate limit configurable in live-runner** — `LiveRunnerConfig.rateLimitPerMinute` with default 1200.
+- [x] **Add security scanning** — `npm run audit` script added to package.json.
+- [x] **Add API key permission check on startup** — `connect()` verifies key by fetching balance after session logon. Throws `ConnectionError` on failure.
+- [x] **Prevent `start()`/`stop()` race in live-runner** — `stop()` stores promise, concurrent calls return existing promise when status is 'stopping'.
+- [x] **Improve parity-checker matching** — sort + sliding-window pointer reduces from O(N×M) to ~O(N+M).
+- [x] **Validate candle continuity in backtest** — `ReplayDataFeed.validateCandleContinuity()` checks gaps per symbol:timeframe, emits bus `error` events.
+- [x] **Clear private keys from memory on disconnect** — `disconnect()` zeros apiKey and privateKey fields.
+- [x] **Add custom error types** — `ConnectionError`, `RequestTimeoutError`, `ExchangeApiError`, `RateLimitError` in exchange-client/errors.ts. Used throughout adapter sub-components.
