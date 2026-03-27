@@ -48,7 +48,20 @@ function makeStrategy(): IStrategy {
     async start(): Promise<void> {},
     async stop(): Promise<void> {},
     getStats() {
-      return { totalTrades: 0, winRate: 0, profitFactor: 0, sharpeRatio: 0, maxDrawdown: 0, maxDrawdownDuration: 0, avgWin: 0, avgLoss: 0, expectancy: 0, avgHoldTime: 0, totalFees: 0, totalSlippage: 0 };
+      return {
+        totalTrades: 0,
+        winRate: 0,
+        profitFactor: 0,
+        sharpeRatio: 0,
+        maxDrawdown: 0,
+        maxDrawdownDuration: 0,
+        avgWin: 0,
+        avgLoss: 0,
+        expectancy: 0,
+        avgHoldTime: 0,
+        totalFees: 0,
+        totalSlippage: 0,
+      };
     },
   };
 }

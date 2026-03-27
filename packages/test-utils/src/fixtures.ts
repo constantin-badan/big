@@ -1,4 +1,12 @@
-import type { Candle, OrderResult, Position, PositionManagerConfig, RiskConfig, Signal, Tick } from '@trading-bot/types';
+import type {
+  Candle,
+  OrderResult,
+  Position,
+  PositionManagerConfig,
+  RiskConfig,
+  Signal,
+  Tick,
+} from '@trading-bot/types';
 
 const BASE_TIME = 1700000000000;
 

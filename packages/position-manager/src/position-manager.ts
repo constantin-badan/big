@@ -63,7 +63,12 @@ export class PositionManager implements IPositionManager {
   private readonly riskManager: IRiskManager;
   private readonly config: PositionManagerConfig;
 
-  constructor(eventBus: IEventBus, executor: IOrderExecutor, riskManager: IRiskManager, config: PositionManagerConfig) {
+  constructor(
+    eventBus: IEventBus,
+    executor: IOrderExecutor,
+    riskManager: IRiskManager,
+    config: PositionManagerConfig,
+  ) {
     this.eventBus = eventBus;
     this.executor = executor;
     this.riskManager = riskManager;
