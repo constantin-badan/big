@@ -12,6 +12,7 @@
     "@trading-bot/backtest-engine": "workspace:*",
     "@trading-bot/reporting": "workspace:*",
     "@trading-bot/storage": "workspace:*",
+    "@trading-bot/strategy": "workspace:*",
     "@trading-bot/types": "workspace:*"
   }
 }

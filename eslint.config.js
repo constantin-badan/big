@@ -31,7 +31,7 @@ module.exports = [
             { sourceTag: 'scope:live-runner', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus', 'scope:exchange-client', 'scope:data-feed', 'scope:order-executor', 'scope:strategy', 'scope:storage'] },
             { sourceTag: 'scope:arena', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus', 'scope:exchange-client', 'scope:data-feed', 'scope:order-executor', 'scope:strategy', 'scope:reporting'] },
             { sourceTag: 'scope:evolver', onlyDependOnLibsWithTags: ['scope:types', 'scope:arena'] },
-            { sourceTag: 'scope:parity-checker', onlyDependOnLibsWithTags: ['scope:types', 'scope:backtest-engine', 'scope:reporting', 'scope:storage'] },
+            { sourceTag: 'scope:parity-checker', onlyDependOnLibsWithTags: ['scope:types', 'scope:backtest-engine', 'scope:reporting', 'scope:storage', 'scope:strategy'] },
             { sourceTag: 'scope:reporting', onlyDependOnLibsWithTags: ['scope:types'] },
             { sourceTag: 'scope:test-utils', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus', 'scope:exchange-client', 'scope:order-executor', 'scope:position-manager', 'scope:risk-manager'] },
           ],
