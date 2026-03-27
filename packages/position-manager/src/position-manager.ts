@@ -59,6 +59,23 @@ export class PositionManager implements IPositionManager {
     private readonly riskManager: IRiskManager,
     private readonly config: PositionManagerConfig,
   ) {
+    if (config.defaultStopLossPct <= 0 || config.defaultStopLossPct >= 100) {
+      throw new Error(`PositionManager: defaultStopLossPct must be in (0, 100), got ${config.defaultStopLossPct}`);
+    }
+    if (config.defaultTakeProfitPct <= 0) {
+      throw new Error(`PositionManager: defaultTakeProfitPct must be > 0, got ${config.defaultTakeProfitPct}`);
+    }
+    if (config.maxHoldTimeMs <= 0) {
+      throw new Error(`PositionManager: maxHoldTimeMs must be > 0, got ${config.maxHoldTimeMs}`);
+    }
+    if (config.trailingStopEnabled) {
+      if (config.trailingStopActivationPct <= 0) {
+        throw new Error(`PositionManager: trailingStopActivationPct must be > 0, got ${config.trailingStopActivationPct}`);
+      }
+      if (config.trailingStopDistancePct <= 0) {
+        throw new Error(`PositionManager: trailingStopDistancePct must be > 0, got ${config.trailingStopDistancePct}`);
+      }
+    }
     this.handleTick = ({ symbol, tick }) => {
       this.lastTickPrice.set(symbol, tick.price);
       if (this.getState(symbol) === 'OPEN') {
@@ -210,15 +227,7 @@ export class PositionManager implements IPositionManager {
         const positionForClose = this.buildPositionFromEntry(symbol, entry);
 
         // State-before-emit: clear to IDLE before emitting
-        symState.state = 'IDLE';
-        symState.pendingClientOrderId = null;
-        symState.entryOrder = null;
-        symState.stopPrice = null;
-        symState.takeProfitPrice = null;
-        symState.peakPrice = null;
-        symState.trailingActive = false;
-        symState.entryTime = null;
-        symState.exitReason = null;
+        this.resetToIdle(symState);
 
         this.eventBus.emit('position:closed', { position: positionForClose, trade });
       }
@@ -229,11 +238,7 @@ export class PositionManager implements IPositionManager {
         if (symState.pendingClientOrderId !== clientOrderId) continue;
 
         if (symState.state === 'PENDING_ENTRY') {
-          symState.state = 'IDLE';
-          symState.pendingClientOrderId = null;
-          symState.stopPrice = null;
-          symState.takeProfitPrice = null;
-          symState.entryTime = null;
+          this.resetToIdle(symState);
         } else if (symState.state === 'PENDING_EXIT') {
           symState.state = 'OPEN';
           symState.pendingClientOrderId = null;
@@ -257,6 +262,18 @@ export class PositionManager implements IPositionManager {
       this.symbolStates.set(symbol, state);
     }
     return state;
+  }
+
+  private resetToIdle(symState: SymbolState): void {
+    symState.state = 'IDLE';
+    symState.pendingClientOrderId = null;
+    symState.entryOrder = null;
+    symState.stopPrice = null;
+    symState.takeProfitPrice = null;
+    symState.peakPrice = null;
+    symState.trailingActive = false;
+    symState.entryTime = null;
+    symState.exitReason = null;
   }
 
   private evaluateSLTP(symbol: string, price: number, timestamp: number): void {
@@ -393,7 +410,30 @@ export class PositionManager implements IPositionManager {
       (exitOrder.avgPrice - entryOrder.avgPrice) * direction * exitOrder.filledQuantity -
       entryOrder.commission -
       exitOrder.commission;
-    const requestedExitPrice = symState.stopPrice ?? exitOrder.price;
+    let requestedExitPrice: number;
+    switch (symState.exitReason) {
+      case 'TAKE_PROFIT':
+        requestedExitPrice = symState.takeProfitPrice ?? exitOrder.price;
+        break;
+      case 'TRAILING_STOP': {
+        // Trailing stop trigger price = peak * (1 - distance%) for longs,
+        // peak * (1 + distance%) for shorts
+        const isLongExit = entryOrder.side === 'BUY';
+        const distanceMult = this.config.trailingStopDistancePct / 100;
+        requestedExitPrice = symState.peakPrice !== null
+          ? (isLongExit
+            ? symState.peakPrice * (1 - distanceMult)
+            : symState.peakPrice * (1 + distanceMult))
+          : exitOrder.price;
+        break;
+      }
+      case 'STOP_LOSS':
+        requestedExitPrice = symState.stopPrice ?? exitOrder.price;
+        break;
+      default:
+        // SIGNAL / TIMEOUT — no "intended" price, slippage is 0
+        requestedExitPrice = exitOrder.avgPrice;
+    }
     const slippage = Math.abs(exitOrder.avgPrice - requestedExitPrice);
     const entryTime = symState.entryTime ?? entryOrder.timestamp;
     const exitTime = exitOrder.timestamp;

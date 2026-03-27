@@ -9,6 +9,9 @@ class KahanSum {
   private compensation = 0;
 
   add(value: number): void {
+    if (!Number.isFinite(value)) {
+      throw new Error(`KahanSum: cannot add non-finite value (${value})`);
+    }
     const y = value - this.compensation;
     const t = this.sum + y;
     this.compensation = t - this.sum - y;
@@ -55,6 +58,28 @@ export class RiskManager implements IRiskManager {
   private readonly handleOrderFilled: (data: TradingEventMap['order:filled']) => void;
 
   constructor(eventBus: IEventBus, config: RiskConfig) {
+    if (config.maxPositionSizePct <= 0 || config.maxPositionSizePct > 100) {
+      throw new Error(`RiskManager: maxPositionSizePct must be in (0, 100], got ${config.maxPositionSizePct}`);
+    }
+    if (config.maxDailyLossPct < 0 || config.maxDailyLossPct > 100) {
+      throw new Error(`RiskManager: maxDailyLossPct must be in [0, 100], got ${config.maxDailyLossPct}`);
+    }
+    if (config.maxDrawdownPct < 0 || config.maxDrawdownPct > 100) {
+      throw new Error(`RiskManager: maxDrawdownPct must be in [0, 100], got ${config.maxDrawdownPct}`);
+    }
+    if (config.maxConcurrentPositions <= 0) {
+      throw new Error(`RiskManager: maxConcurrentPositions must be > 0, got ${config.maxConcurrentPositions}`);
+    }
+    if (config.maxDailyTrades <= 0) {
+      throw new Error(`RiskManager: maxDailyTrades must be > 0, got ${config.maxDailyTrades}`);
+    }
+    if (config.initialBalance <= 0) {
+      throw new Error(`RiskManager: initialBalance must be > 0, got ${config.initialBalance}`);
+    }
+    if (config.leverage <= 0) {
+      throw new Error(`RiskManager: leverage must be > 0, got ${config.leverage}`);
+    }
+
     this.config = config;
 
     this.balance = new KahanSum();

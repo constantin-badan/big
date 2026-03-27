@@ -15,6 +15,9 @@ export class ATR implements IIndicator<ATRConfig, number> {
   private value: number | null = null;
 
   constructor(config: ATRConfig) {
+    if (config.period <= 0 || !Number.isInteger(config.period)) {
+      throw new Error(`ATR: period must be a positive integer, got ${config.period}`);
+    }
     this.config = config;
     this.warmupPeriod = config.period;
   }
@@ -35,6 +38,7 @@ export class ATR implements IIndicator<ATRConfig, number> {
         sum += v;
       }
       this.value = sum / this.config.period;
+      this.trWindow = [];
       return this.value;
     }
 

@@ -15,6 +15,9 @@ export class EMA implements IIndicator<EMAConfig, number> {
   private readonly multiplier: number;
 
   constructor(config: EMAConfig) {
+    if (config.period <= 0 || !Number.isInteger(config.period)) {
+      throw new Error(`EMA: period must be a positive integer, got ${config.period}`);
+    }
     this.config = config;
     this.warmupPeriod = config.period;
     this.multiplier = 2 / (config.period + 1);
@@ -33,6 +36,7 @@ export class EMA implements IIndicator<EMAConfig, number> {
         sum += v;
       }
       this.value = sum / this.config.period;
+      this.seedWindow = [];
       return this.value;
     }
     // Apply EMA multiplier

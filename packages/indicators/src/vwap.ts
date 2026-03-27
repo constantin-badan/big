@@ -33,6 +33,9 @@ export class VWAP implements IIndicator<VWAPConfig, number> {
     this.cumTPV += typicalPrice * candle.volume;
     this.cumVolume += candle.volume;
 
+    if (this.cumVolume === 0) {
+      return null;
+    }
     return this.cumTPV / this.cumVolume;
   }
 

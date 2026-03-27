@@ -124,17 +124,22 @@ export function computeMetrics(
   let peakBalance = initialBalance;
   let peakTime = startTime;
   let maxDrawdownDuration = 0;
+  let inDrawdown = false;
 
   for (const point of equityPoints) {
     if (point.balance >= peakBalance) {
       // New peak — check duration of previous drawdown period
-      const duration = point.time - peakTime;
-      if (duration > maxDrawdownDuration) {
-        maxDrawdownDuration = duration;
+      if (inDrawdown) {
+        const duration = point.time - peakTime;
+        if (duration > maxDrawdownDuration) {
+          maxDrawdownDuration = duration;
+        }
+        inDrawdown = false;
       }
       peakBalance = point.balance;
       peakTime = point.time;
     } else {
+      inDrawdown = true;
       const drawdown = ((peakBalance - point.balance) / peakBalance) * 100;
       if (drawdown > maxDrawdown) {
         maxDrawdown = drawdown;
@@ -208,7 +213,7 @@ export function computeMetrics(
       const diff = r - mean;
       varianceKahan.add(diff * diff);
     }
-    const variance = varianceKahan.value / returns.length; // population std dev
+    const variance = varianceKahan.value / (returns.length - 1); // Bessel's correction (sample std dev)
     const stddev = Math.sqrt(variance);
 
     if (stddev !== 0) {

@@ -21,6 +21,9 @@ export class RSI implements IIndicator<RSIConfig, number> {
   private readonly smoothFactor: number;
 
   constructor(config: RSIConfig) {
+    if (config.period <= 0 || !Number.isInteger(config.period)) {
+      throw new Error(`RSI: period must be a positive integer, got ${config.period}`);
+    }
     this.config = config;
     // warmup = period + 1: need period+1 closes to compute period changes
     this.warmupPeriod = config.period + 1;
@@ -50,6 +53,7 @@ export class RSI implements IIndicator<RSIConfig, number> {
         avgLoss: lossSum / this.config.period,
         prevClose: this.seedCloses[this.seedCloses.length - 1] ?? 0,
       };
+      this.seedCloses = [];
       return this.computeRSI(this.state.avgGain, this.state.avgLoss);
     }
 

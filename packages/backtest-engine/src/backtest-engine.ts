@@ -49,20 +49,17 @@ export function createBacktestEngine(
       // 7. Create strategy via factory
       const strategy = factory(params, { bus, exchange, executor });
 
-      // 8. Start strategy
-      await strategy.start();
+      // 8-10. Run strategy with guaranteed cleanup
+      try {
+        await strategy.start();
+        await dataFeed.start(config.symbols, config.timeframes);
+        await strategy.stop();
+      } finally {
+        bus.off('position:closed', tradeHandler);
+        exchange.dispose();
+      }
 
-      // 9. Pump all candles through replay
-      await dataFeed.start(config.symbols, config.timeframes);
-
-      // 10. Stop strategy
-      await strategy.stop();
-
-      // 11. Clean up
-      bus.off('position:closed', tradeHandler);
-      exchange.dispose();
-
-      // 12. Compute metrics and return result
+      // 11. Compute metrics and return result
       const metrics = computeMetrics(
         trades,
         config.timeframes,

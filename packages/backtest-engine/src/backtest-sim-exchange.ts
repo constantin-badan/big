@@ -26,6 +26,7 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
   private readonly feeStructure: FeeStructure;
   private readonly slippageBps: number;
   private readonly initialBalance: number;
+  private balance: number;
   private readonly currentPrices = new Map<string, number>();
   private readonly handler: (data: { symbol: string; timeframe: Timeframe; candle: Candle }) => void;
   private orderCounter = 0;
@@ -34,13 +35,16 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
     this.bus = bus;
     this.feeStructure = config.feeStructure;
     this.initialBalance = config.initialBalance;
+    this.balance = config.initialBalance;
 
     if (config.slippageModel.type !== 'fixed') {
       throw new Error(
         `BacktestSimExchange: only 'fixed' slippage model supported, got '${config.slippageModel.type}'`,
       );
     }
-    this.slippageBps = config.slippageModel.fixedBps ?? 0;
+    // Default to 2 bps if unset — compensates for close-price execution bias
+    // in candle-based backtesting where signals and fills share the same close price.
+    this.slippageBps = config.slippageModel.fixedBps ?? 2;
 
     this.handler = (data) => {
       this.currentPrices.set(data.symbol, data.candle.close);
@@ -121,6 +125,13 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
 
   private makeFilled(request: OrderRequest, fillPrice: number): OrderResult {
     const fee = request.quantity * fillPrice * this.feeStructure.taker;
+    const notional = request.quantity * fillPrice;
+    // Update virtual balance: BUY reduces free balance, SELL increases it
+    if (request.side === 'BUY') {
+      this.balance -= notional + fee;
+    } else {
+      this.balance += notional - fee;
+    }
     this.orderCounter += 1;
     return {
       orderId: `sim-${this.orderCounter}`,
@@ -212,7 +223,7 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
 
   getBalance(): Promise<AccountBalance[]> {
     return Promise.resolve([
-      { asset: 'USDT', free: this.initialBalance, locked: 0, total: this.initialBalance },
+      { asset: 'USDT', free: this.balance, locked: 0, total: this.balance },
     ]);
   }
 

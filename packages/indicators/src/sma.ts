@@ -13,6 +13,9 @@ export class SMA implements IIndicator<SMAConfig, number> {
   private window: number[] = [];
 
   constructor(config: SMAConfig) {
+    if (config.period <= 0 || !Number.isInteger(config.period)) {
+      throw new Error(`SMA: period must be a positive integer, got ${config.period}`);
+    }
     this.config = config;
     this.warmupPeriod = config.period;
   }
