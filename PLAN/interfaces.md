@@ -194,12 +194,12 @@ export interface IIndicator<TConfig = unknown, TOutput = number> {
   // This avoids deep-copy bugs with nested indicator state (e.g., EMA feeding EMA).
 }
 
-// A factory is just a function that creates a fresh, stateless indicator instance.
-// Scanners hold factories (not instances) so each backtest run / parallel strategy
-// gets independent state by calling the factory. No shared mutable state is possible.
-export type IndicatorFactory<TConfig = unknown, TOutput = number> = (
-  config: TConfig,
-) => IIndicator<TConfig, TOutput>;
+// A zero-arg factory that creates a fresh, independent indicator instance.
+// Config is pre-bound in the closure at the strategy factory level:
+//   indicators: { ema: () => createEMA({ period: params.emaPeriod }) }
+// Scanners call factory() with no args — they don't know or care about configs.
+// This captures the config in a closure (ADR-6) and avoids shared mutable state.
+export type IndicatorFactory = () => IIndicator;
 ```
 
 ---
@@ -265,6 +265,9 @@ export interface PositionManagerConfig {
   trailingStopActivationPct: number; // profit % to activate trailing
   trailingStopDistancePct: number; // distance from peak
   maxHoldTimeMs: number; // timeout exit
+  entryOrderType: OrderType; // default: MARKET — LIMIT for mean-reversion strategies
+  safetyStopEnabled: boolean; // default: false — exchange-side STOP_MARKET as crash net
+  safetyStopMultiplier: number; // default: 2.0 — placed at 2× normal SL distance
 }
 
 // Position lifecycle: IDLE → PENDING_ENTRY → OPEN → PENDING_EXIT → IDLE
@@ -567,14 +570,24 @@ export interface SweepResult {
   result: BacktestResult;
 }
 
+// Scoring function for ranking sweep results. Higher score = better.
+// Default: profit factor. Override for Sharpe, composite scores, etc.
+export type SweepScorer = (result: BacktestResult) => number;
+
+export interface SweepConfig {
+  maxCombinations?: number; // default 10_000 — throws if grid exceeds this
+  scorer?: SweepScorer; // default: profit factor
+}
+
 export interface ISweepEngine {
   // Takes a strategy factory + param grid, computes the cartesian product,
   // runs each combination through IBacktestEngine.run().
-  // Returns results sorted by a metric (e.g., profitFactor, sharpeRatio).
+  // Returns results sorted by scorer descending (higher = better).
   run(
     factory: StrategyFactory,
     grid: SweepParamGrid,
     config: BacktestConfig,
+    sweepConfig?: SweepConfig,
   ): Promise<SweepResult[]>;
 }
 
@@ -589,29 +602,9 @@ export function createSweepEngine(engine: IBacktestEngine): ISweepEngine;
 `KahanSum` is fully implemented in Phase 1. `computeMetrics` is Phase 2. See [ADR-1](./architecture.md#adr-1-floating-point-precision).
 
 ```typescript
-// KahanSum — compensated summation to eliminate floating-point drift
-// in accumulated PnL, equity curves, total fees, and parity-checker diffs.
-// Use this instead of naive += for any running total across trades.
-export class KahanSum {
-  private sum = 0;
-  private compensation = 0;
-
-  add(value: number): void {
-    const y = value - this.compensation;
-    const t = this.sum + y;
-    this.compensation = t - this.sum - y;
-    this.sum = t;
-  }
-
-  get value(): number {
-    return this.sum;
-  }
-
-  reset(): void {
-    this.sum = 0;
-    this.compensation = 0;
-  }
-}
+// KahanSum lives in @trading-bot/types so all packages can use it
+// without depending on reporting. Re-exported here for convenience.
+export { KahanSum } from '@trading-bot/types';
 
 // Computes all PerformanceMetrics from a completed backtest's trade list.
 // Uses KahanSum internally for accumulated values (totalFees, totalSlippage, PnL sums).
@@ -736,3 +729,256 @@ export const fixtures: {
 - `createMockExecutor` with `syncFill: false` does not emit any events on `submit()`
 - `createMockExecutor` with `rejectAll: true` emits `order:rejected` on `submit()`
 - All fixtures have deterministic values (no `Date.now()`, no `Math.random()`)
+
+---
+
+## Phase 3 Interfaces
+
+The following interfaces are defined in Phase 3. They do not exist as implementations yet.
+
+---
+
+## `storage`
+
+New package. SQLite via `bun:sqlite`. Passive service — no event bus dependency, called explicitly. Depends on `types` only (leaf node). See [Phase 3 plan](./phase-3-hl.md#3d-data-persistence).
+
+```typescript
+import type { Candle, Timeframe, TradeRecord, IExchange } from '@trading-bot/types';
+
+export interface ICandleStore {
+  // Write
+  insertCandles(symbol: string, timeframe: Timeframe, candles: Candle[]): void;
+
+  // Read — this IS the CandleLoader for production backtests
+  getCandles(symbol: string, timeframe: Timeframe, startTime: number, endTime: number): Candle[];
+
+  // Sync — fetch missing candles from exchange, append to store
+  sync(exchange: IExchange, symbol: string, timeframe: Timeframe, since: number): Promise<number>;
+
+  // Metadata
+  getLatestTimestamp(symbol: string, timeframe: Timeframe): number | null;
+  getGaps(symbol: string, timeframe: Timeframe): Array<{ from: number; to: number }>;
+}
+
+export interface TradeFilter {
+  strategyName?: string;
+  symbol?: string;
+  startTime?: number;
+  endTime?: number;
+}
+
+export interface ITradeStore {
+  // Write — called by live-runner on position:closed
+  insertTrade(strategyName: string, trade: TradeRecord): void;
+
+  // Read — for reporting, parity-checker, arena
+  getTrades(filter: TradeFilter): TradeRecord[];
+}
+
+// Single factory, one SQLite file
+export function createStorage(dbPath: string): { candles: ICandleStore; trades: ITradeStore };
+```
+
+**CandleLoader integration:**
+```typescript
+const { candles } = createStorage('./data/trading.db');
+const loader: CandleLoader = (symbol, tf, start, end) =>
+  Promise.resolve(candles.getCandles(symbol, tf, start, end));
+```
+
+---
+
+## `live-runner`
+
+Orchestrates live trading. Creates environment (bus, exchange, executor, data-feed), calls `StrategyFactory`. See [Phase 3 plan](./phase-3-hl.md#3b-live-runner).
+
+```typescript
+import type { StrategyFactory, ExchangeConfig, Timeframe, IStrategy } from '@trading-bot/types';
+
+export interface LiveRunnerConfig {
+  factory: StrategyFactory;
+  params: Record<string, number>;
+  exchangeConfig: ExchangeConfig;     // binance-live or binance-testnet
+  symbols: string[];
+  timeframes: Timeframe[];
+  shutdownBehavior: 'close-all' | 'leave-open';  // default: 'leave-open'
+  healthCheckIntervalMs: number;      // default: 30_000
+}
+
+export interface ILiveRunner {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  readonly status: 'idle' | 'running' | 'stopping' | 'stopped';
+  readonly strategy: IStrategy;       // access getStats() through this
+  readonly uptime: number;            // ms since start()
+}
+```
+
+**Notes:**
+- `riskConfig` NOT in runner config — captured in strategy factory closure (ADR-10)
+- No `getStats()` on the runner — access via `runner.strategy.getStats()`
+- Trade persistence: runner subscribes to `position:closed`, writes to `tradeStore.insertTrade(strategyName, trade)`
+- Shutdown sequence: stop data-feed → stop strategy → drain/cancel executor (behavior-dependent) → handle positions → disconnect
+
+---
+
+## `arena`
+
+Parallel strategy tournament. All paper-trade, no live champion. See [Phase 3 plan](./phase-3-hl.md#3e-evolution--tournament).
+
+```typescript
+import type {
+  StrategyFactory,
+  ExchangeConfig,
+  Timeframe,
+  PerformanceMetrics,
+  TradeRecord,
+} from '@trading-bot/types';
+
+export interface ArenaConfig {
+  exchangeConfig: ExchangeConfig;     // live or testnet (for real market data)
+  simExchangeConfig: ExchangeConfig;  // backtest-sim (for paper fills)
+  symbols: string[];
+  timeframes: Timeframe[];
+  factory: StrategyFactory;
+  paramSets: Record<string, number>[];  // N param vectors to run
+  evaluationWindowMs: number;
+}
+
+export interface ArenaRanking {
+  params: Record<string, number>;
+  metrics: PerformanceMetrics;
+  trades: TradeRecord[];
+}
+
+export interface IArena {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  getRankings(): ArenaRanking[];
+  addInstance(params: Record<string, number>): void;   // evolver calls this
+  removeInstance(params: Record<string, number>): void; // evolver kills losers
+}
+```
+
+**Architecture:** Shared exchange → source bus with LiveDataFeed → broadcast to N isolated strategy buses. Each bus has its own SimExecutor (sync fills, same fee/slippage model). Complete isolation per instance.
+
+---
+
+## `evolver`
+
+Evolutionary parameter selection. Outer loop wrapping arena. See [Phase 3 plan](./phase-3-hl.md#3e-evolution--tournament).
+
+```typescript
+import type { PerformanceMetrics, BacktestResult } from '@trading-bot/types';
+import type { ArenaRanking } from '@trading-bot/arena';
+import type { SweepScorer } from '@trading-bot/sweep-engine';
+
+export interface ParamSpec {
+  min: number;
+  max: number;
+  step?: number;  // 1 for integers, 0.001 for percentages, undefined for continuous
+}
+
+export type ParamBounds = Record<string, ParamSpec>;
+
+export interface EvolverConfig {
+  paramBounds: ParamBounds;
+  populationSize: number;
+  survivalRate: number;             // 0.5 = keep top 50%
+  mutationRate: number;             // 0.1 = 10% perturbation
+  eliteCount: number;               // 1 = top 1 survives unmutated
+  evaluationWindowMs: number;       // passed through to arena
+  stagnationGenerations: number;    // widen mutation after N flat generations
+  stagnationMutationRate: number;   // wider rate during stagnation (e.g., 0.3)
+  scorer: SweepScorer;
+}
+
+export interface IEvolver {
+  start(initialParams: Record<string, number>[]): Promise<void>;
+  stop(): Promise<void>;
+  readonly generation: number;
+  readonly bestParams: Record<string, number>;
+  readonly bestMetrics: PerformanceMetrics;
+  onGenerationComplete(cb: (rankings: ArenaRanking[]) => void): void;
+}
+```
+
+**Key decisions:** Proportional mutation with `ParamSpec` (step for integer snapping), no crossover, sweep-seeded, elite survives but resets stats, stagnation detector widens mutation. `onGenerationComplete` is a callback for logging, not a bus event.
+
+---
+
+## `parity-checker`
+
+Backtest vs reality comparison. Batch job, not continuous. See [Phase 3 plan](./phase-3-hl.md#3e-evolution--tournament).
+
+```typescript
+import type { TradeRecord } from '@trading-bot/types';
+
+export interface ParityResult {
+  period: { startTime: number; endTime: number };
+
+  matched: Array<{
+    live: TradeRecord;
+    backtest: TradeRecord;
+    entryPriceDiffBps: number;    // positive = live paid more
+    exitPriceDiffBps: number;
+    pnlDiff: number;
+    slippageDiff: number;
+    feeDiff: number;
+    exitReasonMatch: boolean;
+  }>;
+
+  liveOnly: TradeRecord[];        // signals that only fired in live
+  backtestOnly: TradeRecord[];    // signals that only fired in backtest
+
+  summary: {
+    matchRate: number;              // matched / total unique trades
+    meanEntryDeviationBps: number;  // systematic slippage bias
+    meanPnlDeviation: number;
+    pnlCorrelation: number;        // Pearson correlation of matched PnLs
+    backtestOverestimatesPnl: boolean;  // the critical question
+  };
+}
+
+export interface IParityChecker {
+  compare(
+    strategyName: string,
+    factory: StrategyFactory,
+    params: Record<string, number>,
+    period: { startTime: number; endTime: number },
+  ): Promise<ParityResult>;
+}
+```
+
+**Matching:** Fuzzy key `(symbol, side, entryTime ± finest candle period)`. Dependencies: types, backtest-engine, reporting, storage. No bus.
+
+---
+
+## `sweep-engine` — Parallel variant (Phase 3f)
+
+Separate from the sequential `ISweepEngine`. Workers import factory from module path — closures can't cross worker boundaries.
+
+```typescript
+import type { BacktestConfig, ExchangeConfig, BacktestResult } from '@trading-bot/types';
+import type { SweepResult, SweepParamGrid } from '@trading-bot/sweep-engine';
+
+export type SweepScorerName = 'profitFactor' | 'sharpe' | 'expectancy' | 'winRate';
+
+export interface ParallelSweepConfig {
+  factoryModulePath: string;        // './strategies/ema-crossover.ts'
+  factoryExportName?: string;       // default: 'factory'
+  backtestConfig: BacktestConfig;
+  exchangeConfig: ExchangeConfig;   // backtest-sim variant
+  dbPath: string;                   // SQLite path — each worker opens own connection
+  maxConcurrency?: number;          // default: os.cpus().length
+  scorer?: SweepScorerName;
+}
+
+export interface IParallelSweepEngine {
+  run(grid: SweepParamGrid): Promise<SweepResult[]>;
+}
+
+export function createParallelSweepEngine(config: ParallelSweepConfig): IParallelSweepEngine;
+```
+
+**Note:** `factoryModulePath` is resolved from the project root (Bun workers inherit CWD from parent).

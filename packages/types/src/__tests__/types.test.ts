@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'bun:test';
+
 import type {
   Candle,
   ExchangeConfig,
@@ -34,7 +35,7 @@ describe('types', () => {
     const liveConfig: ExchangeConfig = {
       type: 'binance-live',
       apiKey: 'key',
-      apiSecret: 'secret',
+      privateKey: 'secret',
     };
 
     const simConfig: ExchangeConfig = {

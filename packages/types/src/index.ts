@@ -161,13 +161,7 @@ export interface TradeRecord {
   fees: number;
   slippage: number;
   holdTimeMs: number;
-  exitReason:
-    | 'STOP_LOSS'
-    | 'TAKE_PROFIT'
-    | 'TRAILING_STOP'
-    | 'SIGNAL'
-    | 'TIMEOUT'
-    | 'FORCED';
+  exitReason: 'STOP_LOSS' | 'TAKE_PROFIT' | 'TRAILING_STOP' | 'SIGNAL' | 'TIMEOUT' | 'FORCED';
   metadata: Record<string, unknown>;
 }
 
@@ -195,6 +189,36 @@ export interface PerformanceMetrics {
   totalSlippage: number;
 }
 
+// === Utilities ===
+
+// KahanSum — compensated summation to eliminate floating-point drift
+// in accumulated PnL, equity curves, total fees, and other running totals.
+// Lives here (not in reporting) because multiple packages need it
+// (risk-manager, reporting, parity-checker) and types has no dependencies.
+export class KahanSum {
+  private sum = 0;
+  private compensation = 0;
+
+  add(value: number): void {
+    if (!Number.isFinite(value)) {
+      throw new Error(`KahanSum: cannot add non-finite value (${value})`);
+    }
+    const y = value - this.compensation;
+    const t = this.sum + y;
+    this.compensation = t - this.sum - y;
+    this.sum = t;
+  }
+
+  get value(): number {
+    return this.sum;
+  }
+
+  reset(): void {
+    this.sum = 0;
+    this.compensation = 0;
+  }
+}
+
 // === Config ===
 
 export type ExchangeStream = 'kline' | 'aggTrade' | 'depth' | 'userData';
@@ -208,12 +232,12 @@ export type ExchangeConfig =
   | (ExchangeConfigBase & {
       type: 'binance-live';
       apiKey: string;
-      apiSecret: string;
+      privateKey: string;
     })
   | (ExchangeConfigBase & {
       type: 'binance-testnet';
       apiKey: string;
-      apiSecret: string;
+      privateKey: string;
     })
   | (ExchangeConfigBase & {
       type: 'backtest-sim';

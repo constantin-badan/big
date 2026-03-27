@@ -147,6 +147,17 @@ export type RiskCheckResult =
   | { allowed: true; quantity: number } // quantity computed by risk-manager (balance * pct * leverage / price)
   | { allowed: false; rule: RiskRule; reason: string; severity: RiskSeverity };
 
+// === Utilities ===
+
+// KahanSum — compensated summation to eliminate floating-point drift.
+// Lives in types (not reporting) because multiple packages need it
+// (risk-manager, reporting, parity-checker) and types has no dependencies.
+export class KahanSum {
+  add(value: number): void; // throws on non-finite
+  get value(): number;
+  reset(): void;
+}
+
 // === Account ===
 
 export interface AccountBalance {
@@ -222,13 +233,13 @@ interface ExchangeConfigBase {
 export type ExchangeConfig =
   | (ExchangeConfigBase & {
       type: 'binance-live';
-      apiKey: string;
-      apiSecret: string;
+      apiKey: string;        // public key, registered on Binance
+      privateKey: string;    // Ed25519 private key, PEM or base64
     })
   | (ExchangeConfigBase & {
       type: 'binance-testnet';
-      apiKey: string;
-      apiSecret: string;
+      apiKey: string;        // public key, registered on Binance
+      privateKey: string;    // Ed25519 private key, PEM or base64
     })
   | (ExchangeConfigBase & {
       type: 'backtest-sim';

@@ -1,4 +1,8 @@
 import { describe, test, expect } from 'bun:test';
+
+import { EventBus } from '@trading-bot/event-bus';
+import type { IStrategy, StrategyFactory } from '@trading-bot/strategy';
+import { fixtures } from '@trading-bot/test-utils';
 import type {
   Candle,
   ExchangeConfig,
@@ -7,11 +11,9 @@ import type {
   PerformanceMetrics,
   Timeframe,
 } from '@trading-bot/types';
-import type { IStrategy, StrategyFactory } from '@trading-bot/strategy';
-import { EventBus } from '@trading-bot/event-bus';
-import { fixtures } from '@trading-bot/test-utils';
-import { BacktestSimExchange } from '../backtest-sim-exchange';
+
 import { createBacktestEngine } from '../backtest-engine';
+import { BacktestSimExchange } from '../backtest-sim-exchange';
 
 const BASE_TIME = 1700000000000;
 
@@ -160,6 +162,7 @@ describe('BacktestSimExchange', () => {
       feeStructure: { maker: 0.0002, taker: 0.0004 },
       slippageModel: { type: 'fixed', fixedBps: slippageBps },
       initialBalance: 10_000,
+      leverage: 125, // high leverage so margin check doesn't interfere with fill mechanics tests
     });
     seedPrice(bus, 'BTCUSDT', 50_000);
     return { bus, exchange };
@@ -340,8 +343,46 @@ describe('BacktestSimExchange', () => {
         feeStructure: { maker: 0.0002, taker: 0.0004 },
         slippageModel: { type: 'proportional', proportionalFactor: 0.5 },
         initialBalance: 10_000,
+        leverage: 1,
       });
     }).toThrow("only 'fixed' slippage model supported");
+  });
+
+  test('BUY rejected when margin is insufficient', () => {
+    const bus = new EventBus();
+    const exchange = new BacktestSimExchange(bus, {
+      feeStructure: { maker: 0.0002, taker: 0.0004 },
+      slippageModel: { type: 'fixed', fixedBps: 0 },
+      initialBalance: 1_000,
+      leverage: 1, // 1x leverage → full notional as margin
+    });
+    seedPrice(bus, 'BTCUSDT', 50_000);
+    // Need 50_000 margin but only have 1_000
+    const result = exchange.simulateFill({
+      symbol: 'BTCUSDT',
+      side: 'BUY',
+      type: 'MARKET',
+      quantity: 1,
+    });
+    expect(result.status).toBe('REJECTED');
+  });
+
+  test('BUY fills when leverage provides sufficient margin', () => {
+    const bus = new EventBus();
+    const exchange = new BacktestSimExchange(bus, {
+      feeStructure: { maker: 0.0002, taker: 0.0004 },
+      slippageModel: { type: 'fixed', fixedBps: 0 },
+      initialBalance: 1_000,
+      leverage: 100, // 100x → margin = 50_000/100 = 500 < 1_000
+    });
+    seedPrice(bus, 'BTCUSDT', 50_000);
+    const result = exchange.simulateFill({
+      symbol: 'BTCUSDT',
+      side: 'BUY',
+      type: 'MARKET',
+      quantity: 1,
+    });
+    expect(result.status).toBe('FILLED');
   });
 
   test('dispose unsubscribes from candle:close', () => {
@@ -368,7 +409,7 @@ describe('createBacktestEngine', () => {
     const liveConfig: ExchangeConfig = {
       type: 'binance-live',
       apiKey: 'key',
-      apiSecret: 'secret',
+      privateKey: 'secret',
     };
     expect(() => {
       createBacktestEngine(async () => [], liveConfig);

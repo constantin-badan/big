@@ -1,5 +1,5 @@
 {
-  "name": "@trading-bot/parity-checker",
+  "name": "@trading-bot/storage",
   "version": "0.0.0",
   "private": true,
   "main": "src/index.ts",
@@ -9,9 +9,6 @@
     "lint": "oxlint ./src --config ../../.oxlintrc.json"
   },
   "dependencies": {
-    "@trading-bot/backtest-engine": "workspace:*",
-    "@trading-bot/reporting": "workspace:*",
-    "@trading-bot/storage": "workspace:*",
     "@trading-bot/types": "workspace:*"
   }
 }

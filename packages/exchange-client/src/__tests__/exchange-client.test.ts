@@ -1,6 +1,8 @@
 import { describe, test, expect } from 'bun:test';
-import { createExchange } from '../factory';
+
 import type { ExchangeConfig } from '@trading-bot/types';
+
+import { createExchange } from '../factory';
 
 describe('exchange-client', () => {
   test('module exports are importable', async () => {
@@ -12,7 +14,7 @@ describe('exchange-client', () => {
     const config: ExchangeConfig = {
       type: 'binance-live',
       apiKey: 'key',
-      apiSecret: 'secret',
+      privateKey: 'secret',
     };
     expect(() => createExchange(config)).toThrow('Not implemented: binance-live');
   });
@@ -21,7 +23,7 @@ describe('exchange-client', () => {
     const config: ExchangeConfig = {
       type: 'binance-testnet',
       apiKey: 'key',
-      apiSecret: 'secret',
+      privateKey: 'secret',
     };
     expect(() => createExchange(config)).toThrow('Not implemented: binance-testnet');
   });

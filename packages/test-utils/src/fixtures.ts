@@ -1,12 +1,6 @@
-import type {
-  Candle,
-  OrderResult,
-  Position,
-  Signal,
-  Tick,
-} from '@trading-bot/types';
-import type { RiskConfig } from '@trading-bot/risk-manager';
 import type { PositionManagerConfig } from '@trading-bot/position-manager';
+import type { RiskConfig } from '@trading-bot/risk-manager';
+import type { Candle, OrderResult, Position, Signal, Tick } from '@trading-bot/types';
 
 const BASE_TIME = 1700000000000;
 
@@ -149,6 +143,9 @@ const defaultPositionManagerConfig: PositionManagerConfig = {
   trailingStopActivationPct: 1.5,
   trailingStopDistancePct: 0.5,
   maxHoldTimeMs: 3600000,
+  entryOrderType: 'MARKET',
+  safetyStopEnabled: false,
+  safetyStopMultiplier: 2.0,
 };
 
 export const fixtures = {
