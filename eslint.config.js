@@ -26,7 +26,7 @@ module.exports = [
             { sourceTag: 'scope:scanner', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus', 'scope:indicators'] },
             { sourceTag: 'scope:strategy', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus', 'scope:exchange-client', 'scope:order-executor', 'scope:scanner', 'scope:position-manager', 'scope:risk-manager'] },
             { sourceTag: 'scope:backtest-engine', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus', 'scope:exchange-client', 'scope:data-feed', 'scope:order-executor', 'scope:strategy', 'scope:reporting'] },
-            { sourceTag: 'scope:sweep-engine', onlyDependOnLibsWithTags: ['scope:types', 'scope:backtest-engine', 'scope:strategy'] },
+            { sourceTag: 'scope:sweep-engine', onlyDependOnLibsWithTags: ['scope:types', 'scope:backtest-engine', 'scope:strategy', 'scope:storage'] },
             { sourceTag: 'scope:storage', onlyDependOnLibsWithTags: ['scope:types'] },
             { sourceTag: 'scope:live-runner', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus', 'scope:exchange-client', 'scope:data-feed', 'scope:order-executor', 'scope:strategy', 'scope:storage'] },
             { sourceTag: 'scope:arena', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus', 'scope:exchange-client', 'scope:data-feed', 'scope:order-executor', 'scope:strategy', 'scope:reporting'] },
