@@ -30,9 +30,9 @@ export async function signPayload(
  * This is the payload that gets signed.
  */
 export function buildQueryString(params: Record<string, string | number>): string {
-  return Object.keys(params)
-    .sort()
-    .map((key) => `${key}=${String(params[key])}`)
+  return Object.entries(params)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
     .join('&');
 }
 
