@@ -50,6 +50,7 @@ export class LiveRunner implements ILiveRunner {
   private dataFeed!: IDataFeed;
   private executor!: IOrderExecutor;
   private _strategy!: IStrategy;
+  private readonly logHandlers: Array<() => void> = [];
 
   constructor(config: Partial<LiveRunnerConfig> & Pick<LiveRunnerConfig, 'factory' | 'params' | 'exchangeConfig' | 'symbols' | 'timeframes'>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -137,11 +138,15 @@ export class LiveRunner implements ILiveRunner {
 
     this.log('info', 'runner:stopping', { uptime: this.uptime });
 
-    // Stop heartbeat
+    // Stop heartbeat and unsubscribe logging handlers
     if (this.heartbeatInterval !== null) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
+    for (const unsub of this.logHandlers) {
+      unsub();
+    }
+    this.logHandlers.length = 0;
 
     // 1. Stop data-feed (no new candle/tick events)
     await this.dataFeed.stop();
@@ -206,15 +211,20 @@ export class LiveRunner implements ILiveRunner {
     ] as const;
 
     for (const event of eventsToLog) {
-      this.bus.on(event, (data: unknown) => {
+      const handler = (data: unknown): void => {
         this.log('info', event, data);
-      });
+      };
+      this.bus.on(event, handler);
+      const captured = event;
+      this.logHandlers.push(() => this.bus.off(captured, handler));
     }
 
     // Track last candle time for staleness detection
-    this.bus.on('candle:close', ({ candle }) => {
+    const candleHandler = ({ candle }: { candle: { closeTime: number } }): void => {
       this.lastCandleTimestamp = candle.closeTime;
-    });
+    };
+    this.bus.on('candle:close', candleHandler);
+    this.logHandlers.push(() => this.bus.off('candle:close', candleHandler));
   }
 
   private startHeartbeat(): void {

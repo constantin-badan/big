@@ -206,10 +206,12 @@ export class RiskManager implements IRiskManager {
       }
     }
 
-    // 7. Compute quantity
+    // 7. Compute quantity (adjust entry price for expected slippage)
+    const slippageBps = this.config.expectedSlippageBps ?? 0;
+    const adjustedEntry = entryPrice * (1 + slippageBps / 10_000);
     const quantity =
       (((this.balance.value * this.config.maxPositionSizePct) / 100) * this.config.leverage) /
-      entryPrice;
+      adjustedEntry;
 
     if (!Number.isFinite(quantity) || quantity <= 0) {
       return {

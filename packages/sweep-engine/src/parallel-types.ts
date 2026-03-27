@@ -15,8 +15,13 @@ export interface ParallelSweepConfig {
   scorer?: SweepScorerName;
 }
 
+export interface ParallelSweepResult {
+  results: SweepResult[];
+  errors: Array<{ params: Record<string, number>; error: string }>;
+}
+
 export interface IParallelSweepEngine {
-  run(grid: SweepParamGrid): Promise<SweepResult[]>;
+  run(grid: SweepParamGrid): Promise<ParallelSweepResult>;
 }
 
 // Messages between main thread and workers

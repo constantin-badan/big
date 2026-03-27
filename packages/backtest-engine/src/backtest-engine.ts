@@ -61,11 +61,16 @@ export function createBacktestEngine(
       const strategy = factory(params, { bus, exchange, executor });
 
       // 8-10. Run strategy with guaranteed cleanup
+      let strategyStarted = false;
       try {
         await strategy.start();
+        strategyStarted = true;
         await dataFeed.start(config.symbols, config.timeframes);
         await strategy.stop();
       } finally {
+        if (strategyStarted) {
+          try { await strategy.stop(); } catch { /* already stopped or stop failed */ }
+        }
         bus.off('position:closed', tradeHandler);
         exchange.dispose();
       }

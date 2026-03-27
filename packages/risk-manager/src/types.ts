@@ -9,6 +9,7 @@ export interface RiskConfig {
   cooldownAfterLossMs: number;
   leverage: number; // default 1 for spot; quantity = balance * pct * leverage / price
   initialBalance: number; // balance tracked internally via position:closed PnL
+  expectedSlippageBps?: number; // adjust entry price by this many bps (default 0)
 }
 
 export interface IRiskManager {

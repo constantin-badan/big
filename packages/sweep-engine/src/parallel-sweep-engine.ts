@@ -5,6 +5,7 @@ import { unsafeCast } from './unsafe-cast';
 import type {
   IParallelSweepEngine,
   ParallelSweepConfig,
+  ParallelSweepResult,
   WorkerRequest,
   WorkerResponse,
 } from './parallel-types';
@@ -38,12 +39,12 @@ export function createParallelSweepEngine(config: ParallelSweepConfig): IParalle
   const factoryExportName = config.factoryExportName ?? 'factory';
 
   return {
-    async run(grid: SweepParamGrid): Promise<SweepResult[]> {
+    async run(grid: SweepParamGrid): Promise<ParallelSweepResult> {
       const paramSets = cartesianProduct(grid);
-      if (paramSets.length === 0) return [];
+      if (paramSets.length === 0) return { results: [], errors: [] };
 
       const results: SweepResult[] = [];
-      const errors: string[] = [];
+      const errors: Array<{ params: Record<string, number>; error: string }> = [];
       let nextIndex = 0;
 
       const workerUrl = new URL('./sweep-worker.ts', import.meta.url).href;
@@ -69,14 +70,14 @@ export function createParallelSweepEngine(config: ParallelSweepConfig): IParalle
             if (response.type === 'result' && response.result) {
               results.push({ params: response.params, result: response.result });
             } else if (response.type === 'error') {
-              errors.push(`Params ${JSON.stringify(response.params)}: ${response.error}`);
+              errors.push({ params: response.params, error: response.error ?? 'Unknown error' });
             }
 
             completed++;
 
             if (completed === paramSets.length) {
               if (errors.length > 0 && results.length === 0) {
-                reject(new Error(`All sweep runs failed. First error: ${errors[0]}`));
+                reject(new Error(`All sweep runs failed. First error: ${errors[0]?.error}`));
                 return;
               }
 
@@ -90,25 +91,25 @@ export function createParallelSweepEngine(config: ParallelSweepConfig): IParalle
                 return scoreB - scoreA;
               });
 
-              resolve(results);
+              resolve({ results, errors });
             } else {
               // Spawn next worker
               spawnWorker();
             }
           };
 
-          worker.onerror = (event) => {
+          worker.onerror = () => {
             activeWorkers.delete(worker);
             worker.terminate();
-            errors.push(`Worker error for params ${JSON.stringify(params)}: ${String(event)}`);
+            errors.push({ params, error: 'Worker crashed' });
             completed++;
 
             if (completed === paramSets.length) {
               if (results.length === 0) {
-                reject(new Error(`All sweep runs failed. First error: ${errors[0]}`));
+                reject(new Error(`All sweep runs failed. First error: ${errors[0]?.error}`));
               } else {
                 results.sort((a, b) => scorer(b.result) - scorer(a.result));
-                resolve(results);
+                resolve({ results, errors });
               }
             } else {
               spawnWorker();

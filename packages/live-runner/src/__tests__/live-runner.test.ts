@@ -180,7 +180,6 @@ describe('live-runner', () => {
     mockPositions = [];
 
     // After start, mock getPositions to return an open position for shutdown
-    const originalGetPositions = mockExchange.getPositions;
     let callCount = 0;
     mockExchange.getPositions = async () => {
       callCount++;

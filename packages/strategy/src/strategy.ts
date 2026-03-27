@@ -47,7 +47,12 @@ export class Strategy implements IStrategy {
     for (const [source, signals] of this.buffer) {
       snapshot.set(source, signals.slice());
     }
-    const merged = this.config.signalMerge(signal, snapshot);
+    let merged;
+    try {
+      merged = this.config.signalMerge(signal, snapshot);
+    } catch {
+      return; // merge function threw — drop this signal
+    }
     if (merged !== null) {
       this.bus.emit('signal', { signal: merged });
     }

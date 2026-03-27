@@ -47,6 +47,10 @@ export class LiveExecutor implements IOrderExecutor {
   private readonly handleCanceled: (data: { order: { clientOrderId: string } }) => void;
 
   constructor(bus: IEventBus, exchange: IExchange, config: OrderExecutorConfig) {
+    if (config.rateLimitPerMinute <= 0) {
+      throw new Error(`LiveExecutor: rateLimitPerMinute must be > 0, got ${config.rateLimitPerMinute}`);
+    }
+
     this.bus = bus;
     this.exchange = exchange;
     this.config = config;
