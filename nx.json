@@ -12,5 +12,9 @@
       "cache": true
     }
   },
-  "analytics": false
+  "analytics": false,
+  "tui": {
+    "enabled": true,
+    "autoExit": true
+  }
 }
