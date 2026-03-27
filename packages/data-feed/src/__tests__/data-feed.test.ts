@@ -1,9 +1,50 @@
 import { describe, test, expect } from 'bun:test';
-import { createTestBus, fixtures } from '@trading-bot/test-utils';
+
 import type { IEventBus } from '@trading-bot/event-bus';
+import type { IExchange } from '@trading-bot/exchange-client';
+import { createTestBus, fixtures } from '@trading-bot/test-utils';
 import type { EventCapture } from '@trading-bot/test-utils';
+import type { Candle, Tick, Timeframe, OrderBookDiff } from '@trading-bot/types';
+
 import { ReplayDataFeed } from '../replay-data-feed';
-import type { Candle } from '@trading-bot/types';
+import { LiveDataFeed } from '../live-data-feed';
+
+/**
+ * Creates a mock exchange with overridable subscription behavior.
+ * Returns a typed IExchange without spreads that lose type info.
+ */
+function createStreamableExchange(overrides: {
+  subscribeCandles?: IExchange['subscribeCandles'];
+  subscribeTicks?: IExchange['subscribeTicks'];
+  subscribeOrderBookDiff?: IExchange['subscribeOrderBookDiff'];
+}): IExchange {
+  const noopCandles: IExchange['subscribeCandles'] =
+    (_s: string, _tf: Timeframe, _cb: (c: Candle) => void) => () => {};
+  const noopTicks: IExchange['subscribeTicks'] =
+    (_s: string, _cb: (t: Tick) => void) => () => {};
+  const noopDepth: IExchange['subscribeOrderBookDiff'] =
+    (_s: string, _cb: (d: OrderBookDiff) => void) => () => {};
+
+  const exchange: IExchange = {
+    getCandles: async () => [],
+    getOrderBook: async () => ({ symbol: '', timestamp: 0, bids: [], asks: [] }),
+    subscribeCandles: overrides.subscribeCandles ?? noopCandles,
+    subscribeTicks: overrides.subscribeTicks ?? noopTicks,
+    subscribeOrderBookDiff: overrides.subscribeOrderBookDiff ?? noopDepth,
+    placeOrder: async () => { throw new Error('not configured'); },
+    cancelOrder: async () => {},
+    getOpenOrders: async () => [],
+    getPosition: async () => null,
+    getPositions: async () => [],
+    setLeverage: async () => {},
+    getBalance: async () => [],
+    getFees: async () => ({ maker: 0.0002, taker: 0.0004 }),
+    connect: async () => {},
+    disconnect: async () => {},
+    isConnected: () => false,
+  };
+  return exchange;
+}
 
 const BASE_TIME = 1700000000000;
 
@@ -186,6 +227,154 @@ describe('ReplayDataFeed', () => {
 
     const feed = new ReplayDataFeed(bus, new Map());
     await feed.start(['BTCUSDT'], ['1m']);
+
+    expect(capture.count('candle:close')).toBe(0);
+  });
+});
+
+// === LiveDataFeed tests ===
+
+describe('LiveDataFeed', () => {
+  test('routes closed candles to candle:close event', async () => {
+    const { bus, capture }: { bus: IEventBus; capture: EventCapture } = createTestBus();
+
+    let candleCallback: ((candle: Candle) => void) | null = null;
+    const exchange = createStreamableExchange({
+      subscribeCandles: (_symbol, _tf, cb) => {
+        candleCallback = cb;
+        return () => {};
+      },
+    });
+
+    const feed = new LiveDataFeed(bus, exchange);
+    await feed.start(['BTCUSDT'], ['1m']);
+
+    expect(candleCallback).not.toBeNull();
+
+    const closedCandle: Candle = { ...fixtures.candle, isClosed: true };
+    candleCallback!(closedCandle);
+
+    expect(capture.count('candle:close')).toBe(1);
+    const evt = capture.get('candle:close')[0];
+    expect(evt).toBeDefined();
+    expect(evt!.symbol).toBe('BTCUSDT');
+    expect(evt!.timeframe).toBe('1m');
+    expect(evt!.candle.isClosed).toBe(true);
+  });
+
+  test('routes forming candles to candle:update event', async () => {
+    const { bus, capture }: { bus: IEventBus; capture: EventCapture } = createTestBus();
+
+    let candleCallback: ((candle: Candle) => void) | null = null;
+    const exchange = createStreamableExchange({
+      subscribeCandles: (_symbol, _tf, cb) => {
+        candleCallback = cb;
+        return () => {};
+      },
+    });
+
+    const feed = new LiveDataFeed(bus, exchange);
+    await feed.start(['BTCUSDT'], ['1m']);
+
+    const formingCandle: Candle = { ...fixtures.candle, isClosed: false };
+    candleCallback!(formingCandle);
+
+    expect(capture.count('candle:close')).toBe(0);
+    expect(capture.count('candle:update')).toBe(1);
+  });
+
+  test('routes ticks to tick event', async () => {
+    const { bus, capture }: { bus: IEventBus; capture: EventCapture } = createTestBus();
+
+    let tickCallback: ((tick: Tick) => void) | null = null;
+    const exchange = createStreamableExchange({
+      subscribeTicks: (_symbol, cb) => {
+        tickCallback = cb;
+        return () => {};
+      },
+    });
+
+    const feed = new LiveDataFeed(bus, exchange);
+    await feed.start(['BTCUSDT'], ['1m']);
+
+    expect(tickCallback).not.toBeNull();
+    const testTick: Tick = {
+      symbol: 'BTCUSDT',
+      price: 50000,
+      quantity: 0.5,
+      timestamp: 1700000000000,
+      isBuyerMaker: false,
+    };
+    tickCallback!(testTick);
+
+    expect(capture.count('tick')).toBe(1);
+    expect(capture.get('tick')[0]!.tick.price).toBe(50000);
+  });
+
+  test('subscribes to all symbol × timeframe combinations', async () => {
+    const { bus }: { bus: IEventBus } = createTestBus();
+
+    const subscriptions: Array<{ symbol: string; timeframe: string }> = [];
+    const exchange = createStreamableExchange({
+      subscribeCandles: (symbol, timeframe, _cb) => {
+        subscriptions.push({ symbol, timeframe });
+        return () => {};
+      },
+    });
+
+    const feed = new LiveDataFeed(bus, exchange);
+    await feed.start(['BTCUSDT', 'ETHUSDT'], ['1m', '5m']);
+
+    expect(subscriptions).toHaveLength(4);
+    expect(subscriptions).toContainEqual({ symbol: 'BTCUSDT', timeframe: '1m' });
+    expect(subscriptions).toContainEqual({ symbol: 'BTCUSDT', timeframe: '5m' });
+    expect(subscriptions).toContainEqual({ symbol: 'ETHUSDT', timeframe: '1m' });
+    expect(subscriptions).toContainEqual({ symbol: 'ETHUSDT', timeframe: '5m' });
+  });
+
+  test('stop() unsubscribes from all streams', async () => {
+    const { bus }: { bus: IEventBus } = createTestBus();
+
+    let unsubCount = 0;
+    const exchange = createStreamableExchange({
+      subscribeCandles: () => () => { unsubCount++; },
+      subscribeTicks: () => () => { unsubCount++; },
+    });
+
+    const feed = new LiveDataFeed(bus, exchange);
+    await feed.start(['BTCUSDT'], ['1m']);
+    await feed.stop();
+
+    expect(unsubCount).toBe(2);
+  });
+
+  test('getOrderBook() returns null in Phase 3a-minimal', async () => {
+    const { bus }: { bus: IEventBus } = createTestBus();
+    const exchange = createStreamableExchange({});
+
+    const feed = new LiveDataFeed(bus, exchange);
+    await feed.start(['BTCUSDT'], ['1m']);
+
+    expect(feed.getOrderBook('BTCUSDT')).toBeNull();
+  });
+
+  test('does not emit events after stop()', async () => {
+    const { bus, capture }: { bus: IEventBus; capture: EventCapture } = createTestBus();
+
+    let candleCallback: ((candle: Candle) => void) | null = null;
+    const exchange = createStreamableExchange({
+      subscribeCandles: (_symbol, _tf, cb) => {
+        candleCallback = cb;
+        return () => {};
+      },
+    });
+
+    const feed = new LiveDataFeed(bus, exchange);
+    await feed.start(['BTCUSDT'], ['1m']);
+    await feed.stop();
+
+    const closedCandle: Candle = { ...fixtures.candle, isClosed: true };
+    candleCallback!(closedCandle);
 
     expect(capture.count('candle:close')).toBe(0);
   });

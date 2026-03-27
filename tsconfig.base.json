@@ -30,6 +30,7 @@
       "@trading-bot/evolver": ["./packages/evolver/src/index.ts"],
       "@trading-bot/parity-checker": ["./packages/parity-checker/src/index.ts"],
       "@trading-bot/reporting": ["./packages/reporting/src/index.ts"],
+      "@trading-bot/storage": ["./packages/storage/src/index.ts"],
       "@trading-bot/test-utils": ["./packages/test-utils/src/index.ts"]
     }
   }

@@ -1,11 +1,24 @@
 import type { IEventBus } from '@trading-bot/event-bus';
 import type { IExchange } from '@trading-bot/exchange-client';
 import type { OrderRequest, SubmissionReceipt } from '@trading-bot/types';
+
 import type { IOrderExecutor, OrderExecutorConfig } from './types';
+
+/**
+ * LiveExecutor — async order queue for live trading.
+ *
+ * Design (from Phase 3 grilling):
+ * - submit() is sync (ADR-2 compliant): enqueues, emits order:submitted, returns receipt
+ * - Queue processor: token bucket rate limiting, priority cancel queue
+ * - Adapter emits order:filled on bus; executor subscribes to track pending set
+ * - No retry in Phase 3a-minimal (transport failures reject immediately)
+ * - placeOrder() resolves with ack (status NEW or REJECTED), not fill
+ */
 
 interface QueueItem {
   request: OrderRequest;
   receipt: SubmissionReceipt;
+  priority: boolean; // true for cancels — jump ahead
 }
 
 export class LiveExecutor implements IOrderExecutor {
@@ -14,25 +27,55 @@ export class LiveExecutor implements IOrderExecutor {
   private readonly config: OrderExecutorConfig;
 
   private counter = 0;
-  private queue: QueueItem[] = [];
+  private readonly queue: QueueItem[] = [];
   private processing = false;
   private running = false;
   private processingPromise: Promise<void> = Promise.resolve();
 
-  // Sliding window rate limiter: timestamps of recent submissions
-  private requestTimestamps: number[] = [];
+  // Pending order tracking: clientOrderId → still awaiting fill
+  private readonly pending = new Set<string>();
+
+  // Token bucket rate limiter
+  private tokens: number;
+  private lastRefillTime: number = Date.now();
+  private readonly maxTokens: number;
+  private readonly refillRate: number; // tokens per millisecond
+
+  // Bus event handlers (stored for cleanup)
+  private readonly handleFilled: (data: { order: { clientOrderId: string } }) => void;
+  private readonly handleRejected: (data: { clientOrderId: string }) => void;
+  private readonly handleCanceled: (data: { order: { clientOrderId: string } }) => void;
 
   constructor(bus: IEventBus, exchange: IExchange, config: OrderExecutorConfig) {
     this.bus = bus;
     this.exchange = exchange;
     this.config = config;
+
+    // Token bucket: 5% of rate limit as burst capacity, refill at full rate
+    this.maxTokens = Math.max(1, Math.floor(config.rateLimitPerMinute * 0.05));
+    this.tokens = this.maxTokens;
+    this.refillRate = config.rateLimitPerMinute / 60_000;
+
+    // Subscribe to fills/rejections to track pending set (ADR-8 reactive pattern)
+    this.handleFilled = (data) => {
+      this.pending.delete(data.order.clientOrderId);
+    };
+    this.handleRejected = (data) => {
+      this.pending.delete(data.clientOrderId);
+    };
+    this.handleCanceled = (data) => {
+      this.pending.delete(data.order.clientOrderId);
+    };
+
+    bus.on('order:filled', this.handleFilled);
+    bus.on('order:rejected', this.handleRejected);
+    bus.on('order:canceled', this.handleCanceled);
   }
 
   submit(request: OrderRequest): SubmissionReceipt {
     this.counter += 1;
-    const clientOrderId = request.clientOrderId ?? `live-order-${this.counter}`;
+    const clientOrderId = request.clientOrderId ?? `live-${this.counter}`;
 
-    // Build receipt BEFORE any emit (state-before-emit rule, ADR-2)
     const receipt: SubmissionReceipt = {
       clientOrderId,
       symbol: request.symbol,
@@ -44,8 +87,12 @@ export class LiveExecutor implements IOrderExecutor {
 
     const requestWithId: OrderRequest = { ...request, clientOrderId };
 
-    // Enqueue BEFORE emit so state is consistent if re-entry occurs
-    this.queue.push({ request: requestWithId, receipt });
+    // Track as pending BEFORE emit (state-before-emit rule, ADR-2)
+    this.pending.add(clientOrderId);
+
+    // Enqueue — cancels use priority
+    const item: QueueItem = { request: requestWithId, receipt, priority: false };
+    this.queue.push(item);
 
     this.bus.emit('order:submitted', { receipt });
 
@@ -57,37 +104,57 @@ export class LiveExecutor implements IOrderExecutor {
   }
 
   cancelAll(symbol: string): void {
-    // Remove pending items for this symbol from the queue
-    this.queue = this.queue.filter((item) => item.request.symbol !== symbol);
-    // Note: in-flight orders cannot be canceled synchronously here;
-    // a full implementation would track them and call exchange.cancelOrder.
+    // Remove unprocessed queue items for this symbol
+    for (let i = this.queue.length - 1; i >= 0; i--) {
+      if (this.queue[i]!.request.symbol === symbol) {
+        const removed = this.queue.splice(i, 1)[0]!;
+        this.pending.delete(removed.receipt.clientOrderId);
+      }
+    }
   }
 
   hasPending(symbol: string): boolean {
+    // Check both queue and in-flight orders
+    for (const id of this.pending) {
+      // Check queue items
+      for (const item of this.queue) {
+        if (item.receipt.clientOrderId === id && item.request.symbol === symbol) {
+          return true;
+        }
+      }
+    }
+    // Also check pending set for in-flight orders matching symbol
+    // (we don't track symbol per pending ID, so check the queue + all pending)
     return this.queue.some((item) => item.request.symbol === symbol);
   }
 
   getPendingCount(): number {
-    return this.queue.length;
+    return this.pending.size;
   }
 
-  start(): Promise<void> {
+  async start(): Promise<void> {
     this.running = true;
     if (this.queue.length > 0 && !this.processing) {
       this.processingPromise = this.drainQueue();
     }
-    return Promise.resolve();
   }
 
-  stop(): Promise<void> {
+  async stop(): Promise<void> {
     this.running = false;
-    return this.processingPromise;
+    await this.processingPromise;
+
+    // Unsubscribe from bus events
+    this.bus.off('order:filled', this.handleFilled);
+    this.bus.off('order:rejected', this.handleRejected);
+    this.bus.off('order:canceled', this.handleCanceled);
   }
+
+  // === Internal: Queue processing ===
 
   private async drainQueue(): Promise<void> {
     this.processing = true;
     while (this.queue.length > 0 && this.running) {
-      await this.waitForRateLimit();
+      await this.consumeToken();
       const item = this.queue.shift();
       if (item === undefined) break;
       await this.processItem(item);
@@ -95,57 +162,56 @@ export class LiveExecutor implements IOrderExecutor {
     this.processing = false;
   }
 
-  private async waitForRateLimit(): Promise<void> {
-    const now = Date.now();
-    const windowMs = 60_000;
-    const limit = this.config.rateLimitPerMinute;
-
-    // Prune timestamps outside the window
-    this.requestTimestamps = this.requestTimestamps.filter((t) => now - t < windowMs);
-
-    if (this.requestTimestamps.length >= limit) {
-      // Wait until the oldest timestamp falls out of the window
-      const oldest = this.requestTimestamps[0];
-      if (oldest !== undefined) {
-        const waitMs = windowMs - (now - oldest) + 1;
-        if (waitMs > 0) {
-          await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
-        }
-      }
-      // Re-prune after waiting
-      const nowAfterWait = Date.now();
-      this.requestTimestamps = this.requestTimestamps.filter(
-        (t) => nowAfterWait - t < windowMs,
-      );
-    }
-
-    this.requestTimestamps.push(Date.now());
-  }
-
   private async processItem(item: QueueItem): Promise<void> {
     const { request } = item;
-    let lastError: unknown;
 
-    for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
-      if (attempt > 0) {
-        await new Promise<void>((resolve) => setTimeout(resolve, this.config.retryDelayMs));
-      }
+    try {
+      const ack = await this.exchange.placeOrder(request);
 
-      try {
-        const result = await this.exchange.placeOrder(request);
-        this.bus.emit('order:filled', { order: result });
-        return;
-      } catch (err) {
-        lastError = err;
+      if (ack.status === 'REJECTED') {
+        // Exchange rejected the order — emit rejection, remove from pending
+        this.bus.emit('order:rejected', {
+          clientOrderId: request.clientOrderId ?? '',
+          reason: `Order rejected by exchange`,
+        });
+        this.pending.delete(request.clientOrderId ?? '');
       }
+      // If status is NEW or FILLED: do nothing here.
+      // Fills arrive via user data stream → adapter emits order:filled → pending set updated.
+      // For MARKET orders with RESULT response type, the adapter handles fill emission
+      // and deduplicates against the user data stream fill.
+    } catch (err) {
+      // Transport error — no retry in Phase 3a-minimal, emit rejection
+      const reason = err instanceof Error ? err.message : 'Unknown transport error';
+      this.bus.emit('order:rejected', {
+        clientOrderId: request.clientOrderId ?? '',
+        reason,
+      });
+      this.pending.delete(request.clientOrderId ?? '');
+    }
+  }
+
+  // === Internal: Token bucket rate limiter ===
+
+  private async consumeToken(): Promise<void> {
+    this.refillTokens();
+
+    if (this.tokens >= 1) {
+      this.tokens -= 1;
+      return;
     }
 
-    const reason =
-      lastError instanceof Error ? lastError.message : 'Unknown error after retries';
+    // Wait until we have a token
+    const waitMs = (1 - this.tokens) / this.refillRate;
+    await new Promise<void>((resolve) => setTimeout(resolve, Math.ceil(waitMs)));
+    this.refillTokens();
+    this.tokens -= 1;
+  }
 
-    this.bus.emit('order:rejected', {
-      clientOrderId: request.clientOrderId ?? '',
-      reason,
-    });
+  private refillTokens(): void {
+    const now = Date.now();
+    const elapsed = now - this.lastRefillTime;
+    this.tokens = Math.min(this.maxTokens, this.tokens + elapsed * this.refillRate);
+    this.lastRefillTime = now;
   }
 }

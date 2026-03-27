@@ -17,7 +17,7 @@ module.exports = [
           depConstraints: [
             { sourceTag: 'scope:types', onlyDependOnLibsWithTags: [] },
             { sourceTag: 'scope:event-bus', onlyDependOnLibsWithTags: ['scope:types'] },
-            { sourceTag: 'scope:exchange-client', onlyDependOnLibsWithTags: ['scope:types'] },
+            { sourceTag: 'scope:exchange-client', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus'] },
             { sourceTag: 'scope:indicators', onlyDependOnLibsWithTags: ['scope:types'] },
             { sourceTag: 'scope:data-feed', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus', 'scope:exchange-client'] },
             { sourceTag: 'scope:position-manager', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus', 'scope:order-executor', 'scope:risk-manager'] },

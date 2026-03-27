@@ -9,6 +9,7 @@
     "lint": "oxlint ./src --config ../../.oxlintrc.json"
   },
   "dependencies": {
+    "@trading-bot/event-bus": "workspace:*",
     "@trading-bot/types": "workspace:*"
   }
 }
