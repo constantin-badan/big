@@ -22,10 +22,7 @@ export interface IExchange {
     callback: (candle: Candle) => void,
   ): () => void;
   subscribeTicks(symbol: string, callback: (tick: Tick) => void): () => void;
-  subscribeOrderBookDiff(
-    symbol: string,
-    callback: (diff: OrderBookDiff) => void,
-  ): () => void;
+  subscribeOrderBookDiff(symbol: string, callback: (diff: OrderBookDiff) => void): () => void;
 
   placeOrder(request: OrderRequest): Promise<OrderResult>;
   cancelOrder(symbol: string, orderId: string): Promise<void>;

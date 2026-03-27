@@ -19,6 +19,7 @@ interface BacktestExchangeConfig {
   feeStructure: FeeStructure;
   slippageModel: SlippageModel;
   initialBalance: number;
+  leverage: number; // for margin check: required margin = notional / leverage
 }
 
 export class BacktestSimExchange implements IExchange, IFillSimulator {
@@ -26,15 +27,21 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
   private readonly feeStructure: FeeStructure;
   private readonly slippageBps: number;
   private readonly initialBalance: number;
+  private readonly leverage: number;
   private balance: number;
   private readonly currentPrices = new Map<string, number>();
-  private readonly handler: (data: { symbol: string; timeframe: Timeframe; candle: Candle }) => void;
+  private readonly handler: (data: {
+    symbol: string;
+    timeframe: Timeframe;
+    candle: Candle;
+  }) => void;
   private orderCounter = 0;
 
   constructor(bus: IEventBus, config: BacktestExchangeConfig) {
     this.bus = bus;
     this.feeStructure = config.feeStructure;
     this.initialBalance = config.initialBalance;
+    this.leverage = config.leverage;
     this.balance = config.initialBalance;
 
     if (config.slippageModel.type !== 'fixed') {
@@ -99,7 +106,9 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
     }
     // BUY STOP triggers when price >= stop; SELL STOP triggers when price <= stop
     const triggered =
-      request.side === 'BUY' ? currentPrice >= request.stopPrice : currentPrice <= request.stopPrice;
+      request.side === 'BUY'
+        ? currentPrice >= request.stopPrice
+        : currentPrice <= request.stopPrice;
     if (!triggered) {
       return this.makeRejected(request, 'STOP_MARKET not triggered');
     }
@@ -108,13 +117,19 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
     return this.makeFilled(request, fillPrice);
   }
 
-  private fillTakeProfit(request: OrderRequest, currentPrice: number, slippageMult: number): OrderResult {
+  private fillTakeProfit(
+    request: OrderRequest,
+    currentPrice: number,
+    slippageMult: number,
+  ): OrderResult {
     if (request.stopPrice === undefined) {
       return this.makeRejected(request, 'TAKE_PROFIT_MARKET requires stopPrice');
     }
     // BUY TP triggers when price <= stop; SELL TP triggers when price >= stop
     const triggered =
-      request.side === 'BUY' ? currentPrice <= request.stopPrice : currentPrice >= request.stopPrice;
+      request.side === 'BUY'
+        ? currentPrice <= request.stopPrice
+        : currentPrice >= request.stopPrice;
     if (!triggered) {
       return this.makeRejected(request, 'TAKE_PROFIT_MARKET not triggered');
     }
@@ -126,6 +141,15 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
   private makeFilled(request: OrderRequest, fillPrice: number): OrderResult {
     const fee = request.quantity * fillPrice * this.feeStructure.taker;
     const notional = request.quantity * fillPrice;
+    // Margin check: required margin = notional / leverage.
+    // Rejects when account can't cover the margin requirement for this position.
+    const requiredMargin = notional / this.leverage + fee;
+    if (request.side === 'BUY' && this.balance < requiredMargin) {
+      return this.makeRejected(
+        request,
+        `Insufficient margin: need ${requiredMargin.toFixed(2)}, have ${this.balance.toFixed(2)}`,
+      );
+    }
     // Update virtual balance: BUY reduces free balance, SELL increases it
     if (request.side === 'BUY') {
       this.balance -= notional + fee;
@@ -222,9 +246,7 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
   }
 
   getBalance(): Promise<AccountBalance[]> {
-    return Promise.resolve([
-      { asset: 'USDT', free: this.balance, locked: 0, total: this.balance },
-    ]);
+    return Promise.resolve([{ asset: 'USDT', free: this.balance, locked: 0, total: this.balance }]);
   }
 
   getFees(): Promise<FeeStructure> {

@@ -1,5 +1,7 @@
 import { describe, test, expect } from 'bun:test';
+
 import type { TradeRecord, Timeframe } from '@trading-bot/types';
+
 import { computeMetrics } from '../metrics';
 
 function makeTrade(overrides: Partial<TradeRecord> & { pnl: number }): TradeRecord {
@@ -166,7 +168,7 @@ describe('computeMetrics', () => {
     // Peak at t=60_000, trough continues until t=180_000 (no new peak)
     // endTime = 240_000, so drawdown duration = 240_000 - 60_000 = 180_000
     const trades = [
-      makeTrade({ id: '1', pnl: 200, exitTime: 60_000 }),   // peak = 1200 at t=60k
+      makeTrade({ id: '1', pnl: 200, exitTime: 60_000 }), // peak = 1200 at t=60k
       makeTrade({ id: '2', pnl: -150, exitTime: 120_000 }), // balance = 1050
       makeTrade({ id: '3', pnl: -100, exitTime: 180_000 }), // balance = 950
     ];

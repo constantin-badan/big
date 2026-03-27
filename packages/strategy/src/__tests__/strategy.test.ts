@@ -1,10 +1,17 @@
 import { describe, test, expect } from 'bun:test';
-import type { Signal } from '@trading-bot/types';
-import type { IScanner, IScannerConfig } from '@trading-bot/scanner';
+
+import { EventBus } from '@trading-bot/event-bus';
 import type { IPositionManager, PositionState } from '@trading-bot/position-manager';
 import type { IRiskManager } from '@trading-bot/risk-manager';
-import { EventBus } from '@trading-bot/event-bus';
-import { EventCapture, createMockExchange, createMockExecutor, fixtures } from '@trading-bot/test-utils';
+import type { IScanner, IScannerConfig } from '@trading-bot/scanner';
+import {
+  EventCapture,
+  createMockExchange,
+  createMockExecutor,
+  fixtures,
+} from '@trading-bot/test-utils';
+import type { Signal } from '@trading-bot/types';
+
 import { Strategy, passthroughMerge } from '../strategy';
 import type { StrategyConfig, StrategyDeps, SignalBuffer, SignalMerge } from '../types';
 
@@ -135,8 +142,16 @@ describe('Strategy', () => {
     const deps = makeDeps(bus);
     new Strategy(config, deps);
 
-    const signalA: Signal = { ...fixtures.longSignal, sourceScanner: 'scanner-a', timestamp: BASE_TIME };
-    const signalB: Signal = { ...fixtures.longSignal, sourceScanner: 'scanner-b', timestamp: BASE_TIME + 100 };
+    const signalA: Signal = {
+      ...fixtures.longSignal,
+      sourceScanner: 'scanner-a',
+      timestamp: BASE_TIME,
+    };
+    const signalB: Signal = {
+      ...fixtures.longSignal,
+      sourceScanner: 'scanner-b',
+      timestamp: BASE_TIME + 100,
+    };
 
     // Only scanner-a fires — no emission
     bus.emit('scanner:signal', { signal: signalA });

@@ -1,5 +1,6 @@
 import type { Candle } from '@trading-bot/types';
-import type { IIndicator, IndicatorFactory } from './types';
+
+import type { IIndicator } from './types';
 
 export interface RSIConfig {
   period: number;
@@ -83,4 +84,4 @@ export class RSI implements IIndicator<RSIConfig, number> {
   }
 }
 
-export const createRSI: IndicatorFactory<RSIConfig> = (config) => new RSI(config);
+export const createRSI = (config: RSIConfig): IIndicator<RSIConfig, number> => new RSI(config);

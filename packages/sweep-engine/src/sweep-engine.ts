@@ -1,7 +1,12 @@
 import type { IBacktestEngine } from '@trading-bot/backtest-engine';
 import type { StrategyFactory, SweepParamGrid } from '@trading-bot/strategy';
-import type { BacktestConfig } from '@trading-bot/types';
-import type { ISweepEngine, SweepResult } from './types';
+import type { BacktestConfig, BacktestResult } from '@trading-bot/types';
+
+import type { ISweepEngine, SweepConfig, SweepResult, SweepScorer } from './types';
+
+const DEFAULT_MAX_COMBINATIONS = 10_000;
+
+const defaultScorer: SweepScorer = (r: BacktestResult) => r.metrics.profitFactor;
 
 function cartesianProduct(grid: SweepParamGrid): Record<string, number>[] {
   const keys = Object.keys(grid);
@@ -30,8 +35,18 @@ export function createSweepEngine(engine: IBacktestEngine): ISweepEngine {
       factory: StrategyFactory,
       grid: SweepParamGrid,
       config: BacktestConfig,
+      sweepConfig?: SweepConfig,
     ): Promise<SweepResult[]> {
       const paramSets = cartesianProduct(grid);
+      const maxCombos = sweepConfig?.maxCombinations ?? DEFAULT_MAX_COMBINATIONS;
+      if (paramSets.length > maxCombos) {
+        throw new Error(
+          `Sweep grid produces ${paramSets.length} combinations, exceeds limit of ${maxCombos}. ` +
+            `Set sweepConfig.maxCombinations to override.`,
+        );
+      }
+
+      const scorer = sweepConfig?.scorer ?? defaultScorer;
       const results: SweepResult[] = [];
 
       for (const params of paramSets) {
@@ -39,15 +54,15 @@ export function createSweepEngine(engine: IBacktestEngine): ISweepEngine {
         results.push({ params, result });
       }
 
-      // Sort by profitFactor descending
+      // Sort by scorer descending (higher = better)
       results.sort((a, b) => {
-        const pfA = a.result.metrics.profitFactor;
-        const pfB = b.result.metrics.profitFactor;
+        const scoreA = scorer(a.result);
+        const scoreB = scorer(b.result);
         // Handle Infinity: both Infinity → 0, one Infinity → it wins
-        if (pfA === pfB) return 0;
-        if (pfA === Infinity) return -1;
-        if (pfB === Infinity) return 1;
-        return pfB - pfA;
+        if (scoreA === scoreB) return 0;
+        if (scoreA === Infinity) return -1;
+        if (scoreB === Infinity) return 1;
+        return scoreB - scoreA;
       });
 
       return results;

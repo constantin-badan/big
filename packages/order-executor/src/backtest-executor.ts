@@ -1,5 +1,6 @@
 import type { IEventBus } from '@trading-bot/event-bus';
 import type { OrderRequest, SubmissionReceipt } from '@trading-bot/types';
+
 import type { IFillSimulator, IOrderExecutor } from './types';
 
 export class BacktestExecutor implements IOrderExecutor {

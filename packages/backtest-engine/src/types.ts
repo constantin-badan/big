@@ -1,5 +1,11 @@
-import type { BacktestConfig, BacktestResult, Candle, ExchangeConfig, Timeframe } from '@trading-bot/types';
 import type { StrategyFactory } from '@trading-bot/strategy';
+import type {
+  BacktestConfig,
+  BacktestResult,
+  Candle,
+  ExchangeConfig,
+  Timeframe,
+} from '@trading-bot/types';
 
 // Loads historical candle data for backtest replay.
 // Engine calls this for every symbol × timeframe combination in BacktestConfig.

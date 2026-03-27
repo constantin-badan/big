@@ -1,4 +1,5 @@
 import type { TradeRecord, Timeframe, PerformanceMetrics } from '@trading-bot/types';
+
 import { KahanSum } from './kahan';
 
 const PERIODS_PER_YEAR: Record<Timeframe, number> = {

@@ -1,5 +1,6 @@
 import type { IEventBus, TradingEventMap } from '@trading-bot/event-bus';
 import type { IIndicator } from '@trading-bot/indicators';
+
 import type { IScannerConfig, IScanner, ScannerEvaluate } from './types';
 
 export class Scanner implements IScanner {
@@ -77,7 +78,7 @@ export class Scanner implements IScanner {
 
     const instances = new Map<string, IIndicator>();
     for (const [indicatorName, factory] of Object.entries(this.config.indicators)) {
-      instances.set(indicatorName, factory(undefined));
+      instances.set(indicatorName, factory());
     }
     this.indicatorInstances.set(symbol, instances);
     return instances;

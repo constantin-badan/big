@@ -15,10 +15,10 @@ import type {
 export interface TradingEventMap {
   'candle:close': { symbol: string; timeframe: Timeframe; candle: Candle };
   'candle:update': { symbol: string; timeframe: Timeframe; candle: Candle };
-  'tick': { symbol: string; tick: Tick };
+  tick: { symbol: string; tick: Tick };
 
   'scanner:signal': { signal: Signal };
-  'signal': { signal: Signal };
+  signal: { signal: Signal };
 
   'order:submitted': { receipt: SubmissionReceipt };
   'order:filled': { order: OrderResult };
@@ -57,22 +57,13 @@ export interface TradingEventMap {
     timestamp: number;
   };
 
-  'error': { source: string; error: Error; context?: Record<string, unknown> };
+  error: { source: string; error: Error; context?: Record<string, unknown> };
 }
 
 export interface IEventBus {
-  on<K extends keyof TradingEventMap>(
-    event: K,
-    handler: (data: TradingEventMap[K]) => void,
-  ): void;
-  off<K extends keyof TradingEventMap>(
-    event: K,
-    handler: (data: TradingEventMap[K]) => void,
-  ): void;
-  emit<K extends keyof TradingEventMap>(
-    event: K,
-    data: TradingEventMap[K],
-  ): void;
+  on<K extends keyof TradingEventMap>(event: K, handler: (data: TradingEventMap[K]) => void): void;
+  off<K extends keyof TradingEventMap>(event: K, handler: (data: TradingEventMap[K]) => void): void;
+  emit<K extends keyof TradingEventMap>(event: K, data: TradingEventMap[K]): void;
   once<K extends keyof TradingEventMap>(
     event: K,
     handler: (data: TradingEventMap[K]) => void,

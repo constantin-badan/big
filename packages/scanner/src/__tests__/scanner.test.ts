@@ -1,11 +1,13 @@
 import { describe, test, expect } from 'bun:test';
+
 import type { IEventBus } from '@trading-bot/event-bus';
-import type { Candle } from '@trading-bot/types';
 import type { IIndicator } from '@trading-bot/indicators';
-import type { ScannerEvaluate, ScannerFactory } from '../index';
-import { Scanner, createScannerFactory } from '../index';
 import { createTestBus, fixtures } from '@trading-bot/test-utils';
 import type { EventCapture } from '@trading-bot/test-utils';
+import type { Candle } from '@trading-bot/types';
+
+import type { ScannerEvaluate, ScannerFactory } from '../index';
+import { Scanner, createScannerFactory } from '../index';
 
 // Stub indicator: returns candle.close starting from the 1st update (warmupPeriod = 1)
 function makePassthroughIndicator(): IIndicator<unknown, number> {
@@ -70,7 +72,7 @@ describe('Scanner', () => {
         symbols: ['BTCUSDT'],
         timeframe: '1m',
         indicators: {
-          passthrough: (_config) => makePassthroughIndicator(),
+          passthrough: () => makePassthroughIndicator(),
         },
       },
       passthroughEvaluate,
@@ -102,8 +104,8 @@ describe('Scanner', () => {
         symbols: ['BTCUSDT'],
         timeframe: '1m',
         indicators: {
-          passthrough: (_config) => makePassthroughIndicator(),
-          slow: (_config) => makeSlowIndicator(),
+          passthrough: () => makePassthroughIndicator(),
+          slow: () => makeSlowIndicator(),
         },
       },
       passthroughEvaluate,
@@ -131,7 +133,7 @@ describe('Scanner', () => {
         symbols: ['BTCUSDT'],
         timeframe: '1m',
         indicators: {
-          passthrough: (_config) => makePassthroughIndicator(),
+          passthrough: () => makePassthroughIndicator(),
         },
       },
       nullEvaluate,
@@ -153,7 +155,7 @@ describe('Scanner', () => {
         symbols: ['BTCUSDT'],
         timeframe: '1m',
         indicators: {
-          passthrough: (_config) => makePassthroughIndicator(),
+          passthrough: () => makePassthroughIndicator(),
         },
       },
       passthroughEvaluate,
@@ -183,7 +185,7 @@ describe('Scanner', () => {
         symbols: ['BTCUSDT', 'ETHUSDT'],
         timeframe: '1m',
         indicators: {
-          passthrough: (_config) => {
+          passthrough: () => {
             // Each factory call creates a truly independent indicator
             let count = 0;
             return {
@@ -245,7 +247,7 @@ describe('Scanner', () => {
         symbols: ['BTCUSDT'],
         timeframe: '1m',
         indicators: {
-          passthrough: (_config) => makePassthroughIndicator(),
+          passthrough: () => makePassthroughIndicator(),
         },
       },
       passthroughEvaluate,
@@ -274,7 +276,7 @@ describe('Scanner', () => {
         symbols: ['BTCUSDT'],
         timeframe: '1m',
         indicators: {
-          passthrough: (_config) => makePassthroughIndicator(),
+          passthrough: () => makePassthroughIndicator(),
         },
       },
       passthroughEvaluate,
@@ -302,7 +304,7 @@ describe('Scanner', () => {
       symbols: ['BTCUSDT'],
       timeframe: '1m' as const,
       indicators: {
-        passthrough: (_config: unknown) => makePassthroughIndicator(),
+        passthrough: () => makePassthroughIndicator(),
       },
     };
 

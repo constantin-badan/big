@@ -1,6 +1,6 @@
-import type { Candle, Signal, Timeframe } from '@trading-bot/types';
 import type { IEventBus } from '@trading-bot/event-bus';
 import type { IndicatorFactory } from '@trading-bot/indicators';
+import type { Candle, Signal, Timeframe } from '@trading-bot/types';
 
 export interface IScannerConfig {
   symbols: string[];

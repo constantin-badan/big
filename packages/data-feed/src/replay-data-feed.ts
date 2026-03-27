@@ -1,5 +1,6 @@
 import type { IEventBus } from '@trading-bot/event-bus';
 import type { Candle, OrderBookSnapshot, Timeframe } from '@trading-bot/types';
+
 import type { IDataFeed } from './types';
 
 // Map key format: "${symbol}:${timeframe}" — e.g. "BTCUSDT:1m"

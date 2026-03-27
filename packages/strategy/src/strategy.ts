@@ -1,5 +1,6 @@
-import type { PerformanceMetrics } from '@trading-bot/types';
 import type { IEventBus, TradingEventMap } from '@trading-bot/event-bus';
+import type { PerformanceMetrics } from '@trading-bot/types';
+
 import type { IStrategy, StrategyConfig, StrategyDeps, SignalBuffer, SignalMerge } from './types';
 
 export class Strategy implements IStrategy {

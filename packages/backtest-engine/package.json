@@ -9,12 +9,12 @@
     "lint": "oxlint ./src --config ../../.oxlintrc.json"
   },
   "dependencies": {
-    "@trading-bot/types": "workspace:*",
+    "@trading-bot/data-feed": "workspace:*",
     "@trading-bot/event-bus": "workspace:*",
     "@trading-bot/exchange-client": "workspace:*",
-    "@trading-bot/strategy": "workspace:*",
-    "@trading-bot/data-feed": "workspace:*",
     "@trading-bot/order-executor": "workspace:*",
-    "@trading-bot/reporting": "workspace:*"
+    "@trading-bot/reporting": "workspace:*",
+    "@trading-bot/strategy": "workspace:*",
+    "@trading-bot/types": "workspace:*"
   }
 }

@@ -1,10 +1,19 @@
-import type { BacktestConfig, BacktestResult } from '@trading-bot/types';
-import type { StrategyFactory, SweepParamGrid } from '@trading-bot/strategy';
 import type { IBacktestEngine } from '@trading-bot/backtest-engine';
+import type { StrategyFactory, SweepParamGrid } from '@trading-bot/strategy';
+import type { BacktestConfig, BacktestResult } from '@trading-bot/types';
 
 export interface SweepResult {
   params: Record<string, number>;
   result: BacktestResult;
+}
+
+// Scoring function for ranking sweep results. Higher score = better.
+// Default: profit factor. Override for Sharpe, composite scores, etc.
+export type SweepScorer = (result: BacktestResult) => number;
+
+export interface SweepConfig {
+  maxCombinations?: number; // default 10_000 — throws if grid exceeds this
+  scorer?: SweepScorer; // default: profit factor
 }
 
 export interface ISweepEngine {
@@ -14,6 +23,7 @@ export interface ISweepEngine {
     factory: StrategyFactory,
     grid: SweepParamGrid,
     config: BacktestConfig,
+    sweepConfig?: SweepConfig,
   ): Promise<SweepResult[]>;
 }
 

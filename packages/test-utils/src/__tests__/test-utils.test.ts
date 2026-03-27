@@ -1,10 +1,12 @@
 import { describe, test, expect } from 'bun:test';
+
 import { EventBus } from '@trading-bot/event-bus';
+
 import { EventCapture } from '../event-capture';
+import { fixtures } from '../fixtures';
+import { createTestBus } from '../index';
 import { createMockExchange } from '../mock-exchange';
 import { createMockExecutor } from '../mock-executor';
-import { createTestBus } from '../index';
-import { fixtures } from '../fixtures';
 
 describe('EventCapture', () => {
   test('records emitted events', () => {

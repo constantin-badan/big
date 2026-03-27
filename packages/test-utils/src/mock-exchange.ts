@@ -48,10 +48,7 @@ export function createMockExchange(config?: MockExchangeConfig): IExchange {
     subscribeTicks(_symbol: string, _callback: (tick: Tick) => void): () => void {
       return () => {};
     },
-    subscribeOrderBookDiff(
-      _symbol: string,
-      _callback: (diff: OrderBookDiff) => void,
-    ): () => void {
+    subscribeOrderBookDiff(_symbol: string, _callback: (diff: OrderBookDiff) => void): () => void {
       return () => {};
     },
     async placeOrder(_request: OrderRequest): Promise<OrderResult> {

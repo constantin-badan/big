@@ -1,32 +1,8 @@
-import type { RiskCheckResult, Signal, TradeRecord } from '@trading-bot/types';
 import type { IEventBus, TradingEventMap } from '@trading-bot/event-bus';
+import { KahanSum } from '@trading-bot/types';
+import type { RiskCheckResult, Signal, TradeRecord } from '@trading-bot/types';
+
 import type { IRiskManager, RiskConfig } from './types';
-
-// Kahan compensated summation — inline to avoid importing @trading-bot/reporting
-// (boundary rule: scope:risk-manager may only depend on scope:types and scope:event-bus)
-class KahanSum {
-  private sum = 0;
-  private compensation = 0;
-
-  add(value: number): void {
-    if (!Number.isFinite(value)) {
-      throw new Error(`KahanSum: cannot add non-finite value (${value})`);
-    }
-    const y = value - this.compensation;
-    const t = this.sum + y;
-    this.compensation = t - this.sum - y;
-    this.sum = t;
-  }
-
-  get value(): number {
-    return this.sum;
-  }
-
-  reset(): void {
-    this.sum = 0;
-    this.compensation = 0;
-  }
-}
 
 export class RiskManager implements IRiskManager {
   private readonly config: RiskConfig;
@@ -59,16 +35,24 @@ export class RiskManager implements IRiskManager {
 
   constructor(eventBus: IEventBus, config: RiskConfig) {
     if (config.maxPositionSizePct <= 0 || config.maxPositionSizePct > 100) {
-      throw new Error(`RiskManager: maxPositionSizePct must be in (0, 100], got ${config.maxPositionSizePct}`);
+      throw new Error(
+        `RiskManager: maxPositionSizePct must be in (0, 100], got ${config.maxPositionSizePct}`,
+      );
     }
     if (config.maxDailyLossPct < 0 || config.maxDailyLossPct > 100) {
-      throw new Error(`RiskManager: maxDailyLossPct must be in [0, 100], got ${config.maxDailyLossPct}`);
+      throw new Error(
+        `RiskManager: maxDailyLossPct must be in [0, 100], got ${config.maxDailyLossPct}`,
+      );
     }
     if (config.maxDrawdownPct < 0 || config.maxDrawdownPct > 100) {
-      throw new Error(`RiskManager: maxDrawdownPct must be in [0, 100], got ${config.maxDrawdownPct}`);
+      throw new Error(
+        `RiskManager: maxDrawdownPct must be in [0, 100], got ${config.maxDrawdownPct}`,
+      );
     }
     if (config.maxConcurrentPositions <= 0) {
-      throw new Error(`RiskManager: maxConcurrentPositions must be > 0, got ${config.maxConcurrentPositions}`);
+      throw new Error(
+        `RiskManager: maxConcurrentPositions must be > 0, got ${config.maxConcurrentPositions}`,
+      );
     }
     if (config.maxDailyTrades <= 0) {
       throw new Error(`RiskManager: maxDailyTrades must be > 0, got ${config.maxDailyTrades}`);
@@ -140,6 +124,12 @@ export class RiskManager implements IRiskManager {
       this.dailyTradeCount = 0;
       this.dailyPnl.reset();
       this.currentDay = day;
+      // MAX_DAILY_LOSS kill switch resets at day boundary — the daily limit
+      // is scoped to a single day. MAX_DRAWDOWN stays latched (account-level
+      // concern that persists until explicit reset() or manual intervention).
+      if (this.killSwitchActive && this.killSwitchRule === 'MAX_DAILY_LOSS') {
+        this.killSwitchActive = false;
+      }
     }
   }
 
@@ -189,7 +179,7 @@ export class RiskManager implements IRiskManager {
     }
 
     // 5. Max daily loss — check and potentially set kill switch
-    const dailyLossThreshold = -(this.config.initialBalance * this.config.maxDailyLossPct / 100);
+    const dailyLossThreshold = -((this.config.initialBalance * this.config.maxDailyLossPct) / 100);
     if (this.dailyPnl.value <= dailyLossThreshold) {
       this.killSwitchActive = true;
       this.killSwitchRule = 'MAX_DAILY_LOSS';
@@ -218,7 +208,7 @@ export class RiskManager implements IRiskManager {
 
     // 7. Compute quantity
     const quantity =
-      (this.balance.value * this.config.maxPositionSizePct / 100 * this.config.leverage) /
+      (((this.balance.value * this.config.maxPositionSizePct) / 100) * this.config.leverage) /
       entryPrice;
 
     if (quantity <= 0) {

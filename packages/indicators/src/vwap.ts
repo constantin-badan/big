@@ -1,5 +1,6 @@
 import type { Candle } from '@trading-bot/types';
-import type { IIndicator, IndicatorFactory } from './types';
+
+import type { IIndicator } from './types';
 
 export interface VWAPConfig {
   resetOffsetMs?: number;
@@ -46,4 +47,4 @@ export class VWAP implements IIndicator<VWAPConfig, number> {
   }
 }
 
-export const createVWAP: IndicatorFactory<VWAPConfig> = (config) => new VWAP(config);
+export const createVWAP = (config: VWAPConfig): IIndicator<VWAPConfig, number> => new VWAP(config);

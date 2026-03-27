@@ -6,6 +6,7 @@ export type { MockExecutorConfig } from './mock-executor';
 export { fixtures } from './fixtures';
 
 import { EventBus } from '@trading-bot/event-bus';
+
 import { EventCapture } from './event-capture';
 
 export function createTestBus() {

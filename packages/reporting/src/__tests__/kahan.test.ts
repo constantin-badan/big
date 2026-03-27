@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'bun:test';
+
 import { KahanSum } from '../kahan';
 
 describe('KahanSum', () => {

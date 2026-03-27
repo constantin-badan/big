@@ -1,5 +1,6 @@
 import type { Candle } from '@trading-bot/types';
-import type { IIndicator, IndicatorFactory } from './types';
+
+import type { IIndicator } from './types';
 
 export interface EMAConfig {
   period: number;
@@ -50,4 +51,4 @@ export class EMA implements IIndicator<EMAConfig, number> {
   }
 }
 
-export const createEMA: IndicatorFactory<EMAConfig> = (config) => new EMA(config);
+export const createEMA = (config: EMAConfig): IIndicator<EMAConfig, number> => new EMA(config);

@@ -1,17 +1,14 @@
-import type { PerformanceMetrics, Signal } from '@trading-bot/types';
 import type { IEventBus } from '@trading-bot/event-bus';
 import type { IExchange } from '@trading-bot/exchange-client';
 import type { IOrderExecutor } from '@trading-bot/order-executor';
-import type { IScanner } from '@trading-bot/scanner';
 import type { IPositionManager } from '@trading-bot/position-manager';
 import type { IRiskManager } from '@trading-bot/risk-manager';
+import type { IScanner } from '@trading-bot/scanner';
+import type { PerformanceMetrics, Signal } from '@trading-bot/types';
 
 export type SignalBuffer = Map<string, Signal[]>;
 
-export type SignalMerge = (
-  trigger: Signal,
-  buffer: SignalBuffer,
-) => Signal | null;
+export type SignalMerge = (trigger: Signal, buffer: SignalBuffer) => Signal | null;
 
 export interface StrategyConfig {
   name: string;
@@ -41,9 +38,6 @@ export interface StrategyDeps {
   executor: IOrderExecutor;
 }
 
-export type StrategyFactory = (
-  params: Record<string, number>,
-  deps: StrategyDeps,
-) => IStrategy;
+export type StrategyFactory = (params: Record<string, number>, deps: StrategyDeps) => IStrategy;
 
 export type SweepParamGrid = Record<string, number[]>;

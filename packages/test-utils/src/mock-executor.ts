@@ -10,10 +10,7 @@ export interface MockExecutorConfig {
   rejectReason?: string;
 }
 
-export function createMockExecutor(
-  bus: IEventBus,
-  config?: MockExecutorConfig,
-): IOrderExecutor {
+export function createMockExecutor(bus: IEventBus, config?: MockExecutorConfig): IOrderExecutor {
   const syncFill = config?.syncFill ?? true;
   const fillPrice = config?.fillPrice;
   const commission = config?.commission ?? 0;

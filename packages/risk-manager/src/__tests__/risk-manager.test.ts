@@ -1,17 +1,18 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { createTestBus, fixtures } from '@trading-bot/test-utils';
+
 import type { IEventBus } from '@trading-bot/event-bus';
+import { createTestBus, fixtures } from '@trading-bot/test-utils';
+import type { RiskCheckResult, Signal, TradeRecord } from '@trading-bot/types';
+
 import { RiskManager } from '../risk-manager';
 import type { RiskConfig } from '../types';
-import type { RiskCheckResult, Signal, TradeRecord } from '@trading-bot/types';
 
 // ── constants ──────────────────────────────────────────────────────────────────
 
 const BASE_TIME = 1700000000000; // same as fixtures
 
 /** UTC midnight boundary that falls strictly after BASE_TIME */
-const NEXT_DAY_TIME =
-  (Math.floor(BASE_TIME / 86_400_000) + 1) * 86_400_000 + 1000;
+const NEXT_DAY_TIME = (Math.floor(BASE_TIME / 86_400_000) + 1) * 86_400_000 + 1000;
 
 // Typed aliases for fixture values — eliminates no-unsafe-argument lint errors
 const LONG_SIGNAL: Signal = fixtures.longSignal;
@@ -174,8 +175,7 @@ describe('RiskManager', () => {
       });
     }
 
-    const signalTime =
-      NEXT_DAY_TIME + 6 * 86_400_000 + DEFAULT_CONFIG.cooldownAfterLossMs + 1000;
+    const signalTime = NEXT_DAY_TIME + 6 * 86_400_000 + DEFAULT_CONFIG.cooldownAfterLossMs + 1000;
     const signal = makeSignal(signalTime);
     const result = riskManager.checkEntry(signal, 50020);
     expect(result.allowed).toBe(false);

@@ -1,7 +1,9 @@
 import { describe, test, expect } from 'bun:test';
-import { createTestBus, EventCapture } from '@trading-bot/test-utils';
+
 import type { IEventBus } from '@trading-bot/event-bus';
+import { createTestBus, EventCapture } from '@trading-bot/test-utils';
 import type { OrderRequest, OrderResult, OrderStatus } from '@trading-bot/types';
+
 import { BacktestExecutor } from '../backtest-executor';
 import type { IFillSimulator } from '../types';
 
@@ -36,7 +38,11 @@ const baseRequest: OrderRequest = {
   clientOrderId: 'test-client-1',
 };
 
-function makeExecutor(status: OrderStatus = 'FILLED'): { bus: IEventBus; capture: EventCapture; executor: BacktestExecutor } {
+function makeExecutor(status: OrderStatus = 'FILLED'): {
+  bus: IEventBus;
+  capture: EventCapture;
+  executor: BacktestExecutor;
+} {
   let bus: IEventBus;
   ({ bus } = createTestBus());
   const capture = new EventCapture(bus);
@@ -90,8 +96,12 @@ describe('BacktestExecutor', () => {
     ({ bus } = createTestBus());
     const eventOrder: string[] = [];
 
-    bus.on('order:submitted', () => { eventOrder.push('order:submitted'); });
-    bus.on('order:filled', () => { eventOrder.push('order:filled'); });
+    bus.on('order:submitted', () => {
+      eventOrder.push('order:submitted');
+    });
+    bus.on('order:filled', () => {
+      eventOrder.push('order:filled');
+    });
 
     const executor = new BacktestExecutor(bus, makeFillSim('FILLED'));
     executor.submit(baseRequest);

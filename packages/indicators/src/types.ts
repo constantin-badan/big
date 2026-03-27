@@ -8,6 +8,8 @@ export interface IIndicator<TConfig = unknown, TOutput = number> {
   reset(): void;
 }
 
-export type IndicatorFactory<TConfig = unknown, TOutput = number> = (
-  config: TConfig,
-) => IIndicator<TConfig, TOutput>;
+// A zero-arg factory that creates a fresh, independent indicator instance.
+// Config is pre-bound in the closure at the strategy factory level:
+//   indicators: { ema: () => createEMA({ period: params.emaPeriod }) }
+// Scanners call factory() with no args — they don't know or care about configs.
+export type IndicatorFactory = () => IIndicator;

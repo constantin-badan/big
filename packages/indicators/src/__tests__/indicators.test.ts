@@ -166,9 +166,7 @@ describe('RSI', () => {
   // Custom candles with mixed gains/losses for meaningful RSI values
   // Closes: 100, 102, 101, 103, 100, 98, 99, 97
   const rsiCloses = [100, 102, 101, 103, 100, 98, 99, 97];
-  const rsiCandles = rsiCloses.map((close, i) =>
-    makeCandle({ close, openTime: i * 60000 }),
-  );
+  const rsiCandles = rsiCloses.map((close, i) => makeCandle({ close, openTime: i * 60000 }));
 
   test('warmup: first period calls return null, (period+1)-th returns a value', () => {
     const rsi = new RSI({ period: 3 });

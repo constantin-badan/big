@@ -1,16 +1,13 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import {
-  createTestBus,
-  createMockExecutor,
-  EventCapture,
-  fixtures,
-} from '@trading-bot/test-utils';
+
 import type { IEventBus } from '@trading-bot/event-bus';
 import type { IOrderExecutor } from '@trading-bot/order-executor';
 import type { IRiskManager } from '@trading-bot/risk-manager';
+import { createTestBus, createMockExecutor, EventCapture, fixtures } from '@trading-bot/test-utils';
 import type { OrderRequest, Signal, SubmissionReceipt } from '@trading-bot/types';
-import { PositionManager } from '../position-manager';
+
 import type { PositionManagerConfig, PositionState } from '../index';
+import { PositionManager } from '../position-manager';
 
 // ── typed aliases for fixtures — prevents no-unsafe-argument errors ───────────
 const LONG_SIGNAL: Signal = fixtures.longSignal;
@@ -252,7 +249,10 @@ describe('PositionManager', () => {
   // ─── Test 7: order:rejected while PENDING_ENTRY → state back to IDLE ─────
   describe('order:rejected reverts state', () => {
     test('rejected entry order reverts state to IDLE', () => {
-      const rejectExecutor: IOrderExecutor = createMockExecutor(bus, { syncFill: true, rejectAll: true });
+      const rejectExecutor: IOrderExecutor = createMockExecutor(bus, {
+        syncFill: true,
+        rejectAll: true,
+      });
       const riskMgr = makeMockRiskManager(true, 0.1);
       const pm = new PositionManager(bus, rejectExecutor, riskMgr, makeConfig());
 
@@ -344,13 +344,25 @@ describe('PositionManager', () => {
       const peakPrice = ENTRY_PRICE * 1.015;
       bus.emit('tick', {
         symbol: SYMBOL,
-        tick: { symbol: SYMBOL, price: peakPrice, quantity: 1, timestamp: baseTimestamp, isBuyerMaker: false },
+        tick: {
+          symbol: SYMBOL,
+          price: peakPrice,
+          quantity: 1,
+          timestamp: baseTimestamp,
+          isBuyerMaker: false,
+        },
       });
 
       const dropPrice = peakPrice * (1 - 0.006);
       bus.emit('tick', {
         symbol: SYMBOL,
-        tick: { symbol: SYMBOL, price: dropPrice, quantity: 1, timestamp: baseTimestamp + 1000, isBuyerMaker: false },
+        tick: {
+          symbol: SYMBOL,
+          price: dropPrice,
+          quantity: 1,
+          timestamp: baseTimestamp + 1000,
+          isBuyerMaker: false,
+        },
       });
 
       expect(capture.count('position:closed')).toBe(1);

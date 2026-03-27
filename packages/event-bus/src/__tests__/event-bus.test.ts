@@ -1,7 +1,9 @@
 import { describe, test, expect, spyOn } from 'bun:test';
+
+import type { Tick } from '@trading-bot/types';
+
 import { EventBus } from '../event-bus';
 import type { TradingEventMap } from '../types';
-import type { Tick } from '@trading-bot/types';
 
 const testTick: Tick = {
   symbol: 'BTCUSDT',
@@ -35,8 +37,12 @@ describe('EventBus', () => {
     const bus = new EventBus();
     let count = 0;
 
-    bus.on('tick', () => { count++; });
-    bus.on('tick', () => { count++; });
+    bus.on('tick', () => {
+      count++;
+    });
+    bus.on('tick', () => {
+      count++;
+    });
 
     bus.emit('tick', tickPayload);
     expect(count).toBe(2);
@@ -45,7 +51,9 @@ describe('EventBus', () => {
   test('off removes a specific handler', () => {
     const bus = new EventBus();
     let count = 0;
-    const handler = () => { count++; };
+    const handler = () => {
+      count++;
+    };
 
     bus.on('tick', handler);
     bus.emit('tick', tickPayload);
@@ -60,7 +68,9 @@ describe('EventBus', () => {
     const bus = new EventBus();
     let count = 0;
 
-    bus.once('tick', () => { count++; });
+    bus.once('tick', () => {
+      count++;
+    });
 
     bus.emit('tick', tickPayload);
     bus.emit('tick', tickPayload);
@@ -72,8 +82,12 @@ describe('EventBus', () => {
     const bus = new EventBus();
     const results: number[] = [];
 
-    bus.on('tick', () => { throw new Error('boom'); });
-    bus.on('tick', () => { results.push(1); });
+    bus.on('tick', () => {
+      throw new Error('boom');
+    });
+    bus.on('tick', () => {
+      results.push(1);
+    });
 
     const spy = spyOn(console, 'error').mockImplementation(() => {});
     bus.emit('tick', tickPayload);
@@ -84,7 +98,9 @@ describe('EventBus', () => {
 
   test('error handler logs event name', () => {
     const bus = new EventBus();
-    bus.on('tick', () => { throw new Error('boom'); });
+    bus.on('tick', () => {
+      throw new Error('boom');
+    });
 
     const calls: unknown[][] = [];
     const spy = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
@@ -102,8 +118,12 @@ describe('EventBus', () => {
     let tickCount = 0;
     let errorCount = 0;
 
-    bus.on('tick', () => { tickCount++; });
-    bus.on('error', () => { errorCount++; });
+    bus.on('tick', () => {
+      tickCount++;
+    });
+    bus.on('error', () => {
+      errorCount++;
+    });
 
     bus.removeAllListeners('tick');
 
@@ -118,8 +138,12 @@ describe('EventBus', () => {
     const bus = new EventBus();
     let count = 0;
 
-    bus.on('tick', () => { count++; });
-    bus.on('error', () => { count++; });
+    bus.on('tick', () => {
+      count++;
+    });
+    bus.on('error', () => {
+      count++;
+    });
 
     bus.removeAllListeners();
 
@@ -151,8 +175,12 @@ describe('EventBus', () => {
     const bus = new EventBus();
     const order: number[] = [];
 
-    bus.on('tick', () => { order.push(1); });
-    bus.on('tick', () => { order.push(2); });
+    bus.on('tick', () => {
+      order.push(1);
+    });
+    bus.on('tick', () => {
+      order.push(2);
+    });
 
     order.push(0);
     bus.emit('tick', tickPayload);

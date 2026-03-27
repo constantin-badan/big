@@ -1,5 +1,6 @@
 import type { Candle } from '@trading-bot/types';
-import type { IIndicator, IndicatorFactory } from './types';
+
+import type { IIndicator } from './types';
 
 export interface ATRConfig {
   period: number;
@@ -65,4 +66,4 @@ export class ATR implements IIndicator<ATRConfig, number> {
   }
 }
 
-export const createATR: IndicatorFactory<ATRConfig> = (config) => new ATR(config);
+export const createATR = (config: ATRConfig): IIndicator<ATRConfig, number> => new ATR(config);

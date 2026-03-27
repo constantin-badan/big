@@ -12,6 +12,7 @@ import type {
   Timeframe,
   TradeRecord,
 } from '@trading-bot/types';
+
 import type { IPositionManager, PositionManagerConfig, PositionState } from './types';
 
 type SymbolState = {
@@ -46,7 +47,11 @@ export class PositionManager implements IPositionManager {
   private readonly lastTickPrice = new Map<string, number>();
 
   private readonly handleTick: (data: { symbol: string; tick: Tick }) => void;
-  private readonly handleCandleClose: (data: { symbol: string; timeframe: Timeframe; candle: Candle }) => void;
+  private readonly handleCandleClose: (data: {
+    symbol: string;
+    timeframe: Timeframe;
+    candle: Candle;
+  }) => void;
 
   private readonly handleSignal: (data: { signal: Signal }) => void;
 
@@ -60,20 +65,28 @@ export class PositionManager implements IPositionManager {
     private readonly config: PositionManagerConfig,
   ) {
     if (config.defaultStopLossPct <= 0 || config.defaultStopLossPct >= 100) {
-      throw new Error(`PositionManager: defaultStopLossPct must be in (0, 100), got ${config.defaultStopLossPct}`);
+      throw new Error(
+        `PositionManager: defaultStopLossPct must be in (0, 100), got ${config.defaultStopLossPct}`,
+      );
     }
     if (config.defaultTakeProfitPct <= 0) {
-      throw new Error(`PositionManager: defaultTakeProfitPct must be > 0, got ${config.defaultTakeProfitPct}`);
+      throw new Error(
+        `PositionManager: defaultTakeProfitPct must be > 0, got ${config.defaultTakeProfitPct}`,
+      );
     }
     if (config.maxHoldTimeMs <= 0) {
       throw new Error(`PositionManager: maxHoldTimeMs must be > 0, got ${config.maxHoldTimeMs}`);
     }
     if (config.trailingStopEnabled) {
       if (config.trailingStopActivationPct <= 0) {
-        throw new Error(`PositionManager: trailingStopActivationPct must be > 0, got ${config.trailingStopActivationPct}`);
+        throw new Error(
+          `PositionManager: trailingStopActivationPct must be > 0, got ${config.trailingStopActivationPct}`,
+        );
       }
       if (config.trailingStopDistancePct <= 0) {
-        throw new Error(`PositionManager: trailingStopDistancePct must be > 0, got ${config.trailingStopDistancePct}`);
+        throw new Error(
+          `PositionManager: trailingStopDistancePct must be > 0, got ${config.trailingStopDistancePct}`,
+        );
       }
     }
     this.handleTick = ({ symbol, tick }) => {
@@ -119,8 +132,10 @@ export class PositionManager implements IPositionManager {
             : Math.min(symState.peakPrice, candle.low);
 
           const trailBreached = isLong
-            ? (symState.peakPrice - candle.low) / symState.peakPrice >= this.config.trailingStopDistancePct / 100
-            : (candle.high - symState.peakPrice) / symState.peakPrice >= this.config.trailingStopDistancePct / 100;
+            ? (symState.peakPrice - candle.low) / symState.peakPrice >=
+              this.config.trailingStopDistancePct / 100
+            : (candle.high - symState.peakPrice) / symState.peakPrice >=
+              this.config.trailingStopDistancePct / 100;
 
           if (trailBreached) {
             this.triggerExit(symbol, 'TRAILING_STOP', isLong ? candle.low : candle.high);
@@ -130,12 +145,12 @@ export class PositionManager implements IPositionManager {
       }
 
       // Check SL and TP — SL wins tiebreak
-      const slHit = symState.stopPrice !== null && (
-        isLong ? candle.low <= symState.stopPrice : candle.high >= symState.stopPrice
-      );
-      const tpHit = symState.takeProfitPrice !== null && (
-        isLong ? candle.high >= symState.takeProfitPrice : candle.low <= symState.takeProfitPrice
-      );
+      const slHit =
+        symState.stopPrice !== null &&
+        (isLong ? candle.low <= symState.stopPrice : candle.high >= symState.stopPrice);
+      const tpHit =
+        symState.takeProfitPrice !== null &&
+        (isLong ? candle.high >= symState.takeProfitPrice : candle.low <= symState.takeProfitPrice);
 
       if (slHit) {
         this.triggerExit(symbol, 'STOP_LOSS', symState.stopPrice ?? candle.close);
@@ -312,8 +327,10 @@ export class PositionManager implements IPositionManager {
           : Math.min(symState.peakPrice, price);
 
         const trailBreached = isLong
-          ? (symState.peakPrice - price) / symState.peakPrice >= this.config.trailingStopDistancePct / 100
-          : (price - symState.peakPrice) / symState.peakPrice >= this.config.trailingStopDistancePct / 100;
+          ? (symState.peakPrice - price) / symState.peakPrice >=
+            this.config.trailingStopDistancePct / 100
+          : (price - symState.peakPrice) / symState.peakPrice >=
+            this.config.trailingStopDistancePct / 100;
 
         if (trailBreached) {
           this.triggerExit(symbol, 'TRAILING_STOP', price);
@@ -420,11 +437,12 @@ export class PositionManager implements IPositionManager {
         // peak * (1 + distance%) for shorts
         const isLongExit = entryOrder.side === 'BUY';
         const distanceMult = this.config.trailingStopDistancePct / 100;
-        requestedExitPrice = symState.peakPrice !== null
-          ? (isLongExit
-            ? symState.peakPrice * (1 - distanceMult)
-            : symState.peakPrice * (1 + distanceMult))
-          : exitOrder.price;
+        requestedExitPrice =
+          symState.peakPrice !== null
+            ? isLongExit
+              ? symState.peakPrice * (1 - distanceMult)
+              : symState.peakPrice * (1 + distanceMult)
+            : exitOrder.price;
         break;
       }
       case 'STOP_LOSS':
@@ -487,4 +505,3 @@ export class PositionManager implements IPositionManager {
     this.eventBus.off('order:rejected', this.handleOrderRejected);
   }
 }
-

@@ -1,5 +1,6 @@
 import type { Candle } from '@trading-bot/types';
-import type { IIndicator, IndicatorFactory } from './types';
+
+import type { IIndicator } from './types';
 
 export interface SMAConfig {
   period: number;
@@ -11,6 +12,7 @@ export class SMA implements IIndicator<SMAConfig, number> {
   readonly config: SMAConfig;
 
   private window: number[] = [];
+  private runningSum = 0;
 
   constructor(config: SMAConfig) {
     if (config.period <= 0 || !Number.isInteger(config.period)) {
@@ -22,22 +24,20 @@ export class SMA implements IIndicator<SMAConfig, number> {
 
   update(candle: Candle): number | null {
     this.window.push(candle.close);
+    this.runningSum += candle.close;
     if (this.window.length > this.config.period) {
-      this.window.shift();
+      this.runningSum -= this.window.shift()!;
     }
     if (this.window.length < this.config.period) {
       return null;
     }
-    let sum = 0;
-    for (const v of this.window) {
-      sum += v;
-    }
-    return sum / this.config.period;
+    return this.runningSum / this.config.period;
   }
 
   reset(): void {
     this.window = [];
+    this.runningSum = 0;
   }
 }
 
-export const createSMA: IndicatorFactory<SMAConfig> = (config) => new SMA(config);
+export const createSMA = (config: SMAConfig): IIndicator<SMAConfig, number> => new SMA(config);
