@@ -1,2 +1,2 @@
-// TODO: SQLite-backed candle and trade storage
-export {};
+export { createStorage } from './storage';
+export type { ICandleStore, ITradeStore, TradeFilter } from './types';
