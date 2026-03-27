@@ -17,11 +17,17 @@ export interface LiveRunnerConfig {
   timeframes: Timeframe[];
   shutdownBehavior: 'close-all' | 'leave-open';
   healthCheckIntervalMs: number;
+  maxRetries: number; // order executor retries on transport failure
+  retryDelayMs: number;
+  checkOrphanPositions: boolean; // refuse to start if orphaned positions exist
 }
 
-const DEFAULT_CONFIG: Pick<LiveRunnerConfig, 'shutdownBehavior' | 'healthCheckIntervalMs'> = {
+const DEFAULT_CONFIG: Pick<LiveRunnerConfig, 'shutdownBehavior' | 'healthCheckIntervalMs' | 'maxRetries' | 'retryDelayMs' | 'checkOrphanPositions'> = {
   shutdownBehavior: 'leave-open',
   healthCheckIntervalMs: 30_000,
+  maxRetries: 3,
+  retryDelayMs: 1000,
+  checkOrphanPositions: true,
 };
 
 export interface ILiveRunner {
@@ -71,8 +77,8 @@ export class LiveRunner implements ILiveRunner {
     this.bus = new EventBus();
     this.exchange = createExchange(this.config.exchangeConfig);
     this.executor = new LiveExecutor(this.bus, this.exchange, {
-      maxRetries: 0, // no retry in 3a-minimal
-      retryDelayMs: 0,
+      maxRetries: this.config.maxRetries,
+      retryDelayMs: this.config.retryDelayMs,
       rateLimitPerMinute: 1200,
     });
     this.dataFeed = new LiveDataFeed(this.bus, this.exchange);
@@ -82,6 +88,19 @@ export class LiveRunner implements ILiveRunner {
 
     // 3. Connect to exchange
     await this.exchange.connect();
+
+    // 3b. Check for orphan positions
+    if (this.config.checkOrphanPositions) {
+      const positions = await this.exchange.getPositions();
+      if (positions.length > 0) {
+        await this.exchange.disconnect();
+        const symbols = positions.map((p) => `${p.symbol}(${p.side})`).join(', ');
+        throw new Error(
+          `Orphan positions detected: ${symbols}. ` +
+          'Close them manually or set checkOrphanPositions: false to proceed.',
+        );
+      }
+    }
 
     // 4. Create strategy via factory
     this._strategy = this.config.factory(this.config.params, {
@@ -130,10 +149,37 @@ export class LiveRunner implements ILiveRunner {
     // 2. Stop strategy (disposes scanners — no new signals)
     await this._strategy.stop();
 
-    // 3. Drain executor queue (leave-open mode for 3a-minimal)
+    // 3. Drain or cancel executor queue based on shutdown behavior
+    if (this.config.shutdownBehavior === 'close-all') {
+      // Cancel all pending orders — don't open new positions we're about to close
+      for (const symbol of this.config.symbols) {
+        this.executor.cancelAll(symbol);
+      }
+    }
     await this.executor.stop();
 
-    // 4. Disconnect exchange
+    // 4. Handle open positions per config
+    if (this.config.shutdownBehavior === 'close-all') {
+      try {
+        const positions = await this.exchange.getPositions();
+        for (const pos of positions) {
+          this.log('info', 'runner:closing-position', { symbol: pos.symbol, side: pos.side, quantity: pos.quantity });
+          await this.exchange.placeOrder({
+            symbol: pos.symbol,
+            side: pos.side === 'LONG' ? 'SELL' : 'BUY',
+            type: 'MARKET',
+            quantity: pos.quantity,
+            reduceOnly: true,
+          });
+        }
+      } catch (err) {
+        this.log('error', 'runner:close-positions-failed', {
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }
+
+    // 5. Disconnect exchange
     await this.exchange.disconnect();
 
     this._status = 'stopped';

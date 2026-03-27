@@ -162,30 +162,38 @@ export class LiveExecutor implements IOrderExecutor {
     this.processing = false;
   }
 
-  private async processItem(item: QueueItem): Promise<void> {
+  private async processItem(item: QueueItem, attempt = 0): Promise<void> {
     const { request } = item;
 
     try {
       const ack = await this.exchange.placeOrder(request);
 
       if (ack.status === 'REJECTED') {
-        // Exchange rejected the order — emit rejection, remove from pending
+        // Exchange rejected the order — definitive, never retry
         this.bus.emit('order:rejected', {
           clientOrderId: request.clientOrderId ?? '',
-          reason: `Order rejected by exchange`,
+          reason: 'Order rejected by exchange',
         });
         this.pending.delete(request.clientOrderId ?? '');
       }
       // If status is NEW or FILLED: do nothing here.
       // Fills arrive via user data stream → adapter emits order:filled → pending set updated.
-      // For MARKET orders with RESULT response type, the adapter handles fill emission
-      // and deduplicates against the user data stream fill.
     } catch (err) {
-      // Transport error — no retry in Phase 3a-minimal, emit rejection
+      // Transport error — retry with exponential backoff
+      if (attempt < this.config.maxRetries) {
+        const delay = this.config.retryDelayMs * Math.pow(2, attempt);
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+        if (this.running) {
+          await this.processItem(item, attempt + 1);
+        }
+        return;
+      }
+
+      // Max retries exhausted — emit rejection
       const reason = err instanceof Error ? err.message : 'Unknown transport error';
       this.bus.emit('order:rejected', {
         clientOrderId: request.clientOrderId ?? '',
-        reason,
+        reason: `Transport error after ${attempt + 1} attempts: ${reason}`,
       });
       this.pending.delete(request.clientOrderId ?? '');
     }
