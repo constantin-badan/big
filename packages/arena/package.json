@@ -17,5 +17,8 @@
     "@trading-bot/reporting": "workspace:*",
     "@trading-bot/strategy": "workspace:*",
     "@trading-bot/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@trading-bot/test-utils": "workspace:*"
   }
 }

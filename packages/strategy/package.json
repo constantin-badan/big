@@ -15,5 +15,8 @@
     "@trading-bot/risk-manager": "workspace:*",
     "@trading-bot/scanner": "workspace:*",
     "@trading-bot/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@trading-bot/test-utils": "workspace:*"
   }
 }
