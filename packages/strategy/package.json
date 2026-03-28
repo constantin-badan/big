@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@trading-bot/event-bus": "workspace:*",
+    "@trading-bot/exchange-client": "workspace:*",
     "@trading-bot/margin-guard": "workspace:*",
+    "@trading-bot/order-executor": "workspace:*",
     "@trading-bot/position-manager": "workspace:*",
     "@trading-bot/risk-manager": "workspace:*",
     "@trading-bot/scanner": "workspace:*",

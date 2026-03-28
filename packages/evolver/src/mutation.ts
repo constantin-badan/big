@@ -27,7 +27,7 @@ export function gaussianRandom(): number {
 export function clampAndSnap(value: number, spec: ParamSpec): number {
   let clamped = Math.max(spec.min, Math.min(spec.max, value));
 
-  if (spec.step !== undefined) {
+  if (spec.step !== undefined && spec.step > 0) {
     // Snap to nearest step from min
     const steps = Math.round((clamped - spec.min) / spec.step);
     clamped = spec.min + steps * spec.step;

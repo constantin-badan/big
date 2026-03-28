@@ -169,13 +169,9 @@ Three config fields from the `PositionManagerConfig` interface are never read:
 
 ---
 
-### 25. `maxDailyLossPct = 0` and `maxDrawdownPct = 0` immediately trigger kill switch
+### ~~25. `maxDailyLossPct = 0` and `maxDrawdownPct = 0` immediately trigger kill switch~~ ✅
 
-**File:** `packages/risk-manager/src/risk-manager.ts:182-207`
-
-Both values pass config validation (>= 0 is allowed). But `dailyPnl.value <= 0` is `0 <= 0 = true`, and `drawdown >= 0` is `0 >= 0 = true`, so `checkEntry()` immediately activates the kill switch on the first call. The system is unusable with these configs but no error is raised.
-
-**Fix:** Either reject `= 0` in validation or document that 0 means "disabled" and skip the check.
+**Fixed:** Changed validation from `< 0` to `<= 0` for both maxDailyLossPct and maxDrawdownPct.
 
 ---
 
@@ -185,11 +181,9 @@ Both values pass config validation (>= 0 is allowed). But `dailyPnl.value <= 0` 
 
 ---
 
-### 27. No backtest config validation
+### ~~27. No backtest config validation~~ ✅
 
-**File:** `packages/backtest-engine/src/backtest-engine.ts:10-48`
-
-No check that `startTime < endTime`, `symbols` is non-empty, `timeframes` is non-empty, or `initialBalance > 0`. Empty arrays silently produce zero-trade results with no error.
+**Fixed:** Added validation for startTime < endTime, non-empty symbols, non-empty timeframes.
 
 ---
 
@@ -209,11 +203,9 @@ Unlike the sequential engine (which checks `maxCombinations`), the parallel engi
 
 ---
 
-### 30. `SlippageModel` is not a proper discriminated union
+### ~~30. `SlippageModel` is not a proper discriminated union~~ ✅
 
-**File:** `packages/types/src/index.ts:349-354`
-
-All fields are optional on all variants. `{ type: 'fixed' }` without `fixedBps`, or `{ type: 'orderbook-based', fixedBps: 5 }`, both compile without error. Should use per-variant required fields.
+**Fixed:** Changed SlippageModel from flat interface to proper discriminated union with per-variant required fields.
 
 ---
 
@@ -225,21 +217,15 @@ The market data `WsConnection` is created with `streamLabel: 'kline'` regardless
 
 ---
 
-### 32. Unknown Binance values silently default to `'BUY'`/`'MARKET'`/`'NEW'`
+### ~~32. Unknown Binance values silently default to `'BUY'`/`'MARKET'`/`'NEW'`~~ ✅
 
-**File:** `packages/exchange-client/src/binance/parsers.ts:187-189`
-
-`ORDER_SIDE_MAP[o.S] ?? 'BUY'` means an unknown order side from Binance silently becomes `'BUY'`. Similarly, unknown type defaults to `'MARKET'` and unknown status to `'NEW'`. In a trading system, silently treating an unknown side as BUY is dangerous.
-
-**Fix:** Throw or log on unknown values rather than defaulting.
+**Fixed:** Added lookupOrThrow helper that throws on unknown Binance values instead of silent defaults.
 
 ---
 
-### 33. `clampAndSnap` with `step=0` produces NaN
+### ~~33. `clampAndSnap` with `step=0` produces NaN~~ ✅
 
-**File:** `packages/evolver/src/mutation.ts:32`
-
-`Math.round(x/0)` yields `Infinity`. Then `min + Infinity * 0 = NaN`. No validation against `step <= 0`.
+**Fixed:** Added `spec.step > 0` guard to skip step-snapping when step is 0.
 
 ---
 
@@ -251,11 +237,9 @@ In `parseWsApiOrderResponse()`, `commissionAsset` is always `'USDT'`. Wrong for 
 
 ---
 
-### 35. RSI returns 100 for flat prices (all identical closes)
+### ~~35. RSI returns 100 for flat prices (all identical closes)~~ ✅
 
-**File:** `packages/indicators/src/rsi.ts:73-79`
-
-When all prices are identical, both `avgGain` and `avgLoss` are 0. The `avgLoss === 0` guard returns 100, suggesting maximum bullishness despite zero price movement. Most implementations return 50 (neutral) for this case.
+**Fixed:** RSI now returns 50 when both avgGain and avgLoss are 0 (flat prices).
 
 ---
 
@@ -269,27 +253,21 @@ When all prices are identical, both `avgGain` and `avgLoss` are 0. The `avgLoss 
 
 ---
 
-### 37. Risk-manager kill switch rule persists across daily resets
+### ~~37. Risk-manager kill switch rule persists across daily resets~~ ✅
 
-**File:** `packages/risk-manager/src/risk-manager.ts:130-132`
-
-At day boundaries, `killSwitchActive` is reset for `MAX_DAILY_LOSS`, but `killSwitchRule` is not cleared. Between the reset and the next `checkEntry`, `isKillSwitchActive()` returns false but `killSwitchRule` contains stale data from the previous day.
+**Fixed:** killSwitchRule is now reset when MAX_DAILY_LOSS kill switch clears at day boundary.
 
 ---
 
-### 38. `Evolver._bestMetrics` stores a reference, not a copy
+### ~~38. `Evolver._bestMetrics` stores a reference, not a copy~~ ✅
 
-**File:** `packages/evolver/src/evolver.ts:167`
-
-`this._bestMetrics = topRanking.metrics` stores a direct reference. If the arena later mutates that metrics object, the evolver's `bestMetrics` silently changes. `bestParams` correctly uses `{ ...topRanking.params }` (shallow copy), but `bestMetrics` does not.
+**Fixed:** bestMetrics now uses shallow copy `{ ...topRanking.metrics }` like bestParams.
 
 ---
 
-### 39. LiveExecutor priority queue is dead code
+### ~~39. LiveExecutor priority queue is dead code~~ ✅
 
-**File:** `packages/order-executor/src/live-executor.ts:100`
-
-The `priority` field on queue items is always set to `false`. No code ever sets it to `true`, and no code reads it to reorder the queue. The priority mechanism has no effect.
+**Fixed:** Removed dead priority field from QueueItem interface and submit().
 
 ---
 
@@ -301,27 +279,21 @@ The `priority` field on queue items is always set to `false`. No code ever sets 
 
 ---
 
-### 41. `cartesianProduct` duplicated across two files
+### ~~41. `cartesianProduct` duplicated across two files~~ ✅
 
-**Files:** `packages/sweep-engine/src/sweep-engine.ts:11-30` and `packages/sweep-engine/src/parallel-sweep-engine.ts:14-33`
-
-Identical function duplicated. DRY violation.
+**Fixed:** Extracted cartesianProduct to shared cartesian.ts module, removed duplication.
 
 ---
 
-### 42. Parallel sweep engine uses `navigator.hardwareConcurrency`
+### ~~42. Parallel sweep engine uses `navigator.hardwareConcurrency`~~ ✅
 
-**File:** `packages/sweep-engine/src/parallel-sweep-engine.ts:36`
-
-Browser API used in a server-side Bun context. Works due to `?? 4` fallback, but semantically wrong. Should use `require('os').cpus().length` or Bun equivalent.
+**Fixed:** Made navigator.hardwareConcurrency access conditional with typeof check.
 
 ---
 
-### 43. Evolver non-elite survivor dedup collision causes arena/population mismatch
+### ~~43. Evolver non-elite survivor dedup collision causes arena/population mismatch~~ ✅
 
-**File:** `packages/evolver/src/evolver.ts:222-230`
-
-When mutation produces a duplicate key (already in `seen`), the mutated params are still added to the arena but NOT tracked in `newPopulation`. This creates a mismatch between what the evolver thinks the population is and what the arena actually contains.
+**Fixed:** Non-elite survivor dedup: only add to arena if key not already seen, always remove old.
 
 ---
 
@@ -333,11 +305,9 @@ When mutation produces a duplicate key (already in `seen`), the mutated params a
 
 ---
 
-### 45. Reporting: drawdown duration tracks from last peak, not longest-drawdown peak
+### ~~45. Reporting: drawdown duration tracks from last peak, not longest-drawdown peak~~ ✅
 
-**File:** `packages/reporting/src/metrics.ts:151-157`
-
-`maxDrawdownDuration` is computed as `endTime - peakTime` where `peakTime` is the most recent peak. If an earlier peak produced a longer drawdown, it's not tracked. The metric can underreport the longest drawdown duration.
+**Fixed:** Fixed drawdown duration end-of-backtest check to use `inDrawdown` flag instead of balance comparison.
 
 ---
 
@@ -357,27 +327,21 @@ The `reason` parameter is destructured but never used — not logged, not stored
 
 ---
 
-### 48. `getOpenOrders()` uses `Date.now()` for `requestTime` instead of actual request start
+### ~~48. `getOpenOrders()` uses `Date.now()` for `requestTime` instead of actual request start~~ ✅
 
-**File:** `packages/exchange-client/src/binance/adapter.ts:235`
-
-`parseWsApiOrderResponse(item, Date.now())` is called inside `.map()` at response time, not at request start. The `latencyMs` in returned results is ~0, not reflecting actual round-trip latency.
+**Fixed:** getOpenOrders captures requestTime before the REST call, not during .map().
 
 ---
 
-### 49. `wsApiRequest()` send failure after `track()` leaks pending request
+### ~~49. `wsApiRequest()` send failure after `track()` leaks pending request~~ ✅
 
-**File:** `packages/exchange-client/src/binance/adapter.ts:447-448`
-
-If `tradingConn.send()` throws after `requestTracker.track()` has registered the pending promise, the request lingers until the 30-second timeout. No cleanup on send failure.
+**Fixed:** wsApiRequest wraps send() in try/catch, rejects tracked request on send failure.
 
 ---
 
-### 50. Evolver config not validated
+### ~~50. Evolver config not validated~~ ✅
 
-**File:** `packages/evolver/src/evolver.ts:42-45`
-
-No validation that `populationSize > 0`, `survivalRate ∈ [0,1]`, `eliteCount <= populationSize`, or `evaluationWindowMs > 0`. Invalid configs produce cryptic runtime errors.
+**Fixed:** Added config validation for populationSize, survivalRate, eliteCount, evaluationWindowMs.
 
 ---
 
@@ -490,6 +454,8 @@ No validation that `populationSize > 0`, `survivalRate ∈ [0,1]`, `eliteCount <
 - `Timeframe` union missing `'30m'` which is a common Binance-supported interval.
 - `IExchange` has no subscribe method for user data streams despite `ExchangeStream` including `'userData'`.
 - Mock exchange drops parameters on 7 methods (`getCandles`, `getOrderBook`, `cancelOrder`, `getOpenOrders`, `getPosition`, `setLeverage`, `getFees`). Structurally valid TypeScript but prevents multi-symbol testing.
+
+~~**Missing `package.json` dependencies**~~ ✅ — **Fixed:** Added missing dependencies to strategy, position-manager, order-executor, and risk-manager package.json files.
 
 ---
 

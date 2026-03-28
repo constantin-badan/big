@@ -71,6 +71,9 @@ export class RSI implements IIndicator<RSIConfig, number> {
   }
 
   private computeRSI(avgGain: number, avgLoss: number): number {
+    if (avgGain === 0 && avgLoss === 0) {
+      return 50; // No price movement — neutral
+    }
     if (avgLoss === 0) {
       return 100;
     }

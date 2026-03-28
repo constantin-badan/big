@@ -11,6 +11,7 @@ import type { IStrategy } from '@trading-bot/strategy';
 import type {
   ExchangeConfig,
   OrderRequest,
+  SlippageModel,
   SubmissionReceipt,
   TradeRecord,
 } from '@trading-bot/types';
@@ -41,7 +42,7 @@ interface ArenaInstance {
 
 interface SimExchangeParams {
   feeStructure: { maker: number; taker: number };
-  slippageModel: { type: 'fixed' | 'proportional' | 'orderbook-based'; fixedBps?: number };
+  slippageModel: SlippageModel & { type: 'fixed' };
   initialBalance: number;
   leverage: number;
 }
@@ -49,6 +50,9 @@ interface SimExchangeParams {
 function extractSimConfig(config: ExchangeConfig): SimExchangeParams {
   if (config.type !== 'backtest-sim') {
     throw new Error(`Arena: simExchangeConfig must be 'backtest-sim', got '${config.type}'`);
+  }
+  if (config.slippageModel.type !== 'fixed') {
+    throw new Error(`Arena: only 'fixed' slippage model supported, got '${config.slippageModel.type}'`);
   }
   return {
     feeStructure: config.feeStructure,

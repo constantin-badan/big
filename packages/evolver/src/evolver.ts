@@ -40,6 +40,20 @@ export class Evolver implements IEvolver {
   private currentPopulation: Record<string, number>[] = [];
 
   constructor(arena: IArena, config: EvolverConfig) {
+    if (config.populationSize <= 0) {
+      throw new Error(`Evolver: populationSize must be > 0, got ${config.populationSize}`);
+    }
+    if (config.survivalRate <= 0 || config.survivalRate > 1) {
+      throw new Error(`Evolver: survivalRate must be in (0, 1], got ${config.survivalRate}`);
+    }
+    if (config.eliteCount > config.populationSize) {
+      throw new Error(
+        `Evolver: eliteCount (${config.eliteCount}) must be <= populationSize (${config.populationSize})`,
+      );
+    }
+    if (config.evaluationWindowMs <= 0) {
+      throw new Error(`Evolver: evaluationWindowMs must be > 0, got ${config.evaluationWindowMs}`);
+    }
     this.arena = arena;
     this.config = config;
   }
@@ -166,7 +180,7 @@ export class Evolver implements IEvolver {
       this._stagnationCount = 0;
       if (topRanking !== undefined) {
         this._bestParams = { ...topRanking.params };
-        this._bestMetrics = topRanking.metrics;
+        this._bestMetrics = { ...topRanking.metrics };
       }
     } else {
       this._stagnationCount++;
@@ -222,14 +236,13 @@ export class Evolver implements IEvolver {
         effectiveMutationRate,
       );
       const key = paramsKey(mutated);
+      // Remove old instance regardless — it was not elite
+      this.arena.removeInstance(survivor.ranking.params);
       if (!seen.has(key)) {
         seen.add(key);
         newPopulation.push(mutated);
+        this.arena.addInstance(mutated);
       }
-
-      // Remove old instance and add mutated version
-      this.arena.removeInstance(survivor.ranking.params);
-      this.arena.addInstance(mutated);
     }
 
     // 8. Fill slots vacated by casualties with mutations of survivors

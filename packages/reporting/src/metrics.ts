@@ -149,7 +149,7 @@ export function computeMetrics(
   }
 
   // Check if we're still in a drawdown at end of backtest
-  if (runningBalance < peakBalance) {
+  if (inDrawdown) {
     const duration = endTime - peakTime;
     if (duration > maxDrawdownDuration) {
       maxDrawdownDuration = duration;

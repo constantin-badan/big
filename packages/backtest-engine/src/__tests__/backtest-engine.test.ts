@@ -336,17 +336,9 @@ describe('BacktestSimExchange', () => {
     expect(result.status).toBe('REJECTED');
   });
 
-  test('throws for non-fixed slippage model', () => {
-    const bus = new EventBus();
-    expect(() => {
-      new BacktestSimExchange(bus, {
-        feeStructure: { maker: 0.0002, taker: 0.0004 },
-        slippageModel: { type: 'proportional', proportionalFactor: 0.5 },
-        initialBalance: 10_000,
-        leverage: 1,
-      });
-    }).toThrow("only 'fixed' slippage model supported");
-  });
+  // Non-fixed slippage model is now rejected at compile time by the
+  // discriminated union (SlippageModel & { type: 'fixed' }). Runtime guard
+  // remains in BacktestSimExchange for extra safety.
 
   test('BUY rejected when margin is insufficient', () => {
     const bus = new EventBus();

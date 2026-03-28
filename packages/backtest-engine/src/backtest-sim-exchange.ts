@@ -17,7 +17,7 @@ import type {
 
 interface BacktestExchangeConfig {
   feeStructure: FeeStructure;
-  slippageModel: SlippageModel;
+  slippageModel: SlippageModel & { type: 'fixed' };
   initialBalance: number;
   leverage: number; // for margin check: required margin = notional / leverage
 }
@@ -44,14 +44,7 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
     this.leverage = config.leverage;
     this.balance = config.initialBalance;
 
-    if (config.slippageModel.type !== 'fixed') {
-      throw new Error(
-        `BacktestSimExchange: only 'fixed' slippage model supported, got '${config.slippageModel.type}'`,
-      );
-    }
-    // Default to 2 bps if unset — compensates for close-price execution bias
-    // in candle-based backtesting where signals and fills share the same close price.
-    this.slippageBps = config.slippageModel.fixedBps ?? 2;
+    this.slippageBps = config.slippageModel.fixedBps;
 
     this.handler = (data) => {
       this.currentPrices.set(data.symbol, data.candle.close);

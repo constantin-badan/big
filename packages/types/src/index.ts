@@ -346,12 +346,10 @@ export type ExchangeConfig =
       initialBalance: number;
     });
 
-export interface SlippageModel {
-  type: 'fixed' | 'proportional' | 'orderbook-based';
-  fixedBps?: number;
-  proportionalFactor?: number;
-  maxSlippageBps?: number;
-}
+export type SlippageModel =
+  | { type: 'fixed'; fixedBps: number; maxSlippageBps?: number }
+  | { type: 'proportional'; proportionalFactor: number; maxSlippageBps?: number }
+  | { type: 'orderbook-based'; maxSlippageBps?: number };
 
 export interface BacktestConfig {
   startTime: number;

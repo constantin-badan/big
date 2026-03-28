@@ -156,6 +156,14 @@ export function parseRestOrderBook(data: unknown, symbol: string): OrderBookSnap
 
 // === Order/Trade update parsing ===
 
+function lookupOrThrow<T>(map: Record<string, T>, key: string, label: string): T {
+  const value = map[key];
+  if (value === undefined) {
+    throw new Error(`Unknown ${label} from Binance: '${key}'`);
+  }
+  return value;
+}
+
 const ORDER_STATUS_MAP: Record<string, OrderStatus> = {
   NEW: 'NEW',
   PARTIALLY_FILLED: 'PARTIALLY_FILLED',
@@ -184,9 +192,9 @@ export function parseOrderTradeUpdate(data: unknown): OrderResult {
     orderId: String(o.i),
     clientOrderId: o.c,
     symbol: o.s,
-    side: ORDER_SIDE_MAP[o.S] ?? 'BUY',
-    type: ORDER_TYPE_MAP[o.o] ?? 'MARKET',
-    status: ORDER_STATUS_MAP[o.X] ?? 'NEW',
+    side: lookupOrThrow(ORDER_SIDE_MAP, o.S, 'order side'),
+    type: lookupOrThrow(ORDER_TYPE_MAP, o.o, 'order type'),
+    status: lookupOrThrow(ORDER_STATUS_MAP, o.X, 'order status'),
     price: Number(o.p),
     avgPrice: Number(o.ap),
     quantity: Number(o.q),
@@ -205,9 +213,9 @@ export function parseAlgoUpdate(data: unknown): OrderResult {
     orderId: String(o.i),
     clientOrderId: o.c,
     symbol: o.s,
-    side: ORDER_SIDE_MAP[o.S] ?? 'BUY',
-    type: ORDER_TYPE_MAP[o.o] ?? 'STOP_MARKET',
-    status: ORDER_STATUS_MAP[o.X] ?? 'NEW',
+    side: lookupOrThrow(ORDER_SIDE_MAP, o.S, 'order side'),
+    type: lookupOrThrow(ORDER_TYPE_MAP, o.o, 'order type'),
+    status: lookupOrThrow(ORDER_STATUS_MAP, o.X, 'order status'),
     price: Number(o.p),
     avgPrice: Number(o.ap),
     quantity: Number(o.q),
@@ -227,9 +235,9 @@ export function parseWsApiOrderResponse(data: unknown, requestTime: number): Ord
     orderId: String(r.orderId),
     clientOrderId: r.clientOrderId,
     symbol: r.symbol,
-    side: ORDER_SIDE_MAP[r.side] ?? 'BUY',
-    type: ORDER_TYPE_MAP[r.type] ?? 'MARKET',
-    status: ORDER_STATUS_MAP[r.status] ?? 'NEW',
+    side: lookupOrThrow(ORDER_SIDE_MAP, r.side, 'order side'),
+    type: lookupOrThrow(ORDER_TYPE_MAP, r.type, 'order type'),
+    status: lookupOrThrow(ORDER_STATUS_MAP, r.status, 'order status'),
     price: Number(r.price),
     avgPrice: Number(r.avgPrice),
     quantity: Number(r.origQty),

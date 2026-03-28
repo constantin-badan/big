@@ -18,7 +18,6 @@ import type { IOrderExecutor, OrderExecutorConfig } from './types';
 interface QueueItem {
   request: OrderRequest;
   receipt: SubmissionReceipt;
-  priority: boolean; // true for cancels — jump ahead
 }
 
 export class LiveExecutor implements IOrderExecutor {
@@ -96,8 +95,7 @@ export class LiveExecutor implements IOrderExecutor {
     // Track as pending BEFORE emit (state-before-emit rule, ADR-2)
     this.pending.set(clientOrderId, requestWithId.symbol);
 
-    // Enqueue — cancels use priority
-    const item: QueueItem = { request: requestWithId, receipt, priority: false };
+    const item: QueueItem = { request: requestWithId, receipt };
     this.queue.push(item);
 
     this.bus.emit('order:submitted', { receipt });

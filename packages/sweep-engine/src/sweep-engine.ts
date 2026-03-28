@@ -2,32 +2,12 @@ import type { IBacktestEngine } from '@trading-bot/backtest-engine';
 import type { StrategyFactory, SweepParamGrid } from '@trading-bot/strategy';
 import type { BacktestConfig, BacktestResult } from '@trading-bot/types';
 
+import { cartesianProduct } from './cartesian';
 import type { ISweepEngine, SweepConfig, SweepResult, SweepScorer } from './types';
 
 const DEFAULT_MAX_COMBINATIONS = 10_000;
 
 const defaultScorer: SweepScorer = (r: BacktestResult) => r.metrics.profitFactor;
-
-function cartesianProduct(grid: SweepParamGrid): Record<string, number>[] {
-  const keys = Object.keys(grid);
-  if (keys.length === 0) return [];
-
-  let combos: Record<string, number>[] = [{}];
-
-  for (const key of keys) {
-    const values = grid[key];
-    if (values === undefined || values.length === 0) return [];
-    const next: Record<string, number>[] = [];
-    for (const combo of combos) {
-      for (const value of values) {
-        next.push({ ...combo, [key]: value });
-      }
-    }
-    combos = next;
-  }
-
-  return combos;
-}
 
 export function createSweepEngine(engine: IBacktestEngine): ISweepEngine {
   return {

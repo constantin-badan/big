@@ -229,12 +229,13 @@ export class BinanceAdapter implements IExchange {
 
   async getOpenOrders(symbol: string): Promise<OrderResult[]> {
     const params = { symbol };
+    const requestTime = Date.now();
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
     const data = await this.restClient.restGet('/fapi/v1/openOrders', signed);
     return z
       .array(WsApiOrderResponseSchema)
       .parse(data)
-      .map((o) => parseWsApiOrderResponse(o, Date.now()));
+      .map((o) => parseWsApiOrderResponse(o, requestTime));
   }
 
   // === REST API: Positions ===
@@ -456,7 +457,11 @@ export class BinanceAdapter implements IExchange {
     };
 
     const promise = this.requestTracker.track(id, method);
-    this.tradingConn.send(JSON.stringify(request));
+    try {
+      this.tradingConn.send(JSON.stringify(request));
+    } catch (err) {
+      this.requestTracker.reject(id, err instanceof Error ? err : new Error(String(err)));
+    }
     return promise;
   }
 

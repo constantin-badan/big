@@ -1,5 +1,6 @@
 import type { SweepParamGrid } from '@trading-bot/strategy';
 
+import { cartesianProduct } from './cartesian';
 import type {
   IParallelSweepEngine,
   ParallelSweepConfig,
@@ -11,29 +12,9 @@ import { BUILT_IN_SCORERS } from './parallel-types';
 import type { SweepResult, SweepScorer } from './types';
 import { unsafeCast } from './unsafe-cast';
 
-function cartesianProduct(grid: SweepParamGrid): Record<string, number>[] {
-  const keys = Object.keys(grid);
-  if (keys.length === 0) return [];
-
-  let combos: Record<string, number>[] = [{}];
-
-  for (const key of keys) {
-    const values = grid[key];
-    if (values === undefined || values.length === 0) return [];
-    const next: Record<string, number>[] = [];
-    for (const combo of combos) {
-      for (const value of values) {
-        next.push({ ...combo, [key]: value });
-      }
-    }
-    combos = next;
-  }
-
-  return combos;
-}
-
 export function createParallelSweepEngine(config: ParallelSweepConfig): IParallelSweepEngine {
-  const maxConcurrency = config.maxConcurrency ?? navigator.hardwareConcurrency ?? 4;
+  const cpuCount = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : undefined;
+  const maxConcurrency = config.maxConcurrency ?? cpuCount ?? 4;
   const scorerName = config.scorer ?? 'profitFactor';
   const scorer: SweepScorer = BUILT_IN_SCORERS[scorerName];
   const factoryExportName = config.factoryExportName ?? 'factory';

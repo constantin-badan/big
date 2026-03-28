@@ -19,8 +19,22 @@ export function createBacktestEngine(
 
   const { feeStructure, slippageModel, initialBalance, defaultLeverage } = exchangeConfig;
 
+  if (slippageModel.type !== 'fixed') {
+    throw new Error(`Backtest engine only supports 'fixed' slippage model, got '${slippageModel.type}'`);
+  }
+
   return {
     async run(factory, params, config) {
+      if (config.startTime >= config.endTime) {
+        throw new Error(`Backtest: startTime must be < endTime`);
+      }
+      if (config.symbols.length === 0) {
+        throw new Error(`Backtest: symbols must not be empty`);
+      }
+      if (config.timeframes.length === 0) {
+        throw new Error(`Backtest: timeframes must not be empty`);
+      }
+
       // 1. Create event bus
       const bus = new EventBus();
 

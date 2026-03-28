@@ -38,14 +38,14 @@ export class RiskManager implements IRiskManager {
         `RiskManager: maxPositionSizePct must be in (0, 100], got ${config.maxPositionSizePct}`,
       );
     }
-    if (config.maxDailyLossPct < 0 || config.maxDailyLossPct > 100) {
+    if (config.maxDailyLossPct <= 0 || config.maxDailyLossPct > 100) {
       throw new Error(
-        `RiskManager: maxDailyLossPct must be in [0, 100], got ${config.maxDailyLossPct}`,
+        `RiskManager: maxDailyLossPct must be in (0, 100], got ${config.maxDailyLossPct}`,
       );
     }
-    if (config.maxDrawdownPct < 0 || config.maxDrawdownPct > 100) {
+    if (config.maxDrawdownPct <= 0 || config.maxDrawdownPct > 100) {
       throw new Error(
-        `RiskManager: maxDrawdownPct must be in [0, 100], got ${config.maxDrawdownPct}`,
+        `RiskManager: maxDrawdownPct must be in (0, 100], got ${config.maxDrawdownPct}`,
       );
     }
     if (config.maxConcurrentPositions <= 0) {
@@ -127,6 +127,7 @@ export class RiskManager implements IRiskManager {
       // concern that persists until explicit reset() or manual intervention).
       if (this.killSwitchActive && this.killSwitchRule === 'MAX_DAILY_LOSS') {
         this.killSwitchActive = false;
+        this.killSwitchRule = 'MAX_DAILY_LOSS';
       }
     }
   }
