@@ -20,7 +20,6 @@ export class RiskManager implements IRiskManager {
   private currentDay: number;
 
   // Last trade info
-  private lastTradeTimestamp: number | null = null;
   private lastTradePnl: number = 0;
   private lastTradeClosedAt: number | null = null;
 
@@ -104,7 +103,6 @@ export class RiskManager implements IRiskManager {
       this.checkAndResetDaily(timestamp);
 
       this.dailyTradeCount += 1;
-      this.lastTradeTimestamp = timestamp;
     };
 
     eventBus.on('position:opened', this.handlePositionOpened);
@@ -241,7 +239,6 @@ export class RiskManager implements IRiskManager {
     this.dailyTradeCount = 0;
     this.dailyPnl.reset();
     this.currentDay = 0;
-    this.lastTradeTimestamp = null;
     this.lastTradePnl = 0;
     this.lastTradeClosedAt = null;
     this.killSwitchActive = false;

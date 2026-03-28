@@ -177,11 +177,12 @@ export class LiveExecutor implements IOrderExecutor {
       // If status is NEW or FILLED: do nothing here.
       // Fills arrive via user data stream → adapter emits order:filled → pending set updated.
     } catch (err) {
-      // Transport error — retry with exponential backoff
+      // Transport error — retry with exponential backoff + rate limit
       if (attempt < this.config.maxRetries) {
         const delay = this.config.retryDelayMs * Math.pow(2, attempt);
         await new Promise<void>((resolve) => setTimeout(resolve, delay));
         if (this.running) {
+          await this.consumeToken();
           await this.processItem(item, attempt + 1);
         }
         return;

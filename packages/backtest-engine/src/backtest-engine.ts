@@ -66,13 +66,12 @@ export function createBacktestEngine(
         await strategy.start();
         strategyStarted = true;
         await dataFeed.start(config.symbols, config.timeframes);
-        await strategy.stop();
       } finally {
         if (strategyStarted) {
           try {
             await strategy.stop();
           } catch {
-            /* already stopped or stop failed */
+            /* stop failed — cleanup continues */
           }
         }
         bus.off('position:closed', tradeHandler);

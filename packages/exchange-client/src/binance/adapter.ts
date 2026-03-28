@@ -69,6 +69,7 @@ export class BinanceAdapter implements IExchange {
   private marketDataConn: WsConnection | null = null;
   private tradingConnected = false;
   private marketDataConnected = false;
+  private marketDataConnecting = false;
 
   // Combined stream dispatch: stream name → callback
   private readonly streamCallbacks = new Map<string, StreamCallback[]>();
@@ -77,8 +78,9 @@ export class BinanceAdapter implements IExchange {
   // WS API request tracking
   private readonly requestTracker = new RequestTracker();
 
-  // Fill dedup: orderId → already emitted
-  private readonly emittedFills = new Set<string>();
+  // Fill dedup: orderId:status → timestamp (bounded, entries older than 1h pruned)
+  private readonly emittedFills = new Map<string, number>();
+  private static readonly DEDUP_TTL_MS = 3_600_000; // 1 hour
 
   // REST client
   private readonly restClient: RestClient;
@@ -399,10 +401,19 @@ export class BinanceAdapter implements IExchange {
   private emitOrderEvent(order: OrderResult): void {
     if (!this.bus) return;
 
-    // Dedup: don't emit twice for same orderId + status
+    // Dedup: don't emit twice for same orderId + status (bounded with TTL)
+    const now = Date.now();
     const dedupeKey = `${order.orderId}:${order.status}`;
     if (this.emittedFills.has(dedupeKey)) return;
-    this.emittedFills.add(dedupeKey);
+    this.emittedFills.set(dedupeKey, now);
+
+    // Prune old entries when map gets large
+    if (this.emittedFills.size > 5000) {
+      const cutoff = now - BinanceAdapter.DEDUP_TTL_MS;
+      for (const [key, ts] of this.emittedFills) {
+        if (ts < cutoff) this.emittedFills.delete(key);
+      }
+    }
 
     if (order.status === 'FILLED' || order.status === 'PARTIALLY_FILLED') {
       this.bus.emit('order:filled', { order });
@@ -463,8 +474,11 @@ export class BinanceAdapter implements IExchange {
     this.activeStreams.add(streamName);
 
     // If we're connected but the WS isn't open (first subscription), open it
-    if (this.tradingConnected && !this.marketDataConn) {
-      void this.connectMarketDataWs([...this.activeStreams]);
+    if (this.tradingConnected && !this.marketDataConn && !this.marketDataConnecting) {
+      this.marketDataConnecting = true;
+      void this.connectMarketDataWs([...this.activeStreams]).finally(() => {
+        this.marketDataConnecting = false;
+      });
     }
 
     return () => {

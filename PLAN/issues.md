@@ -86,69 +86,45 @@
 
 No throttling for any REST calls (`getBalance()`, `getPositions()`, `getFees()`, `getCandles()`, etc.). Binance enforces hard rate limits (1200 request weight / minute). The `LiveExecutor` has its own rate limiter for WS API order placement, but all REST calls from the adapter are unthrottled. Spamming will trigger IP bans.
 
-**Fix:** Add a shared rate limiter (token bucket) for REST requests.
+**Fix:** Add a shared rate limiter (token bucket) for REST requests. *(Deferred — needs design for weight-based limiting, not just call count.)*
 
 ---
 
-### 14. `emittedFills` dedup set grows unbounded
+### ~~14. `emittedFills` dedup set grows unbounded~~ ✅
 
-**File:** `packages/exchange-client/src/binance/adapter.ts:81`
-
-`private readonly emittedFills = new Set<string>()` accumulates every `orderId:status` pair forever. In a long-running process with thousands of orders, this is a memory leak.
-
-**Fix:** Use a bounded LRU cache or time-based TTL (1 hour is more than enough for dedup purposes).
+**Fixed:** Replaced `Set` with `Map<string, number>` (key → timestamp). Entries older than 1 hour are pruned when map exceeds 5000 entries.
 
 ---
 
-### 15. REST client has no request timeout
+### ~~15. REST client has no request timeout~~ ✅
 
-**File:** `packages/exchange-client/src/binance/rest-client.ts:16,32`
-
-`fetch()` calls have no `AbortSignal` timeout. A hung network connection blocks indefinitely. Both `restGet()` and `restPost()` are affected.
-
-**Fix:** Add `AbortController` with a configurable timeout (e.g., 30 seconds).
+**Fixed:** Added `AbortSignal.timeout(30s)` to both `restGet()` and `restPost()`. Timeout is configurable via constructor.
 
 ---
 
-### 16. Race condition: concurrent market data connections
+### ~~16. Race condition: concurrent market data connections~~ ✅
 
-**File:** `packages/exchange-client/src/binance/adapter.ts:465-468`
-
-Two rapid `subscribe*()` calls can both see `marketDataConn === null` and both call `connectMarketDataWs()` via fire-and-forget `void`. This creates duplicate WebSocket connections.
-
-**Fix:** Add a `marketDataConnecting` flag or promise mutex to prevent concurrent connection attempts.
+**Fixed:** Added `marketDataConnecting` flag. `addStreamCallback` now checks both `!marketDataConn` and `!marketDataConnecting` before initiating connection.
 
 ---
 
-### 17. LiveExecutor retries bypass rate limiter
+### ~~17. LiveExecutor retries bypass rate limiter~~ ✅
 
-**File:** `packages/order-executor/src/live-executor.ts:193`
-
-`processItem()` calls itself recursively on transport errors without calling `consumeToken()` first. During error storms (exchange returning 5xx), retries can violate Binance rate limits.
-
-**Fix:** Call `consumeToken()` before each retry, or queue retries back into the main drain loop.
+**Fixed:** Added `await this.consumeToken()` before each retry in the `processItem` error path.
 
 ---
 
-### 18. `RateLimitError` is exported but never used
+### ~~18. `RateLimitError` is exported but never used~~ ✅
 
-**File:** `packages/exchange-client/src/errors.ts:8`
-
-The class is defined and exported but never thrown or constructed anywhere in the codebase. Dead code that implies rate limiting exists when it doesn't.
-
-**Fix:** Remove it, or implement rate limiting that uses it.
+**Fixed:** Removed dead `RateLimitError` class from `errors.ts` and its re-export from `index.ts`.
 
 ---
 
 ## P2 — Design Issues & Robustness
 
-### 19. EventBus: handlers added during emit() fire in same cycle
+### ~~19. EventBus: handlers added during emit() fire in same cycle~~ ✅
 
-**File:** `packages/event-bus/src/event-bus.ts:39-50`
-
-ES2015 `Set` iteration visits entries added during iteration. A handler that calls `bus.on()` for the same event during an `emit()` will cause the new handler to fire in the current emit cycle. No re-entrancy depth guard exists, so infinite recursion is possible if a handler emits the same event it's listening to.
-
-**Fix:** Snapshot the handler set before iterating: `const snapshot = [...set]`.
+**Fixed:** `emit()` now snapshots handlers via `[...set]` before iterating. Handlers added/removed during emission do not affect the current cycle.
 
 ---
 
@@ -187,11 +163,9 @@ Three config fields from the `PositionManagerConfig` interface are never read:
 
 ---
 
-### 24. Dead state in risk-manager: `lastTradeTimestamp`
+### ~~24. Dead state in risk-manager: `lastTradeTimestamp`~~ ✅
 
-**File:** `packages/risk-manager/src/risk-manager.ts:23,107`
-
-`lastTradeTimestamp` is written on every `order:filled` event but never read anywhere. The cooldown logic uses `lastTradeClosedAt` (set in `position:closed`), not `lastTradeTimestamp`. The field is dead state.
+**Fixed:** Removed `lastTradeTimestamp` field, its assignment in `handleOrderFilled`, and its reset in `reset()`.
 
 ---
 
@@ -205,13 +179,9 @@ Both values pass config validation (>= 0 is allowed). But `dailyPnl.value <= 0` 
 
 ---
 
-### 26. Strategy `stop()` called twice in backtest engine
+### ~~26. Strategy `stop()` called twice in backtest engine~~ ✅
 
-**File:** `packages/backtest-engine/src/backtest-engine.ts:69+73`
-
-In the happy path, `strategy.stop()` is called at line 69, then the `finally` block calls it again at line 73. The second call is suppressed by try/catch, but strategies that don't handle double-stop gracefully could misbehave.
-
-**Fix:** Remove the `stop()` from line 69 and rely solely on the `finally` block.
+**Fixed:** Removed the `stop()` from the try block. The `finally` block now handles stop exclusively.
 
 ---
 

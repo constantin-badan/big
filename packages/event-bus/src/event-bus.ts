@@ -39,7 +39,9 @@ export class EventBus implements IEventBus {
   emit<K extends keyof TradingEventMap>(event: K, data: TradingEventMap[K]): void {
     const set = this.getHandlers(event);
     if (!set) return;
-    for (const handler of set) {
+    // Snapshot handlers so mutations during iteration (on/off/once) are safe
+    const snapshot = [...set];
+    for (const handler of snapshot) {
       try {
         handler(data);
       } catch (err) {
