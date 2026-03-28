@@ -111,7 +111,14 @@ export class MarginGuard implements IMarginGuard {
 
     for (const [symbol, list] of this.positions) {
       const markPrice = this.markPrices.get(symbol);
-      if (markPrice === undefined) continue;
+      if (markPrice === undefined) {
+        // Cannot evaluate without a mark price — skip but log via error event
+        this.bus.emit('error', {
+          source: 'margin-guard',
+          error: new Error(`No mark price for ${symbol} with ${list.length} open position(s) — skipping from breach evaluation`),
+        });
+        continue;
+      }
 
       for (const pos of list) {
         const direction = pos.side === 'LONG' ? 1 : -1;

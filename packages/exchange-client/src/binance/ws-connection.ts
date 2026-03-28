@@ -63,6 +63,7 @@ export class WsConnection {
 
   /** Open a WebSocket to the given URL. Resolves when the connection is open. */
   open(url: string): Promise<void> {
+    this.intentionalDisconnect = false;
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(url);
       let resolved = false;
@@ -168,6 +169,7 @@ export class WsConnection {
             message: `${this.streamLabel} WS reconnect failed after ${this.reconnectAttempt} attempts`,
             severity: 'KILL',
           });
+          return;
         }
 
         await new Promise<void>((r) => setTimeout(r, delay));

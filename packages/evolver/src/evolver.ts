@@ -125,6 +125,8 @@ export class Evolver implements IEvolver {
         population.push(mutated);
       }
       sourceIdx++;
+      // Safety: avoid infinite loop if mutation keeps producing duplicates
+      if (sourceIdx > this.config.populationSize * 100) break;
     }
 
     return population;
@@ -231,6 +233,10 @@ export class Evolver implements IEvolver {
     }
 
     // 8. Fill slots vacated by casualties with mutations of survivors
+    if (survivors.length === 0) {
+      this.scheduleNextGeneration();
+      return;
+    }
     let fillIdx = 0;
     while (newPopulation.length < this.config.populationSize) {
       const sourceIdx = fillIdx % survivors.length;

@@ -32,8 +32,8 @@ export class LiveExecutor implements IOrderExecutor {
   private running = false;
   private processingPromise: Promise<void> = Promise.resolve();
 
-  // Pending order tracking: clientOrderId → still awaiting fill
-  private readonly pending = new Set<string>();
+  // Pending order tracking: clientOrderId → symbol
+  private readonly pending = new Map<string, string>();
 
   // Token bucket rate limiter
   private tokens: number;
@@ -94,7 +94,7 @@ export class LiveExecutor implements IOrderExecutor {
     const requestWithId: OrderRequest = { ...request, clientOrderId };
 
     // Track as pending BEFORE emit (state-before-emit rule, ADR-2)
-    this.pending.add(clientOrderId);
+    this.pending.set(clientOrderId, requestWithId.symbol);
 
     // Enqueue — cancels use priority
     const item: QueueItem = { request: requestWithId, receipt, priority: false };
@@ -120,18 +120,10 @@ export class LiveExecutor implements IOrderExecutor {
   }
 
   hasPending(symbol: string): boolean {
-    // Check both queue and in-flight orders
-    for (const id of this.pending) {
-      // Check queue items
-      for (const item of this.queue) {
-        if (item.receipt.clientOrderId === id && item.request.symbol === symbol) {
-          return true;
-        }
-      }
+    for (const [, sym] of this.pending) {
+      if (sym === symbol) return true;
     }
-    // Also check pending set for in-flight orders matching symbol
-    // (we don't track symbol per pending ID, so check the queue + all pending)
-    return this.queue.some((item) => item.request.symbol === symbol);
+    return false;
   }
 
   getPendingCount(): number {

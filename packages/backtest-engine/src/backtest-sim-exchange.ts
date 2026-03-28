@@ -139,10 +139,12 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
   }
 
   private makeFilled(request: OrderRequest, fillPrice: number): OrderResult {
-    const fee = request.quantity * fillPrice * this.feeStructure.taker;
+    const feeRate = request.type === 'LIMIT' ? this.feeStructure.maker : this.feeStructure.taker;
+    const fee = request.quantity * fillPrice * feeRate;
     const notional = request.quantity * fillPrice;
-    // Margin check: required margin = notional / leverage.
-    // Rejects when account can't cover the margin requirement for this position.
+    // Margin check: required margin = notional / leverage + fee.
+    // Uses margin-based check but full-notional balance tracking so that
+    // round-trip PnL = (exitPrice - entryPrice) * qty - fees, regardless of leverage.
     const requiredMargin = notional / this.leverage + fee;
     if (request.side === 'BUY' && this.balance < requiredMargin) {
       return this.makeRejected(
@@ -150,7 +152,8 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
         `Insufficient margin: need ${requiredMargin.toFixed(2)}, have ${this.balance.toFixed(2)}`,
       );
     }
-    // Update virtual balance: BUY reduces free balance, SELL increases it
+    // Full-notional balance tracking: BUY reduces by notional + fee, SELL increases by notional - fee.
+    // Balance may go negative during open positions — this is expected and correct.
     if (request.side === 'BUY') {
       this.balance -= notional + fee;
     } else {

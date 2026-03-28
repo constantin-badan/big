@@ -253,7 +253,10 @@ export class PositionManager implements IPositionManager {
       this.eventBus.emit('position:opened', { position });
     } else if (symState.state === 'PENDING_EXIT') {
       const entry = symState.entryOrder;
-      if (!entry) return;
+      if (!entry) {
+        this.resetToIdle(symState);
+        return;
+      }
 
       const trade = this.buildTradeRecord(symbol, symState, entry, order);
       const positionForClose = this.buildPositionFromEntry(symbol, entry);
@@ -299,9 +302,10 @@ export class PositionManager implements IPositionManager {
       if (activated) {
         symState.trailingActive = true;
         symState.peakPrice = isLong ? currentHigh : currentLow;
-        return 'ACTIVATED';
+        // Fall through to breach check — a wide candle can activate and breach in one bar
+      } else {
+        return null;
       }
-      return null;
     }
 
     if (symState.peakPrice !== null) {

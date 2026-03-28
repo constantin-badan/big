@@ -134,6 +134,9 @@ export class RiskManager implements IRiskManager {
   }
 
   checkEntry(signal: Signal, entryPrice: number): RiskCheckResult {
+    // Ensure daily counters are current for the signal's timestamp
+    this.checkAndResetDaily(signal.timestamp);
+
     // 1. Kill switch already active
     if (this.killSwitchActive) {
       return {

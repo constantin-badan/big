@@ -121,16 +121,16 @@ export class BinanceAdapter implements IExchange {
     // Open trading WS API first (for auth)
     await this.tradingConn.open(this.endpoints.wsApi);
 
-    // Authenticate via session.logon
-    await this.sessionLogon();
-
-    // Verify API key can trade by fetching account info
     try {
+      // Authenticate via session.logon
+      await this.sessionLogon();
+
+      // Verify API key can trade by fetching account info
       await this.getBalance();
     } catch (err) {
       this.tradingConn.close();
       const msg = err instanceof Error ? err.message : String(err);
-      throw new ConnectionError(`API key verification failed (cannot fetch balance): ${msg}`);
+      throw new ConnectionError(`Connection setup failed: ${msg}`);
     }
 
     this.tradingConnected = true;
