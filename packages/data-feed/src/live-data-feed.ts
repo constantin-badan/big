@@ -141,7 +141,7 @@ export class LiveDataFeed implements IDataFeed {
 
       // Filter to the gap window and only closed candles
       const gapCandles = candles.filter(
-        (c) => c.openTime >= fromTimestamp && c.openTime <= toTimestamp && c.isClosed,
+        (c) => c.openTime >= fromTimestamp && c.openTime < toTimestamp && c.isClosed,
       );
 
       // Emit backfilled candles as candle:close

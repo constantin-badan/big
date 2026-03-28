@@ -169,9 +169,6 @@ export interface PositionManagerConfig {
   trailingStopActivationPct: number;
   trailingStopDistancePct: number;
   maxHoldTimeMs: number;
-  entryOrderType: OrderType;
-  safetyStopEnabled: boolean;
-  safetyStopMultiplier: number;
 }
 
 export type PositionState = 'IDLE' | 'PENDING_ENTRY' | 'OPEN' | 'PENDING_EXIT';

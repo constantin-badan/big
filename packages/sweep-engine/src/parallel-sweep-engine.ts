@@ -24,6 +24,13 @@ export function createParallelSweepEngine(config: ParallelSweepConfig): IParalle
       const paramSets = cartesianProduct(grid);
       if (paramSets.length === 0) return { results: [], errors: [] };
 
+      const maxCombinations = config.maxCombinations ?? 50_000;
+      if (paramSets.length > maxCombinations) {
+        throw new Error(
+          `Grid produces ${paramSets.length} combinations, exceeding limit of ${maxCombinations}`,
+        );
+      }
+
       const results: SweepResult[] = [];
       const errors: Array<{ params: Record<string, number>; error: string }> = [];
       let nextIndex = 0;

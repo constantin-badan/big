@@ -268,8 +268,8 @@ export class PositionManager implements IPositionManager {
     }
   }
 
-  private onOrderRejected({ clientOrderId }: { clientOrderId: string; reason: string }): void {
-    for (const [, symState] of this.symbolStates) {
+  private onOrderRejected({ clientOrderId, reason }: { clientOrderId: string; reason: string }): void {
+    for (const [symbol, symState] of this.symbolStates) {
       if (symState.pendingClientOrderId !== clientOrderId) continue;
 
       if (symState.state === 'PENDING_ENTRY') {
@@ -278,6 +278,12 @@ export class PositionManager implements IPositionManager {
         symState.state = 'OPEN';
         symState.pendingClientOrderId = null;
       }
+
+      this.eventBus.emit('error', {
+        source: 'position-manager',
+        error: new Error(`Order rejected for ${symbol}: ${reason}`),
+        context: { clientOrderId, symbol, state: symState.state },
+      });
       break;
     }
   }

@@ -12,6 +12,7 @@ export interface ParallelSweepConfig {
   exchangeConfig: ExchangeConfig; // must be backtest-sim
   dbPath: string;
   maxConcurrency?: number; // default: navigator.hardwareConcurrency
+  maxCombinations?: number; // default: 50_000
   scorer?: SweepScorerName;
 }
 

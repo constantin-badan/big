@@ -37,6 +37,11 @@ export class Scanner implements IScanner {
     }
 
     const { symbol, candle } = data;
+
+    // Filter by configured symbols if non-empty
+    if (this.config.symbols.length > 0 && !this.config.symbols.includes(symbol)) {
+      return;
+    }
     const indicators = this.getOrCreateIndicators(symbol);
 
     const values: Record<string, number> = {};

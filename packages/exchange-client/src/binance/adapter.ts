@@ -310,6 +310,8 @@ export class BinanceAdapter implements IExchange {
 
   private connectMarketDataWs(streams: string[]): Promise<void> {
     const url = buildCombinedStreamUrl(this.endpoints.wsStreams, streams);
+    // Label as 'kline' since that's the primary market data stream;
+    // gap events derive actual stream type from the stream key.
     const conn = new WsConnection('kline', {
       onConnected: (p) => {
         this.marketDataConnected = true;
@@ -328,8 +330,11 @@ export class BinanceAdapter implements IExchange {
     conn.onReconnected = async () => {
       const reconnectTime = Date.now();
       for (const [streamKey, lastTs] of this.lastMessageTimestamp) {
+        const streamType = streamKey.includes('kline') ? 'kline'
+          : streamKey.includes('aggTrade') ? 'aggTrade'
+          : 'depth';
         this.bus?.emit('exchange:gap', {
-          stream: 'kline',
+          stream: streamType,
           symbol: streamKey.split('@')[0]?.toUpperCase() ?? '*',
           fromTimestamp: lastTs,
           toTimestamp: reconnectTime,

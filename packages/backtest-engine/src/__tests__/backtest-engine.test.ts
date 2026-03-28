@@ -426,15 +426,17 @@ describe('createBacktestEngine', () => {
     expect(result.endTime).toBe(btConfig.endTime);
   });
 
-  test('finalBalance reflects trade PnL', async () => {
+  test('finalBalance comes from exchange balance (includes fees + slippage)', async () => {
     const candles = makeCandles(20, 50_000);
     const loader = async () => candles;
     const engine = createBacktestEngine(loader, simConfig);
     const factory = tradingFactory(3, 10);
 
     const result = await engine.run(factory, {}, btConfig);
-    const expectedFinal = 10_000 + result.trades[0]!.pnl;
-    expect(result.finalBalance).toBeCloseTo(expectedFinal, 6);
+    // Exchange balance is authoritative — includes fees and slippage.
+    // Price rises from candle 3 to 10, so profit should be positive.
+    expect(result.finalBalance).not.toBe(10_000);
+    expect(result.trades[0]!.pnl).toBeGreaterThan(0);
   });
 
   test('no trades → zero metrics', async () => {

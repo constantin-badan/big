@@ -149,9 +149,6 @@ const defaultPositionManagerConfig: PositionManagerConfig = {
   trailingStopActivationPct: 1.5,
   trailingStopDistancePct: 0.5,
   maxHoldTimeMs: 3600000,
-  entryOrderType: 'MARKET',
-  safetyStopEnabled: false,
-  safetyStopMultiplier: 2.0,
 };
 
 export const fixtures = {

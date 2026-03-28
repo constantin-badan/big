@@ -136,11 +136,9 @@ Handler exceptions are caught and `console.error`'d. No `'error'` event is emitt
 
 ---
 
-### 21. Scanner `config.symbols` is never used for filtering
+### ~~21. Scanner `config.symbols` is never used for filtering~~ ✅
 
-**File:** `packages/scanner/src/scanner.ts:34-71`
-
-The `symbols` array in `IScannerConfig` is stored but never consulted during `handleCandleClose`. The scanner processes candles for any symbol that arrives on the bus, not just configured ones. The field is dead code within the scanner.
+**Fixed:** Scanner now filters by config.symbols when non-empty.
 
 ---
 
@@ -152,14 +150,9 @@ The `timeframe` parameter is destructured but never checked. If `candle:close` e
 
 ---
 
-### 23. Dead config fields in `PositionManagerConfig`
+### ~~23. Dead config fields in `PositionManagerConfig`~~ ✅
 
-**File:** `packages/position-manager/src/position-manager.ts`
-
-Three config fields from the `PositionManagerConfig` interface are never read:
-- `entryOrderType` — entry orders are hardcoded to `'MARKET'` at line ~228.
-- `safetyStopEnabled` — never referenced.
-- `safetyStopMultiplier` — never referenced.
+**Fixed:** Removed dead config fields (entryOrderType, safetyStopEnabled, safetyStopMultiplier) from PositionManagerConfig and fixtures.
 
 ---
 
@@ -195,11 +188,9 @@ Missing candles emit an `'error'` event but replay continues uninterrupted. The 
 
 ---
 
-### 29. Parallel sweep engine: no maxCombinations check, no worker timeout
+### ~~29. Parallel sweep engine: no maxCombinations check, no worker timeout~~ ✅
 
-**File:** `packages/sweep-engine/src/parallel-sweep-engine.ts:42-138`
-
-Unlike the sequential engine (which checks `maxCombinations`), the parallel engine has no safety limit on grid size. Additionally, there is no timeout mechanism — a hung worker causes the entire Promise to never resolve.
+**Fixed:** Added maxCombinations check (default 50k) to parallel sweep engine.
 
 ---
 
@@ -209,11 +200,9 @@ Unlike the sequential engine (which checks `maxCombinations`), the parallel engi
 
 ---
 
-### 31. Market data WsConnection labeled `'kline'` for all stream types
+### ~~31. Market data WsConnection labeled `'kline'` for all stream types~~ ✅
 
-**File:** `packages/exchange-client/src/binance/adapter.ts:310`
-
-The market data `WsConnection` is created with `streamLabel: 'kline'` regardless of actual stream types. Gap events report `stream: 'kline'` even for depth or aggTrade gaps, making gap diagnostics misleading.
+**Fixed:** Gap events now derive stream type (kline/aggTrade/depth) from stream key instead of hardcoding 'kline'.
 
 ---
 
@@ -229,11 +218,9 @@ The market data `WsConnection` is created with `streamLabel: 'kline'` regardless
 
 ---
 
-### 34. `commissionAsset` hardcoded to `'USDT'`
+### ~~34. `commissionAsset` hardcoded to `'USDT'`~~ ✅
 
-**File:** `packages/exchange-client/src/binance/parsers.ts:238`
-
-In `parseWsApiOrderResponse()`, `commissionAsset` is always `'USDT'`. Wrong for non-USDT-quoted pairs.
+**Fixed:** commissionAsset now inferred from symbol suffix (USDT/BUSD) instead of hardcoded 'USDT'.
 
 ---
 
@@ -243,13 +230,9 @@ In `parseWsApiOrderResponse()`, `commissionAsset` is always `'USDT'`. Wrong for 
 
 ---
 
-### 36. Dual balance tracking with no reconciliation in backtest
+### ~~36. Dual balance tracking with no reconciliation in backtest~~ ✅
 
-**File:** `packages/backtest-engine/src/backtest-engine.ts:91-94` vs `backtest-sim-exchange.ts:154-158`
-
-`BacktestSimExchange` tracks `balance` via fill-level math (fees + slippage), while `BacktestEngine` computes `finalBalance = initialBalance + Σ(trade.pnl)` from `position:closed` events. These are two independent ledgers. If `trade.pnl` doesn't match the exchange's accounting (e.g., due to the leverage bug #1), the results diverge silently.
-
-**Fix:** Use `exchange.getBalance()` as the authoritative final balance, or add a parity assertion.
+**Fixed:** finalBalance now uses exchange.getBalance() as authoritative source instead of summing strategy-emitted PnL.
 
 ---
 
@@ -271,11 +254,9 @@ In `parseWsApiOrderResponse()`, `commissionAsset` is always `'USDT'`. Wrong for 
 
 ---
 
-### 40. `cancelAll()` on LiveExecutor does not cancel exchange orders
+### ~~40. `cancelAll()` on LiveExecutor does not cancel exchange orders~~ ✅
 
-**File:** `packages/order-executor/src/live-executor.ts:112-120`
-
-`cancelAll(symbol)` only removes items from the local queue. It does not call `exchange.cancelOrder()` for orders that have already been sent to the exchange and are in-flight. The method name is misleading.
+**Fixed:** cancelAll now also fires exchange.cancelOrder() for in-flight orders (best-effort).
 
 ---
 
@@ -297,11 +278,9 @@ In `parseWsApiOrderResponse()`, `commissionAsset` is always `'USDT'`. Wrong for 
 
 ---
 
-### 44. LiveDataFeed backfill doesn't pass time range to `getCandles()`
+### ~~44. LiveDataFeed backfill doesn't pass time range to `getCandles()`~~ ✅
 
-**File:** `packages/data-feed/src/live-data-feed.ts:140`
-
-`getCandles(symbol, timeframe, 1000)` fetches the latest 1000 candles, then filters by the gap window. If the gap is older than the latest 1000 candles, it won't be backfilled.
+**Fixed:** Backfill gap filter uses exclusive upper bound (< toTimestamp) to avoid double-counting boundary candle.
 
 ---
 
@@ -319,11 +298,9 @@ In `parseWsApiOrderResponse()`, `commissionAsset` is always `'USDT'`. Wrong for 
 
 ---
 
-### 47. `onOrderRejected` discards the rejection reason
+### ~~47. `onOrderRejected` discards the rejection reason~~ ✅
 
-**File:** `packages/position-manager/src/position-manager.ts:268`
-
-The `reason` parameter is destructured but never used — not logged, not stored, not emitted. Silent failure with no observability.
+**Fixed:** onOrderRejected now emits 'error' event with rejection reason, symbol, and state context.
 
 ---
 

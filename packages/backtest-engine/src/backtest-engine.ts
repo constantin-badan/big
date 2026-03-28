@@ -101,10 +101,10 @@ export function createBacktestEngine(
         config.endTime,
       );
 
-      let finalBalance = initialBalance;
-      for (const trade of trades) {
-        finalBalance += trade.pnl;
-      }
+      // Use the exchange's internal balance as authoritative source of truth.
+      // This accounts for fees and slippage that the exchange applied during fills.
+      const balances = await exchange.getBalance();
+      const finalBalance = balances[0]?.total ?? initialBalance;
 
       const result: BacktestResult = {
         trades,

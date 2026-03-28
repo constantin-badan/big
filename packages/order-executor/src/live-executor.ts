@@ -115,6 +115,16 @@ export class LiveExecutor implements IOrderExecutor {
         this.pending.delete(removed.receipt.clientOrderId);
       }
     }
+
+    // Cancel in-flight orders on the exchange (fire-and-forget — fills/rejects
+    // will arrive via bus events and clean up the pending map)
+    for (const [clientOrderId, sym] of this.pending) {
+      if (sym === symbol) {
+        void this.exchange.cancelOrder(symbol, clientOrderId).catch(() => {
+          // Best-effort — order may have already filled
+        });
+      }
+    }
   }
 
   hasPending(symbol: string): boolean {

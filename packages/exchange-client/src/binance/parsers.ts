@@ -243,7 +243,7 @@ export function parseWsApiOrderResponse(data: unknown, requestTime: number): Ord
     quantity: Number(r.origQty),
     filledQuantity: Number(r.executedQty),
     commission: 0, // Not in ack response — comes via user data stream
-    commissionAsset: 'USDT',
+    commissionAsset: r.symbol.endsWith('USDT') ? 'USDT' : r.symbol.endsWith('BUSD') ? 'BUSD' : 'USDT',
     timestamp: r.updateTime,
     latencyMs: Date.now() - requestTime,
   };
