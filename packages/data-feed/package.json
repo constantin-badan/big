@@ -9,7 +9,6 @@
     "lint": "oxlint ./src --config ../../.oxlintrc.json"
   },
   "dependencies": {
-    "@trading-bot/exchange-client": "workspace:*",
     "@trading-bot/types": "workspace:*"
   },
   "devDependencies": {

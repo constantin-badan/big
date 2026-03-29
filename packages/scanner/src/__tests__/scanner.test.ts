@@ -1,9 +1,8 @@
 import { describe, test, expect } from 'bun:test';
 
-import type { IIndicator } from '@trading-bot/indicators';
 import { createTestBus, fixtures } from '@trading-bot/test-utils';
 import type { EventCapture } from '@trading-bot/test-utils';
-import type { Candle, IEventBus } from '@trading-bot/types';
+import type { Candle, IEventBus, IIndicator } from '@trading-bot/types';
 import { toSymbol } from '@trading-bot/types';
 
 import type { ScannerEvaluate, ScannerFactory } from '../index';

@@ -1,10 +1,10 @@
-import type { IExchange } from '@trading-bot/exchange-client';
-import type { IFillSimulator } from '@trading-bot/order-executor';
 import type {
   AccountBalance,
   Candle,
   FeeStructure,
   IEventBus,
+  IExchange,
+  IFillSimulator,
   OrderBookDiff,
   OrderBookSnapshot,
   OrderRequest,

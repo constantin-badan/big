@@ -269,6 +269,55 @@ export interface IPositionManager {
   dispose(): void;
 }
 
+// === Interfaces: Margin Guard ===
+
+export interface IMarginGuard {
+  readonly isBreached: boolean;
+  dispose(): void;
+}
+
+// === Interfaces: Indicators ===
+
+export interface IIndicator<TConfig = unknown, TOutput = number> {
+  readonly name: string;
+  readonly warmupPeriod: number;
+  readonly config: TConfig;
+  update(candle: Candle): TOutput | null;
+  reset(): void;
+}
+
+// A zero-arg factory that creates a fresh, independent indicator instance.
+// Config is pre-bound in the closure at the strategy factory level:
+//   indicators: { ema: () => createEMA({ period: params.emaPeriod }) }
+// Scanners call factory() with no args — they don't know or care about configs.
+export type IndicatorFactory = () => IIndicator;
+
+// === Interfaces: Scanner ===
+
+export interface IScannerConfig {
+  symbols: Symbol[];
+  timeframe: Timeframe;
+  indicators: Record<string, IndicatorFactory>;
+}
+
+export interface IScanner {
+  readonly name: string;
+  readonly config: IScannerConfig;
+  dispose(): void;
+}
+
+export type ScannerFactory = (eventBus: IEventBus, config: IScannerConfig) => IScanner;
+
+// Called on each candle:close for the scanner's timeframe.
+// indicators: live values for this symbol (already updated with the current candle, only non-null)
+// candle: the closed candle
+// Returns a Signal to emit, or null for no signal this candle.
+export type ScannerEvaluate = (
+  indicators: Record<string, number>,
+  candle: Candle,
+  symbol: Symbol,
+) => Omit<Signal, 'symbol' | 'sourceScanner' | 'timestamp'> | null;
+
 // === Backtest ===
 
 export interface TradeRecord {

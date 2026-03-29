@@ -1,9 +1,9 @@
-import type { IOrderExecutor } from '@trading-bot/order-executor';
-import type { IRiskManager } from '@trading-bot/risk-manager';
 import type {
   Candle,
   ClientOrderId,
   IEventBus,
+  IOrderExecutor,
+  IRiskManager,
   OrderRequest,
   OrderResult,
   Position,

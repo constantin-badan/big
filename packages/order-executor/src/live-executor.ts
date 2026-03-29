@@ -1,5 +1,4 @@
-import type { IExchange } from '@trading-bot/exchange-client';
-import type { ClientOrderId, IEventBus, OrderRequest, SubmissionReceipt, Symbol } from '@trading-bot/types';
+import type { ClientOrderId, IEventBus, IExchange, OrderRequest, SubmissionReceipt, Symbol } from '@trading-bot/types';
 import { toClientOrderId, toOrderId } from '@trading-bot/types';
 
 import type { IOrderExecutor, OrderExecutorConfig } from './types';

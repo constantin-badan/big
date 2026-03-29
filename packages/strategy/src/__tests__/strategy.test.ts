@@ -1,8 +1,5 @@
 import { describe, test, expect } from 'bun:test';
 
-import type { IPositionManager, PositionState } from '@trading-bot/position-manager';
-import type { IRiskManager } from '@trading-bot/risk-manager';
-import type { IScanner, IScannerConfig } from '@trading-bot/scanner';
 import {
   EventCapture,
   MockEventBus,
@@ -10,7 +7,7 @@ import {
   createMockExecutor,
   fixtures,
 } from '@trading-bot/test-utils';
-import type { Signal } from '@trading-bot/types';
+import type { IPositionManager, IRiskManager, IScanner, IScannerConfig, PositionState, Signal } from '@trading-bot/types';
 import { toSymbol } from '@trading-bot/types';
 
 import { Strategy, passthroughMerge } from '../strategy';

@@ -1,9 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 
-import type { IOrderExecutor } from '@trading-bot/order-executor';
-import type { IRiskManager } from '@trading-bot/risk-manager';
 import { createTestBus, createMockExecutor, EventCapture, fixtures } from '@trading-bot/test-utils';
-import type { IEventBus, OrderRequest, Signal, SubmissionReceipt } from '@trading-bot/types';
+import type { IEventBus, IOrderExecutor, IRiskManager, OrderRequest, Signal, SubmissionReceipt } from '@trading-bot/types';
 import { toSymbol, toOrderId, toClientOrderId } from '@trading-bot/types';
 
 import type { PositionManagerConfig, PositionState } from '../index';
