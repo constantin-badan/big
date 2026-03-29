@@ -87,6 +87,10 @@ function makeUpDownCandles(): Candle[] {
 /**
  * Enters LONG when close > enterThreshold. One entry per instance.
  * Exits via SL/TP from position-manager — no signal-based exits.
+ *
+ * Each instance gets its own RiskManager (risk state not shared across instances).
+ * This matches real Arena behavior — instances compete independently.
+ * Portfolio-level risk limits would need a shared risk layer above the arena.
  */
 function makeThresholdFactory(): StrategyFactory {
   return (params, deps) => {
@@ -140,6 +144,8 @@ interface ArenaInstance {
   strategy: IStrategy;
   trades: TradeRecord[];
   sim: BacktestSimExchange;
+  /** Removes sourceBus → instanceBus forwarding listeners. */
+  detachFromSource: () => void;
 }
 
 function createArenaInstance(
@@ -161,13 +167,23 @@ function createArenaInstance(
     trades.push(data.trade);
   });
 
-  // Forward market data from source bus to instance bus (mirrors Arena internals)
-  sourceBus.on('candle:close', (data) => bus.emit('candle:close', data));
-  sourceBus.on('candle:update', (data) => bus.emit('candle:update', data));
-  sourceBus.on('tick', (data) => bus.emit('tick', data));
+  // Forward market data from source bus to instance bus (mirrors Arena internals).
+  // Store handlers so we can clean them up — prevents leaked listeners on sourceBus.
+  const fwdCandle = (data: TradingEventMap['candle:close']): void => { bus.emit('candle:close', data); };
+  const fwdUpdate = (data: TradingEventMap['candle:update']): void => { bus.emit('candle:update', data); };
+  const fwdTick = (data: TradingEventMap['tick']): void => { bus.emit('tick', data); };
+  sourceBus.on('candle:close', fwdCandle);
+  sourceBus.on('candle:update', fwdUpdate);
+  sourceBus.on('tick', fwdTick);
+
+  const detachFromSource = (): void => {
+    sourceBus.off('candle:close', fwdCandle);
+    sourceBus.off('candle:update', fwdUpdate);
+    sourceBus.off('tick', fwdTick);
+  };
 
   const strategy = factory(params, { bus, exchange: sim, executor });
-  return { bus, strategy, trades, sim };
+  return { bus, strategy, trades, sim, detachFromSource };
 }
 
 function pumpCandles(bus: IEventBus, candles: Candle[]): void {
@@ -179,6 +195,7 @@ function pumpCandles(bus: IEventBus, candles: Candle[]): void {
 async function cleanupInstances(instances: ArenaInstance[]): Promise<void> {
   for (const inst of instances) {
     await inst.strategy.stop();
+    inst.detachFromSource();
     inst.sim.dispose();
   }
 }
@@ -194,6 +211,7 @@ describe('E2E Arena Pipeline', () => {
   describe('three instances with different thresholds (pinned)', () => {
     const factory = makeThresholdFactory();
     let instances: ArenaInstance[];
+    let balances: number[];
 
     beforeAll(async () => {
       const sourceBus = new EventBus();
@@ -204,6 +222,14 @@ describe('E2E Arena Pipeline', () => {
       ];
       for (const inst of instances) await inst.strategy.start();
       pumpCandles(sourceBus, candles);
+
+      // Capture balances BEFORE cleanup (dispose may invalidate sim state)
+      balances = [];
+      for (const inst of instances) {
+        const bal = await inst.sim.getBalance();
+        balances.push(bal[0]!.total);
+      }
+
       await cleanupInstances(instances);
     });
 
@@ -213,32 +239,47 @@ describe('E2E Arena Pipeline', () => {
       expect(instances[2]!.trades.length).toBe(1);
     });
 
-    test('instance A (threshold=95): LONG, TAKE_PROFIT, positive pnl', () => {
+    test('instance A (threshold=95): LONG, TAKE_PROFIT, exact prices', () => {
       const t = instances[0]!.trades[0]!;
       expect(t.side).toBe('LONG');
       expect(t.exitReason).toBe('TAKE_PROFIT');
-      expect(t.entryPrice).toBeCloseTo(96.316, 2);
-      expect(t.exitPrice).toBeCloseTo(101.132, 2);
+      // Zero slippage + linear interpolation = exact IEEE 754 floats
+      expect(t.entryPrice).toBe(96.3157894736842);
+      expect(t.exitPrice).toBe(101.13157894736842);
       expect(t.pnl).toBeGreaterThan(0);
     });
 
-    test('instance B (threshold=110): LONG, TAKE_PROFIT, positive pnl', () => {
+    test('instance B (threshold=110): LONG, TAKE_PROFIT, exact prices', () => {
       const t = instances[1]!.trades[0]!;
       expect(t.side).toBe('LONG');
       expect(t.exitReason).toBe('TAKE_PROFIT');
-      expect(t.entryPrice).toBeCloseTo(111.053, 2);
-      expect(t.exitPrice).toBeCloseTo(116.605, 2);
+      expect(t.entryPrice).toBe(111.05263157894737);
+      expect(t.exitPrice).toBe(116.60526315789474);
       expect(t.pnl).toBeGreaterThan(0);
     });
 
-    test('instance C (threshold=125): LONG, STOP_LOSS, negative pnl', () => {
+    test('instance C (threshold=125): LONG, STOP_LOSS, exact prices', () => {
       // Enters late near the top, price reverses → SL fires
       const t = instances[2]!.trades[0]!;
       expect(t.side).toBe('LONG');
       expect(t.exitReason).toBe('STOP_LOSS');
-      expect(t.entryPrice).toBeCloseTo(125.789, 2);
-      expect(t.exitPrice).toBeCloseTo(122.016, 2);
+      expect(t.entryPrice).toBe(125.78947368421052);
+      expect(t.exitPrice).toBe(122.01578947368421);
       expect(t.pnl).toBeLessThan(0);
+    });
+
+    test('ranking: A and B profit, C loses (arena comparison)', () => {
+      const pnlA = instances[0]!.trades[0]!.pnl;
+      const pnlB = instances[1]!.trades[0]!.pnl;
+      const pnlC = instances[2]!.trades[0]!.pnl;
+      // A and B entered early enough to hit TP; C entered late and hit SL
+      expect(pnlA).toBeGreaterThan(0);
+      expect(pnlB).toBeGreaterThan(0);
+      expect(pnlC).toBeLessThan(0);
+      // A and B have same-magnitude TP (5% of ~similar position size)
+      // C is the only loser — worst performer in the arena
+      expect(pnlC).toBeLessThan(pnlA);
+      expect(pnlC).toBeLessThan(pnlB);
     });
 
     test('all instances have different entry prices (independent behavior)', () => {
@@ -247,11 +288,9 @@ describe('E2E Arena Pipeline', () => {
       expect(prices[1]).not.toBe(prices[2]);
     });
 
-    test('initialBalance is 10000 for all instances', async () => {
-      for (const inst of instances) {
-        const balances = await inst.sim.getBalance();
-        // Balance moved from initial — trades happened
-        expect(balances[0]!.total).not.toBe(10_000);
+    test('all instances have balance != initial (trades moved it)', () => {
+      for (const bal of balances) {
+        expect(bal).not.toBe(10_000);
       }
     });
   });
