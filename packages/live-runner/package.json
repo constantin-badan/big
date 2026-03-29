@@ -13,7 +13,6 @@
     "@trading-bot/event-bus": "workspace:*",
     "@trading-bot/exchange-client": "workspace:*",
     "@trading-bot/order-executor": "workspace:*",
-    "@trading-bot/storage": "workspace:*",
     "@trading-bot/strategy": "workspace:*",
     "@trading-bot/types": "workspace:*"
   },
