@@ -1,6 +1,4 @@
-import type { IEventBus, TradingEventMap, PositionSide, Symbol } from '@trading-bot/types';
-
-import type { IMarginGuard, MarginGuardConfig } from './types';
+import type { IEventBus, TradingEventMap, PositionSide, Symbol, IMarginGuard, MarginGuardConfig } from '@trading-bot/types';
 
 interface TrackedPosition {
   symbol: Symbol;

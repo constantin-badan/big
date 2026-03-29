@@ -1,10 +1,9 @@
 import { describe, test, expect, spyOn } from 'bun:test';
 
-import type { Tick } from '@trading-bot/types';
+import type { Tick, TradingEventMap } from '@trading-bot/types';
 import { toSymbol } from '@trading-bot/types';
 
 import { EventBus } from '../event-bus';
-import type { TradingEventMap } from '../types';
 
 const BTCUSDT = toSymbol('BTCUSDT');
 

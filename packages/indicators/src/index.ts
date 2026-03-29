@@ -1,4 +1,4 @@
-export type { IIndicator, IndicatorFactory } from './types';
+export type { IIndicator, IndicatorFactory } from '@trading-bot/types';
 
 export { SMA, createSMA } from './sma';
 export type { SMAConfig } from './sma';

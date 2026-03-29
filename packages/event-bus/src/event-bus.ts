@@ -1,4 +1,4 @@
-import type { IEventBus, TradingEventMap } from './types';
+import type { IEventBus, TradingEventMap } from '@trading-bot/types';
 
 function isSet<T>(value: unknown): value is Set<T> {
   return value instanceof Set;

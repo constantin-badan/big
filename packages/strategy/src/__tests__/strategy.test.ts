@@ -7,11 +7,10 @@ import {
   createMockExecutor,
   fixtures,
 } from '@trading-bot/test-utils';
-import type { IPositionManager, IRiskManager, IScanner, IScannerConfig, PositionState, Signal } from '@trading-bot/types';
+import type { IPositionManager, IRiskManager, IScanner, IScannerConfig, PositionState, Signal, StrategyConfig, StrategyDeps, SignalBuffer, SignalMerge } from '@trading-bot/types';
 import { toSymbol } from '@trading-bot/types';
 
 import { Strategy, passthroughMerge } from '../strategy';
-import type { StrategyConfig, StrategyDeps, SignalBuffer, SignalMerge } from '../types';
 
 const BASE_TIME = 1700000000000;
 

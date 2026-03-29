@@ -1,6 +1,4 @@
-import type { IEventBus, IIndicator, TradingEventMap } from '@trading-bot/types';
-
-import type { IScannerConfig, IScanner, ScannerEvaluate } from './types';
+import type { IEventBus, IIndicator, TradingEventMap, IScannerConfig, IScanner, ScannerEvaluate, ScannerFactory, Symbol } from '@trading-bot/types';
 
 export class Scanner implements IScanner {
   readonly name: string;
@@ -8,7 +6,7 @@ export class Scanner implements IScanner {
 
   private readonly bus: IEventBus;
   private readonly evaluate: ScannerEvaluate;
-  private readonly indicatorInstances: Map<import('@trading-bot/types').Symbol, Map<string, IIndicator>>;
+  private readonly indicatorInstances: Map<Symbol, Map<string, IIndicator>>;
   private readonly handler: (data: TradingEventMap['candle:close']) => void;
 
   constructor(
@@ -75,7 +73,7 @@ export class Scanner implements IScanner {
     });
   }
 
-  private getOrCreateIndicators(symbol: import('@trading-bot/types').Symbol): Map<string, IIndicator> {
+  private getOrCreateIndicators(symbol: Symbol): Map<string, IIndicator> {
     const existing = this.indicatorInstances.get(symbol);
     if (existing !== undefined) {
       return existing;
@@ -97,6 +95,6 @@ export class Scanner implements IScanner {
 export function createScannerFactory(
   name: string,
   evaluate: ScannerEvaluate,
-): import('./types').ScannerFactory {
+): ScannerFactory {
   return (eventBus, config) => new Scanner(eventBus, name, config, evaluate);
 }

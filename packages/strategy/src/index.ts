@@ -6,5 +6,5 @@ export type {
   SignalMerge,
   SignalBuffer,
   SweepParamGrid,
-} from './types';
+} from '@trading-bot/types';
 export { Strategy, passthroughMerge } from './strategy';

@@ -1,6 +1,4 @@
-import type { Candle } from '@trading-bot/types';
-
-import type { IIndicator } from './types';
+import type { Candle, IIndicator } from '@trading-bot/types';
 
 export interface ATRConfig {
   period: number;

@@ -1,11 +1,10 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 
 import { createTestBus, EventCapture, fixtures } from '@trading-bot/test-utils';
-import type { IEventBus, Position } from '@trading-bot/types';
+import type { IEventBus, Position, MarginGuardConfig } from '@trading-bot/types';
 import { toSymbol } from '@trading-bot/types';
 
 import { MarginGuard } from '../margin-guard';
-import type { MarginGuardConfig } from '../types';
 
 // ── constants ──────────────────────────────────────────────────────────────────
 
