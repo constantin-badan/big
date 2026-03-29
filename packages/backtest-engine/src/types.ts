@@ -1,9 +1,9 @@
-import type { StrategyFactory } from '@trading-bot/strategy';
 import type {
   BacktestConfig,
   BacktestResult,
   Candle,
   ExchangeConfig,
+  StrategyFactory,
   Symbol,
   Timeframe,
 } from '@trading-bot/types';

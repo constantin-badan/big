@@ -3,19 +3,21 @@ import { describe, test, expect } from 'bun:test';
 import { BacktestSimExchange } from '@trading-bot/backtest-engine';
 import { createEMA } from '@trading-bot/indicators';
 import { EventBus } from '@trading-bot/event-bus';
-import type { IEventBus, TradingEventMap } from '@trading-bot/event-bus';
 import { BacktestExecutor } from '@trading-bot/order-executor';
 import { PositionManager } from '@trading-bot/position-manager';
 import { RiskManager } from '@trading-bot/risk-manager';
 import { createScannerFactory } from '@trading-bot/scanner';
-import type { ScannerEvaluate } from '@trading-bot/scanner';
 import { Strategy, passthroughMerge } from '@trading-bot/strategy';
-import type { StrategyFactory, IStrategy } from '@trading-bot/strategy';
 import type {
   Candle,
+  IEventBus,
+  IStrategy,
   PositionManagerConfig,
   RiskConfig,
+  ScannerEvaluate,
+  StrategyFactory,
   TradeRecord,
+  TradingEventMap,
   Timeframe,
 } from '@trading-bot/types';
 import { toSymbol, toOrderId, toClientOrderId } from '@trading-bot/types';

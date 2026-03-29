@@ -4,9 +4,7 @@ import { createEMA } from '@trading-bot/indicators';
 import { PositionManager } from '@trading-bot/position-manager';
 import { RiskManager } from '@trading-bot/risk-manager';
 import { createScannerFactory } from '@trading-bot/scanner';
-import type { ScannerEvaluate } from '@trading-bot/scanner';
 import { Strategy, passthroughMerge } from '@trading-bot/strategy';
-import type { StrategyFactory } from '@trading-bot/strategy';
 import { fixtures } from '@trading-bot/test-utils';
 import type {
   Candle,
@@ -14,6 +12,8 @@ import type {
   BacktestConfig,
   PositionManagerConfig,
   RiskConfig,
+  ScannerEvaluate,
+  StrategyFactory,
 } from '@trading-bot/types';
 import { toSymbol } from '@trading-bot/types';
 

@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 
 import type { IBacktestEngine } from '@trading-bot/backtest-engine';
-import type { StrategyFactory, SweepParamGrid } from '@trading-bot/strategy';
+import type { StrategyFactory, SweepParamGrid } from '@trading-bot/types';
 import type { BacktestConfig, BacktestResult, PerformanceMetrics } from '@trading-bot/types';
 import { toSymbol } from '@trading-bot/types';
 

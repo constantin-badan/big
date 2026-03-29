@@ -1,7 +1,6 @@
 import type { IBacktestEngine } from '@trading-bot/backtest-engine';
 import type { ITradeStore } from '@trading-bot/storage';
-import type { StrategyFactory } from '@trading-bot/strategy';
-import type { BacktestConfig, Timeframe, TradeRecord } from '@trading-bot/types';
+import type { BacktestConfig, StrategyFactory, Timeframe, TradeRecord } from '@trading-bot/types';
 
 import type { IParityChecker, ParityMatchedPair, ParityResult, ParitySummary } from './types';
 

@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, mock } from 'bun:test';
 
 import type { IExchange } from '@trading-bot/exchange-client';
-import type { IStrategy } from '@trading-bot/strategy';
+import type { IStrategy } from '@trading-bot/types';
 import { createMockExchange } from '@trading-bot/test-utils';
 import type { Position, ExchangeConfig } from '@trading-bot/types';
 import { toSymbol, toOrderId, toClientOrderId } from '@trading-bot/types';

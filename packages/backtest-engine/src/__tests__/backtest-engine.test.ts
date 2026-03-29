@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 
 import { EventBus } from '@trading-bot/event-bus';
-import type { IStrategy, StrategyFactory } from '@trading-bot/strategy';
+import type { IStrategy, StrategyFactory } from '@trading-bot/types';
 import { fixtures } from '@trading-bot/test-utils';
 import type {
   Candle,

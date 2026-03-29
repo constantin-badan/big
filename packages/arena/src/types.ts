@@ -1,7 +1,7 @@
-import type { StrategyFactory } from '@trading-bot/strategy';
 import type {
   ExchangeConfig,
   PerformanceMetrics,
+  StrategyFactory,
   Symbol,
   Timeframe,
   TradeRecord,

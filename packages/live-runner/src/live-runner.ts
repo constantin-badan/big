@@ -3,8 +3,7 @@ import { EventBus } from '@trading-bot/event-bus';
 import { createExchange, type IExchange } from '@trading-bot/exchange-client';
 import { LiveExecutor } from '@trading-bot/order-executor';
 import type { IOrderExecutor } from '@trading-bot/order-executor';
-import type { IStrategy, StrategyFactory } from '@trading-bot/strategy';
-import type { ExchangeConfig, IEventBus, Symbol, Timeframe } from '@trading-bot/types';
+import type { ExchangeConfig, IEventBus, IStrategy, StrategyFactory, Symbol, Timeframe } from '@trading-bot/types';
 
 export type RunnerStatus = 'idle' | 'running' | 'stopping' | 'stopped';
 

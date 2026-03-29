@@ -6,7 +6,7 @@ import type { IExchange } from '@trading-bot/exchange-client';
 import { BacktestExecutor } from '@trading-bot/order-executor';
 import type { IOrderExecutor } from '@trading-bot/order-executor';
 import { computeMetrics } from '@trading-bot/reporting';
-import type { IStrategy } from '@trading-bot/strategy';
+import type { IStrategy } from '@trading-bot/types';
 import type {
   ExchangeConfig,
   IEventBus,

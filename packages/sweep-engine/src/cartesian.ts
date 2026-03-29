@@ -1,4 +1,4 @@
-import type { SweepParamGrid } from '@trading-bot/strategy';
+import type { SweepParamGrid } from '@trading-bot/types';
 
 export function cartesianProduct(grid: SweepParamGrid): Record<string, number>[] {
   const keys = Object.keys(grid);

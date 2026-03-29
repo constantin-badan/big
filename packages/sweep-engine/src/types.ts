@@ -1,6 +1,5 @@
 import type { IBacktestEngine } from '@trading-bot/backtest-engine';
-import type { StrategyFactory, SweepParamGrid } from '@trading-bot/strategy';
-import type { BacktestConfig, BacktestResult } from '@trading-bot/types';
+import type { BacktestConfig, BacktestResult, StrategyFactory, SweepParamGrid } from '@trading-bot/types';
 
 export interface SweepResult {
   params: Record<string, number>;

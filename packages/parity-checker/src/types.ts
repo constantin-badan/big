@@ -1,5 +1,4 @@
-import type { StrategyFactory } from '@trading-bot/strategy';
-import type { TradeRecord } from '@trading-bot/types';
+import type { StrategyFactory, TradeRecord } from '@trading-bot/types';
 
 export interface ParityMatchedPair {
   live: TradeRecord;

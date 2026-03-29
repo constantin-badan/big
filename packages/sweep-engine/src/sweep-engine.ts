@@ -1,6 +1,5 @@
 import type { IBacktestEngine } from '@trading-bot/backtest-engine';
-import type { StrategyFactory, SweepParamGrid } from '@trading-bot/strategy';
-import type { BacktestConfig, BacktestResult } from '@trading-bot/types';
+import type { BacktestConfig, BacktestResult, StrategyFactory, SweepParamGrid } from '@trading-bot/types';
 
 import { cartesianProduct } from './cartesian';
 import type { ISweepEngine, SweepConfig, SweepResult, SweepScorer } from './types';

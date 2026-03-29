@@ -12,7 +12,7 @@
 import { createBacktestEngine } from '@trading-bot/backtest-engine';
 import type { CandleLoader } from '@trading-bot/backtest-engine';
 import { createStorage } from '@trading-bot/storage';
-import type { StrategyFactory } from '@trading-bot/strategy';
+import type { StrategyFactory } from '@trading-bot/types';
 import type { Symbol, Timeframe } from '@trading-bot/types';
 
 import type { WorkerRequest, WorkerResponse } from './parallel-types';

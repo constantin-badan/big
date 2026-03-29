@@ -2,7 +2,7 @@ import { describe, test, expect } from 'bun:test';
 
 import type { IBacktestEngine } from '@trading-bot/backtest-engine';
 import type { ITradeStore } from '@trading-bot/storage';
-import type { IStrategy } from '@trading-bot/strategy';
+import type { IStrategy } from '@trading-bot/types';
 import type { BacktestResult, PerformanceMetrics, TradeRecord } from '@trading-bot/types';
 import { toSymbol } from '@trading-bot/types';
 

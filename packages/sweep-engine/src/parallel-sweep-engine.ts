@@ -1,4 +1,4 @@
-import type { SweepParamGrid } from '@trading-bot/strategy';
+import type { SweepParamGrid } from '@trading-bot/types';
 
 import { cartesianProduct } from './cartesian';
 import type {
