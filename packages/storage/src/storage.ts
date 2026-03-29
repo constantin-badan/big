@@ -62,6 +62,7 @@ class CandleStore implements ICandleStore {
   private readonly db: Database;
   private readonly insertStmt: ReturnType<Database['prepare']>;
   private readonly selectStmt: ReturnType<Database['prepare']>;
+  private readonly earliestStmt: ReturnType<Database['prepare']>;
   private readonly latestStmt: ReturnType<Database['prepare']>;
   private readonly gapStmt: ReturnType<Database['prepare']>;
 
@@ -79,6 +80,12 @@ class CandleStore implements ICandleStore {
       FROM candles
       WHERE symbol = ? AND timeframe = ? AND open_time >= ? AND open_time <= ?
       ORDER BY open_time ASC
+    `);
+
+    this.earliestStmt = db.prepare(`
+      SELECT MIN(open_time) as earliest
+      FROM candles
+      WHERE symbol = ? AND timeframe = ?
     `);
 
     this.latestStmt = db.prepare(`
@@ -147,6 +154,14 @@ class CandleStore implements ICandleStore {
         isClosed: true,
       }),
     );
+  }
+
+  getEarliestTimestamp(symbol: Symbol, timeframe: Timeframe): number | null {
+    interface EarliestRow {
+      earliest: number | null;
+    }
+    const row = unsafeCast<EarliestRow | null>(this.earliestStmt.get(symbol, timeframe));
+    return row?.earliest ?? null;
   }
 
   getLatestTimestamp(symbol: Symbol, timeframe: Timeframe): number | null {

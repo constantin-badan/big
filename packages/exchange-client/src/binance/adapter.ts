@@ -199,12 +199,14 @@ export class BinanceAdapter implements IExchange {
 
   // === REST API: Market data ===
 
-  async getCandles(symbol: Symbol, timeframe: Timeframe, limit: number): Promise<Candle[]> {
-    const params = {
+  async getCandles(symbol: Symbol, timeframe: Timeframe, limit: number, startTime?: number, endTime?: number): Promise<Candle[]> {
+    const params: Record<string, string | number> = {
       symbol,
       interval: toBinanceInterval(timeframe),
       limit: String(limit),
     };
+    if (startTime !== undefined) params.startTime = startTime;
+    if (endTime !== undefined) params.endTime = endTime;
     const data = await this.restClient.restGet('/fapi/v1/klines', params);
     return parseRestCandles(data, symbol);
   }

@@ -142,7 +142,7 @@ export class LiveDataFeed implements IDataFeed {
       // Paginate: fetch candles in batches until the full gap is covered
       let cursor = fromTimestamp;
       while (cursor < toTimestamp) {
-        const candles = await this.exchange.getCandles(symbol, timeframe, 1000);
+        const candles = await this.exchange.getCandles(symbol, timeframe, 1000, cursor, toTimestamp);
 
         // Filter to the remaining gap window and only closed candles
         const gapCandles = candles.filter(

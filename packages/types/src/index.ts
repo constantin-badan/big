@@ -202,7 +202,7 @@ export type PositionState = 'IDLE' | 'PENDING_ENTRY' | 'OPEN' | 'PENDING_EXIT';
 // === Interfaces: Exchange ===
 
 export interface IExchange {
-  getCandles(symbol: Symbol, timeframe: Timeframe, limit: number): Promise<Candle[]>;
+  getCandles(symbol: Symbol, timeframe: Timeframe, limit: number, startTime?: number, endTime?: number): Promise<Candle[]>;
   getOrderBook(symbol: Symbol, depth?: number): Promise<OrderBookSnapshot>;
 
   subscribeCandles(
