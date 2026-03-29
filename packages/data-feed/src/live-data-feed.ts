@@ -132,6 +132,9 @@ export class LiveDataFeed implements IDataFeed {
   ): Promise<void> {
     const key = backfillKey(symbol, timeframe);
 
+    // Skip if already backfilling this key (prevent concurrent backfills)
+    if (this.backfilling.has(key)) return;
+
     // Set backfilling flag — live candles will be buffered
     this.backfilling.add(key);
 

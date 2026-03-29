@@ -130,19 +130,18 @@ export class MarginGuard implements IMarginGuard {
     const unrealizedLossPct = (totalUnrealizedPnl / this.config.balance) * 100;
     const exposurePct = (totalNotional / this.config.balance) * 100;
 
-    let breachMessage: string | undefined;
-
     if (unrealizedLossPct <= -this.config.maxUnrealizedLossPct) {
-      breachMessage = `Unrealized loss ${unrealizedLossPct.toFixed(2)}% exceeds max ${this.config.maxUnrealizedLossPct}% of balance`;
-    } else if (exposurePct >= this.config.maxTotalExposurePct) {
-      breachMessage = `Total exposure ${exposurePct.toFixed(2)}% exceeds max ${this.config.maxTotalExposurePct}% of balance`;
-    }
-
-    if (breachMessage) {
       this._isBreached = true;
       this.bus.emit('risk:breach', {
         rule: 'MAX_DRAWDOWN',
-        message: breachMessage,
+        message: `Unrealized loss ${unrealizedLossPct.toFixed(2)}% exceeds max ${this.config.maxUnrealizedLossPct}% of balance`,
+        severity: 'KILL',
+      });
+    } else if (exposurePct >= this.config.maxTotalExposurePct) {
+      this._isBreached = true;
+      this.bus.emit('risk:breach', {
+        rule: 'MAX_POSITION_SIZE',
+        message: `Total exposure ${exposurePct.toFixed(2)}% exceeds max ${this.config.maxTotalExposurePct}% of balance`,
         severity: 'KILL',
       });
     }

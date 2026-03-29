@@ -409,7 +409,7 @@ export class BinanceAdapter implements IExchange {
 
     // Dedup: don't emit twice for same orderId + status (bounded with TTL)
     const now = Date.now();
-    const dedupeKey = `${order.orderId}:${order.status}`;
+    const dedupeKey = `${order.orderId}:${order.status}:${order.filledQuantity}`;
     if (this.emittedFills.has(dedupeKey)) return;
     this.emittedFills.set(dedupeKey, now);
 

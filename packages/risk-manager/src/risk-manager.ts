@@ -62,6 +62,11 @@ export class RiskManager implements IRiskManager {
     if (config.leverage <= 0) {
       throw new Error(`RiskManager: leverage must be > 0, got ${config.leverage}`);
     }
+    if (config.cooldownAfterLossMs < 0) {
+      throw new Error(
+        `RiskManager: cooldownAfterLossMs must be >= 0, got ${config.cooldownAfterLossMs}`,
+      );
+    }
 
     this.config = config;
 
