@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 
-import { EventBus } from '@trading-bot/event-bus';
+import { MockEventBus } from '../mock-event-bus';
 import { toSymbol } from '@trading-bot/types';
 
 import { EventCapture } from '../event-capture';
@@ -11,7 +11,7 @@ import { createMockExecutor } from '../mock-executor';
 
 describe('EventCapture', () => {
   test('records emitted events', () => {
-    const bus = new EventBus();
+    const bus = new MockEventBus();
     const capture = new EventCapture(bus);
 
     bus.emit('tick', { symbol: toSymbol('BTCUSDT'), tick: fixtures.tick });
@@ -21,7 +21,7 @@ describe('EventCapture', () => {
   });
 
   test('last returns most recent event', () => {
-    const bus = new EventBus();
+    const bus = new MockEventBus();
     const capture = new EventCapture(bus);
 
     bus.emit('tick', { symbol: toSymbol('BTCUSDT'), tick: fixtures.tick });
@@ -31,7 +31,7 @@ describe('EventCapture', () => {
   });
 
   test('clear resets all recorded events', () => {
-    const bus = new EventBus();
+    const bus = new MockEventBus();
     const capture = new EventCapture(bus);
 
     bus.emit('tick', { symbol: toSymbol('BTCUSDT'), tick: fixtures.tick });
@@ -41,7 +41,7 @@ describe('EventCapture', () => {
   });
 
   test('dispose stops capturing', () => {
-    const bus = new EventBus();
+    const bus = new MockEventBus();
     const capture = new EventCapture(bus);
 
     capture.dispose();

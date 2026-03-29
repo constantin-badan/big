@@ -33,7 +33,7 @@ module.exports = [
             { sourceTag: 'scope:evolver', onlyDependOnLibsWithTags: ['scope:types',  'scope:test-utils', 'scope:arena'] },
             { sourceTag: 'scope:parity-checker', onlyDependOnLibsWithTags: ['scope:types',  'scope:test-utils', 'scope:backtest-engine', 'scope:reporting', 'scope:storage', 'scope:strategy'] },
             { sourceTag: 'scope:reporting', onlyDependOnLibsWithTags: ['scope:types',  'scope:test-utils'] },
-            { sourceTag: 'scope:test-utils', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus'] },
+            { sourceTag: 'scope:test-utils', onlyDependOnLibsWithTags: ['scope:types', 'scope:event-bus'] }, // event-bus is type-only (IEventBus, TradingEventMap)
             { sourceTag: 'scope:e2e', onlyDependOnLibsWithTags: ['scope:types', 'scope:test-utils', 'scope:event-bus', 'scope:exchange-client', 'scope:indicators', 'scope:scanner', 'scope:risk-manager', 'scope:position-manager', 'scope:margin-guard', 'scope:order-executor', 'scope:data-feed', 'scope:strategy', 'scope:reporting', 'scope:backtest-engine', 'scope:arena', 'scope:evolver', 'scope:parity-checker', 'scope:storage', 'scope:live-runner', 'scope:sweep-engine'] },
           ],
         },
