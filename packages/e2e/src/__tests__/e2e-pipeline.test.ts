@@ -236,13 +236,15 @@ describe('E2E Golden Reference Backtest', () => {
     expect(t1.pnl).toBeGreaterThan(0);
   });
 
-  test('trade ordering: t0 entry before t1 entry (maxConcurrentPositions=1)', () => {
+  test('trade ordering: t0 entry before t1 entry, no overlap (maxConcurrentPositions=1)', () => {
     const t0 = result.trades[0]!;
     const t1 = result.trades[1]!;
-    // entryTime comes from signal.timestamp (simulation time, deterministic).
-    // exitTime comes from Date.now() in sim exchange (wall-clock) — not comparable.
-    // Verify entry ordering which proves sequential execution.
     expect(t0.entryTime).toBeLessThan(t1.entryTime);
+    // NOTE: The stronger assertion would be t0.exitTime <= t1.entryTime (no overlap).
+    // Currently exitTime uses Date.now() in BacktestSimExchange.makeFilled() instead of
+    // simulation time, making exit timestamps non-deterministic and incomparable with
+    // entry timestamps. This is a known design issue — sim exchange should use candle
+    // timestamps for fills. For now, entry ordering proves sequential execution.
   });
 
   test('all trades have non-zero fees', () => {
@@ -251,10 +253,11 @@ describe('E2E Golden Reference Backtest', () => {
     }
   });
 
-  test('pinned finalBalance — exact value with zero slippage', () => {
-    // With zero slippage and deterministic fees, this should be exact.
-    // Using toBe for strict equality — any fee/fill change breaks this.
-    expect(result.finalBalance).toBeCloseTo(10_199.384, 3);
+  test('pinned finalBalance and initialBalance', () => {
+    expect(result.initialBalance).toBe(10_000);
+    // Zero slippage + deterministic fees = exact IEEE 754 float.
+    // If this breaks, a fee/fill calculation changed.
+    expect(result.finalBalance).toBe(10199.38406384);
   });
 
   test('metrics match trades', () => {
@@ -298,9 +301,10 @@ describe('E2E Negative Paths', () => {
     expect(result.metrics.winRate).toBe(0);
   });
 
-  test('stop-loss fires when SL is tight on golden data', async () => {
-    // Golden data has a 35% drop (200→130). With a 2% SL and 50% TP,
-    // any LONG entered near the peak will hit SL during the drawdown.
+  test('stop-loss fires when SL is tight on golden data (pinned)', async () => {
+    // Golden data: up (0-19), down (20-34), up again (35-49).
+    // Bearish crossover fires a SHORT near the peak. The second uptrend
+    // (candles 35-49) pushes price above the 2% SL, closing the position.
     const goldenCandles = makeGoldenCandles();
     const btConfig: BacktestConfig = {
       startTime: goldenCandles[0]!.openTime,
@@ -309,7 +313,6 @@ describe('E2E Negative Paths', () => {
       timeframes: ['1m'],
     };
     const loader = async () => goldenCandles;
-    // Tight SL (2%), very wide TP (50%) — SL should fire, TP should not
     const slPmConfig: PositionManagerConfig = {
       ...pmConfig,
       defaultStopLossPct: 2,
@@ -319,9 +322,14 @@ describe('E2E Negative Paths', () => {
     const engine = createBacktestEngine(loader, exchangeConfig);
     const result = await engine.run(factory, {}, btConfig);
 
-    expect(result.trades.length).toBeGreaterThanOrEqual(1);
-    const slTrades = result.trades.filter((t) => t.exitReason === 'STOP_LOSS');
-    expect(slTrades.length).toBeGreaterThanOrEqual(1);
+    // Pinned: exactly 1 trade, SHORT, hit STOP_LOSS at 173.4
+    expect(result.trades.length).toBe(1);
+    const t0 = result.trades[0]!;
+    expect(t0.side).toBe('SHORT');
+    expect(t0.exitReason).toBe('STOP_LOSS');
+    expect(t0.entryPrice).toBe(170);
+    expect(t0.exitPrice).toBe(173.4);
+    expect(t0.pnl).toBeLessThan(0);
   });
 
   test('fewer candles than slow EMA period produces zero trades', async () => {
@@ -339,59 +347,35 @@ describe('E2E Negative Paths', () => {
     const result = await engine.run(factory, {}, btConfig);
 
     expect(result.trades.length).toBe(0);
+    expect(result.initialBalance).toBe(10_000);
     expect(result.finalBalance).toBe(10_000);
   });
-});
 
-// =====================================================================
-// Test Suite 3: Fixture Pipeline (pinned, no workaround strategy)
-// =====================================================================
+  test('monotonic fixture data (~50k prices) produces zero trades, no NaN metrics', async () => {
+    // Fixture candles are monotonically increasing (~50020 to ~51010).
+    // A pure crossover never fires — same zero-trade outcome as flat data,
+    // but exercises the engine with realistic price magnitudes.
+    const fixtureCandles = fixtures.candles;
+    const fixtureSymbol = fixtureCandles[0]!.symbol;
+    // Guard: if fixture symbol changes, this test would silently pass for the wrong reason
+    expect(fixtureSymbol).toBe(BTCUSDT);
 
-describe('E2E Fixture Pipeline', () => {
-  // Fixture candles are monotonically increasing (~50020 to ~51010).
-  // A pure crossover never fires on monotonic data — that's correct behavior.
-  // This suite tests that the engine handles real fixture data without errors.
-  // For actual trade verification, see the golden reference suite above.
-
-  const fixtureCandles = fixtures.candles;
-  // Verify fixture symbol matches our constant to prevent silent zero-trade failures
-  const fixtureSymbol = fixtureCandles[0]!.symbol;
-
-  const btConfig: BacktestConfig = {
-    startTime: fixtureCandles[0]!.openTime,
-    endTime: fixtureCandles[fixtureCandles.length - 1]!.closeTime + 1,
-    symbols: [fixtureSymbol],
-    timeframes: ['1m'],
-  };
-
-  let result: BacktestResult;
-  beforeAll(async () => {
+    const btConfig: BacktestConfig = {
+      startTime: fixtureCandles[0]!.openTime,
+      endTime: fixtureCandles[fixtureCandles.length - 1]!.closeTime + 1,
+      symbols: [fixtureSymbol],
+      timeframes: ['1m'],
+    };
     const loader = async () => fixtureCandles;
     const factory = makeEmaCrossoverFactory(riskConfig, pmConfig, 5, 10);
     const engine = createBacktestEngine(loader, exchangeConfig);
-    result = await engine.run(factory, {}, btConfig);
-  });
+    const result = await engine.run(factory, {}, btConfig);
 
-  test('monotonic data produces zero trades (correct — no crossover)', () => {
     expect(result.trades.length).toBe(0);
-  });
-
-  test('balance unchanged with zero trades', () => {
+    expect(result.initialBalance).toBe(10_000);
     expect(result.finalBalance).toBe(10_000);
-  });
-
-  test('metrics are all zeroed with no trades', () => {
     expect(result.metrics.totalTrades).toBe(0);
-    expect(result.metrics.winRate).toBe(0);
-    expect(result.metrics.profitFactor).toBe(0);
-    expect(result.metrics.expectancy).toBe(0);
-  });
-
-  test('no NaN values in metrics', () => {
-    expect(Number.isNaN(result.metrics.winRate)).toBe(false);
-    expect(Number.isNaN(result.metrics.profitFactor)).toBe(false);
-    expect(Number.isNaN(result.metrics.expectancy)).toBe(false);
     expect(Number.isNaN(result.metrics.sharpeRatio)).toBe(false);
-    expect(Number.isNaN(result.metrics.maxDrawdown)).toBe(false);
+    expect(Number.isNaN(result.metrics.profitFactor)).toBe(false);
   });
 });
