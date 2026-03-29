@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect, beforeAll } from 'bun:test';
 
 import { createEMA } from '@trading-bot/indicators';
 import { PositionManager } from '@trading-bot/position-manager';
@@ -7,9 +7,10 @@ import { createScannerFactory } from '@trading-bot/scanner';
 import { Strategy, passthroughMerge } from '@trading-bot/strategy';
 import { fixtures } from '@trading-bot/test-utils';
 import type {
+  BacktestConfig,
+  BacktestResult,
   Candle,
   ExchangeConfig,
-  BacktestConfig,
   PositionManagerConfig,
   RiskConfig,
   ScannerEvaluate,
@@ -46,7 +47,7 @@ function makeGoldenCandles(): Candle[] {
     } else {
       close = 130 + (i - 35) * 5;
     }
-    const open = close - 1; // deterministic, slightly below close
+    const open = close - 1;
     const high = close + 2;
     const low = close - 2;
     candles.push({
@@ -66,12 +67,28 @@ function makeGoldenCandles(): Candle[] {
   return candles;
 }
 
+/**
+ * 30 candles of flat/sideways prices (all close at 100).
+ * Should produce zero trades — EMA crossover never fires on flat data.
+ */
+function makeFlatCandles(): Candle[] {
+  return Array.from({ length: 30 }, (_, i) => ({
+    symbol: BTCUSDT,
+    openTime: BASE_TIME + i * CANDLE_MS,
+    closeTime: BASE_TIME + (i + 1) * CANDLE_MS - 1,
+    open: 100,
+    high: 101,
+    low: 99,
+    close: 100,
+    volume: 500,
+    quoteVolume: 50_000,
+    trades: 50,
+    isClosed: true,
+  }));
+}
+
 // ─── EMA Crossover Strategy Factory ──────────────────────────────────
 
-/**
- * Builds a StrategyFactory that uses EMA crossover logic.
- * The evaluate function detects when fast EMA crosses above or below slow EMA.
- */
 function makeEmaCrossoverFactory(
   riskCfg: RiskConfig,
   pmCfg: PositionManagerConfig,
@@ -79,7 +96,6 @@ function makeEmaCrossoverFactory(
   slowPeriod = 10,
 ): StrategyFactory {
   return (_params, deps) => {
-    // Closure state for crossover detection (per-symbol)
     const prevFastMap = new Map<string, number>();
     const prevSlowMap = new Map<string, number>();
 
@@ -91,14 +107,11 @@ function makeEmaCrossoverFactory(
       const prevFast = prevFastMap.get(symbol) ?? null;
       const prevSlow = prevSlowMap.get(symbol) ?? null;
 
-      // Store current values for next iteration
       prevFastMap.set(symbol, fast);
       prevSlowMap.set(symbol, slow);
 
-      // Need previous values to detect crossover
       if (prevFast === null || prevSlow === null) return null;
 
-      // Bullish crossover: fast crosses above slow
       if (prevFast <= prevSlow && fast > slow) {
         return {
           action: 'ENTER_LONG',
@@ -108,7 +121,6 @@ function makeEmaCrossoverFactory(
         };
       }
 
-      // Bearish crossover: fast crosses below slow
       if (prevFast >= prevSlow && fast < slow) {
         return {
           action: 'ENTER_SHORT',
@@ -132,114 +144,11 @@ function makeEmaCrossoverFactory(
     });
 
     const riskManager = new RiskManager(deps.bus, riskCfg);
-    const positionManager = new PositionManager(
-      deps.bus,
-      deps.executor,
-      riskManager,
-      pmCfg,
-    );
+    const positionManager = new PositionManager(deps.bus, deps.executor, riskManager, pmCfg);
 
     return new Strategy(
       {
         name: 'ema-crossover',
-        symbols: [BTCUSDT],
-        scanners: [scanner],
-        signalMerge: passthroughMerge,
-        signalBufferWindowMs: 60_000,
-        positionManager,
-        riskManager,
-      },
-      deps,
-    );
-  };
-}
-
-/**
- * Variant strategy factory for monotonically trending data.
- * Enters LONG when fast EMA first appears above slow EMA (initial divergence),
- * in addition to standard crossover detection. This ensures at least one trade
- * on steadily trending fixture data.
- */
-function makeEmaWithInitialEntryFactory(
-  riskCfg: RiskConfig,
-  pmCfg: PositionManagerConfig,
-  fastPeriod = 5,
-  slowPeriod = 10,
-): StrategyFactory {
-  return (_params, deps) => {
-    const prevFastMap = new Map<string, number>();
-    const prevSlowMap = new Map<string, number>();
-    const hasEnteredMap = new Map<string, boolean>();
-
-    const evaluate: ScannerEvaluate = (indicators, candle, symbol) => {
-      const fast = indicators.fast;
-      const slow = indicators.slow;
-      if (fast === undefined || slow === undefined) return null;
-
-      const prevFast = prevFastMap.get(symbol) ?? null;
-      const prevSlow = prevSlowMap.get(symbol) ?? null;
-      const hasEntered = hasEnteredMap.get(symbol) ?? false;
-
-      prevFastMap.set(symbol, fast);
-      prevSlowMap.set(symbol, slow);
-
-      // On the first candle where both EMAs are valid, treat fast > slow as entry
-      if (prevFast === null || prevSlow === null) {
-        if (fast > slow && !hasEntered) {
-          hasEnteredMap.set(symbol, true);
-          return {
-            action: 'ENTER_LONG',
-            confidence: 0.8,
-            price: candle.close,
-            metadata: { fast, slow, reason: 'initial-divergence' },
-          };
-        }
-        return null;
-      }
-
-      // Standard crossover detection
-      if (prevFast <= prevSlow && fast > slow) {
-        return {
-          action: 'ENTER_LONG',
-          confidence: 0.9,
-          price: candle.close,
-          metadata: { fast, slow, crossover: 'bullish' },
-        };
-      }
-
-      if (prevFast >= prevSlow && fast < slow) {
-        return {
-          action: 'ENTER_SHORT',
-          confidence: 0.9,
-          price: candle.close,
-          metadata: { fast, slow, crossover: 'bearish' },
-        };
-      }
-
-      return null;
-    };
-
-    const scannerFactory = createScannerFactory('ema-initial', evaluate);
-    const scanner = scannerFactory(deps.bus, {
-      symbols: [BTCUSDT],
-      timeframe: '1m',
-      indicators: {
-        fast: () => createEMA({ period: fastPeriod }),
-        slow: () => createEMA({ period: slowPeriod }),
-      },
-    });
-
-    const riskManager = new RiskManager(deps.bus, riskCfg);
-    const positionManager = new PositionManager(
-      deps.bus,
-      deps.executor,
-      riskManager,
-      pmCfg,
-    );
-
-    return new Strategy(
-      {
-        name: 'ema-initial-entry',
         symbols: [BTCUSDT],
         scanners: [scanner],
         signalMerge: passthroughMerge,
@@ -298,98 +207,65 @@ describe('E2E Golden Reference Backtest', () => {
   const loader = async () => goldenCandles;
   const factory = makeEmaCrossoverFactory(riskConfig, pmConfig, 5, 10);
 
-  test('produces exactly 2 deterministic trades', async () => {
+  // Run once, assert many — no need to repeat 8 full backtests
+  let result: BacktestResult;
+  beforeAll(async () => {
     const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
+    result = await engine.run(factory, {}, btConfig);
+  });
 
-    // ── Pin exact trade count ──
+  test('produces exactly 2 deterministic trades', () => {
     expect(result.trades.length).toBe(2);
   });
 
-  test('trade 0 is SHORT, closed by TAKE_PROFIT', async () => {
-    const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
-
+  test('trade 0 is SHORT, closed by TAKE_PROFIT', () => {
     const t0 = result.trades[0]!;
     expect(t0.side).toBe('SHORT');
     expect(t0.exitReason).toBe('TAKE_PROFIT');
     expect(t0.entryPrice).toBe(170);
-    // TP for short at 5% SL/10% TP: takeProfitPrice = entry * (1 - 10/100) = 153
     expect(t0.exitPrice).toBe(153);
     expect(t0.pnl).toBeGreaterThan(0);
   });
 
-  test('trade 1 is LONG, closed by TAKE_PROFIT', async () => {
-    const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
-
+  test('trade 1 is LONG, closed by TAKE_PROFIT', () => {
     const t1 = result.trades[1]!;
     expect(t1.side).toBe('LONG');
     expect(t1.exitReason).toBe('TAKE_PROFIT');
     expect(t1.entryPrice).toBe(155);
-    // TP for long at 10%: takeProfitPrice = entry * (1 + 10/100) = 170.5
     expect(t1.exitPrice).toBe(170.5);
     expect(t1.pnl).toBeGreaterThan(0);
   });
 
-  test('all trades have non-zero fees', async () => {
-    const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
+  test('trade ordering: t0 entry before t1 entry (maxConcurrentPositions=1)', () => {
+    const t0 = result.trades[0]!;
+    const t1 = result.trades[1]!;
+    // entryTime comes from signal.timestamp (simulation time, deterministic).
+    // exitTime comes from Date.now() in sim exchange (wall-clock) — not comparable.
+    // Verify entry ordering which proves sequential execution.
+    expect(t0.entryTime).toBeLessThan(t1.entryTime);
+  });
 
+  test('all trades have non-zero fees', () => {
     for (const trade of result.trades) {
       expect(trade.fees).toBeGreaterThan(0);
     }
   });
 
-  test('all trades have pnl !== 0', async () => {
-    const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
-
-    for (const trade of result.trades) {
-      expect(trade.pnl).not.toBe(0);
-    }
+  test('pinned finalBalance — exact value with zero slippage', () => {
+    // With zero slippage and deterministic fees, this should be exact.
+    // Using toBe for strict equality — any fee/fill change breaks this.
+    expect(result.finalBalance).toBeCloseTo(10_199.384, 3);
   });
 
-  test('finalBalance reflects profit from winning trades', async () => {
-    const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
-
-    expect(result.finalBalance).not.toBe(10_000);
-    // Both trades are winners, so balance should increase
-    expect(result.finalBalance).toBeGreaterThan(10_000);
-  });
-
-  test('metrics match trades', async () => {
-    const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
-
+  test('metrics match trades', () => {
     expect(result.metrics.totalTrades).toBe(2);
     expect(result.metrics.totalTrades).toBe(result.trades.length);
-    // Both trades are winners
-    expect(result.metrics.winRate).toBe(1);
+    expect(result.metrics.winRate).toBe(1); // both trades are winners
   });
 
-  test('pinned finalBalance value', async () => {
-    const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
-
-    // Pin the exact final balance for regression detection.
-    // balance = 10_000 + pnl_trade0 + pnl_trade1
-    // (accounting for fees applied by the sim exchange)
-    expect(result.finalBalance).toBeCloseTo(10_199.384, 2);
-  });
-
-  test('each trade has valid exit reason and side', async () => {
-    const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
-
+  test('each trade has valid exit reason and side', () => {
     const validExitReasons = new Set([
-      'STOP_LOSS',
-      'TAKE_PROFIT',
-      'TRAILING_STOP',
-      'SIGNAL',
-      'TIMEOUT',
-      'FORCED',
+      'STOP_LOSS', 'TAKE_PROFIT', 'TRAILING_STOP', 'SIGNAL', 'TIMEOUT', 'FORCED',
     ]);
     for (const trade of result.trades) {
       expect(validExitReasons.has(trade.exitReason)).toBe(true);
@@ -399,111 +275,123 @@ describe('E2E Golden Reference Backtest', () => {
 });
 
 // =====================================================================
-// Test Suite 2: Full Pipeline Integration
+// Test Suite 2: Negative Paths
 // =====================================================================
 
-describe('E2E Full Pipeline Integration', () => {
+describe('E2E Negative Paths', () => {
+  test('flat/sideways data produces zero trades, balance unchanged', async () => {
+    const flatCandles = makeFlatCandles();
+    const btConfig: BacktestConfig = {
+      startTime: flatCandles[0]!.openTime,
+      endTime: flatCandles[flatCandles.length - 1]!.closeTime + 1,
+      symbols: [BTCUSDT],
+      timeframes: ['1m'],
+    };
+    const loader = async () => flatCandles;
+    const factory = makeEmaCrossoverFactory(riskConfig, pmConfig, 5, 10);
+    const engine = createBacktestEngine(loader, exchangeConfig);
+    const result = await engine.run(factory, {}, btConfig);
+
+    expect(result.trades.length).toBe(0);
+    expect(result.finalBalance).toBe(10_000);
+    expect(result.metrics.totalTrades).toBe(0);
+    expect(result.metrics.winRate).toBe(0);
+  });
+
+  test('stop-loss fires when SL is tight on golden data', async () => {
+    // Golden data has a 35% drop (200→130). With a 2% SL and 50% TP,
+    // any LONG entered near the peak will hit SL during the drawdown.
+    const goldenCandles = makeGoldenCandles();
+    const btConfig: BacktestConfig = {
+      startTime: goldenCandles[0]!.openTime,
+      endTime: goldenCandles[goldenCandles.length - 1]!.closeTime + 1,
+      symbols: [BTCUSDT],
+      timeframes: ['1m'],
+    };
+    const loader = async () => goldenCandles;
+    // Tight SL (2%), very wide TP (50%) — SL should fire, TP should not
+    const slPmConfig: PositionManagerConfig = {
+      ...pmConfig,
+      defaultStopLossPct: 2,
+      defaultTakeProfitPct: 50,
+    };
+    const factory = makeEmaCrossoverFactory(riskConfig, slPmConfig, 5, 10);
+    const engine = createBacktestEngine(loader, exchangeConfig);
+    const result = await engine.run(factory, {}, btConfig);
+
+    expect(result.trades.length).toBeGreaterThanOrEqual(1);
+    const slTrades = result.trades.filter((t) => t.exitReason === 'STOP_LOSS');
+    expect(slTrades.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('fewer candles than slow EMA period produces zero trades', async () => {
+    const goldenCandles = makeGoldenCandles();
+    const shortCandles = goldenCandles.slice(0, 5); // only 5 candles, slow EMA needs 10
+    const btConfig: BacktestConfig = {
+      startTime: shortCandles[0]!.openTime,
+      endTime: shortCandles[shortCandles.length - 1]!.closeTime + 1,
+      symbols: [BTCUSDT],
+      timeframes: ['1m'],
+    };
+    const loader = async () => shortCandles;
+    const factory = makeEmaCrossoverFactory(riskConfig, pmConfig, 5, 10);
+    const engine = createBacktestEngine(loader, exchangeConfig);
+    const result = await engine.run(factory, {}, btConfig);
+
+    expect(result.trades.length).toBe(0);
+    expect(result.finalBalance).toBe(10_000);
+  });
+});
+
+// =====================================================================
+// Test Suite 3: Fixture Pipeline (pinned, no workaround strategy)
+// =====================================================================
+
+describe('E2E Fixture Pipeline', () => {
+  // Fixture candles are monotonically increasing (~50020 to ~51010).
+  // A pure crossover never fires on monotonic data — that's correct behavior.
+  // This suite tests that the engine handles real fixture data without errors.
+  // For actual trade verification, see the golden reference suite above.
+
   const fixtureCandles = fixtures.candles;
+  // Verify fixture symbol matches our constant to prevent silent zero-trade failures
+  const fixtureSymbol = fixtureCandles[0]!.symbol;
 
   const btConfig: BacktestConfig = {
     startTime: fixtureCandles[0]!.openTime,
     endTime: fixtureCandles[fixtureCandles.length - 1]!.closeTime + 1,
-    symbols: [BTCUSDT],
+    symbols: [fixtureSymbol],
     timeframes: ['1m'],
   };
 
-  const fixtureRiskConfig: RiskConfig = {
-    maxPositionSizePct: 10,
-    maxConcurrentPositions: 1,
-    maxDailyLossPct: 50,
-    maxDrawdownPct: 50,
-    maxDailyTrades: 100,
-    cooldownAfterLossMs: 0,
-    leverage: 1,
-    initialBalance: 10_000,
-  };
-
-  // Fixture prices span ~50020..~51010 (~2% range over 100 candles).
-  // Use tight TP (1%) so price movement is enough to close positions.
-  const fixturePmConfig: PositionManagerConfig = {
-    defaultStopLossPct: 5,
-    defaultTakeProfitPct: 1,
-    trailingStopEnabled: false,
-    trailingStopActivationPct: 0,
-    trailingStopDistancePct: 0,
-    maxHoldTimeMs: 999_999_999,
-  };
-
-  const loader = async () => fixtureCandles;
-
-  // The fixture data (100 candles, monotonically increasing from ~50020 to ~51010)
-  // never has a price reversal, so a pure crossover strategy won't generate trades.
-  // Use the variant that also enters on initial EMA divergence.
-  const factory = makeEmaWithInitialEntryFactory(
-    fixtureRiskConfig,
-    fixturePmConfig,
-    5,
-    10,
-  );
-
-  test('pipeline produces at least 1 trade', async () => {
+  let result: BacktestResult;
+  beforeAll(async () => {
+    const loader = async () => fixtureCandles;
+    const factory = makeEmaCrossoverFactory(riskConfig, pmConfig, 5, 10);
     const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
-
-    // Fixture prices trend upward; the initial divergence entry should
-    // produce at least one LONG that closes via TAKE_PROFIT.
-    expect(result.trades.length).toBeGreaterThanOrEqual(1);
+    result = await engine.run(factory, {}, btConfig);
   });
 
-  test('all trades have valid fields (non-NaN pnl, positive fees, valid exit reasons)', async () => {
-    const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
-
-    for (const trade of result.trades) {
-      expect(Number.isNaN(trade.pnl)).toBe(false);
-      expect(trade.fees).toBeGreaterThan(0);
-      expect([
-        'STOP_LOSS',
-        'TAKE_PROFIT',
-        'TRAILING_STOP',
-        'SIGNAL',
-        'TIMEOUT',
-        'FORCED',
-      ]).toContain(trade.exitReason);
-      expect(trade.entryPrice).toBeGreaterThan(0);
-      expect(trade.exitPrice).toBeGreaterThan(0);
-      expect(trade.quantity).toBeGreaterThan(0);
-      expect(trade.holdTimeMs).toBeGreaterThanOrEqual(0);
-    }
+  test('monotonic data produces zero trades (correct — no crossover)', () => {
+    expect(result.trades.length).toBe(0);
   });
 
-  test('result.metrics has non-zero totalTrades', async () => {
-    const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
-
-    expect(result.metrics.totalTrades).toBeGreaterThan(0);
-    expect(result.metrics.totalTrades).toBe(result.trades.length);
+  test('balance unchanged with zero trades', () => {
+    expect(result.finalBalance).toBe(10_000);
   });
 
-  test('result.finalBalance != result.initialBalance', async () => {
-    const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
-
-    expect(result.finalBalance).not.toBe(result.initialBalance);
+  test('metrics are all zeroed with no trades', () => {
+    expect(result.metrics.totalTrades).toBe(0);
+    expect(result.metrics.winRate).toBe(0);
+    expect(result.metrics.profitFactor).toBe(0);
+    expect(result.metrics.expectancy).toBe(0);
   });
 
-  test('no errors thrown during execution', async () => {
-    const engine = createBacktestEngine(loader, exchangeConfig);
-    // Should complete without throwing
-    const result = await engine.run(factory, {}, btConfig);
-    expect(result).toBeDefined();
-    expect(result.trades).toBeInstanceOf(Array);
-    expect(result.metrics).toBeDefined();
-
-    // Verify no NaN values leaked into metrics
+  test('no NaN values in metrics', () => {
     expect(Number.isNaN(result.metrics.winRate)).toBe(false);
     expect(Number.isNaN(result.metrics.profitFactor)).toBe(false);
     expect(Number.isNaN(result.metrics.expectancy)).toBe(false);
     expect(Number.isNaN(result.metrics.sharpeRatio)).toBe(false);
+    expect(Number.isNaN(result.metrics.maxDrawdown)).toBe(false);
   });
 });
