@@ -150,4 +150,43 @@ describe('createSweepEngine', () => {
     expect(results.length).toBe(0);
     expect(calls.length).toBe(0);
   });
+
+  test('maxCombinations limit throws when exceeded', async () => {
+    const { engine } = createMockEngine();
+    const sweep = createSweepEngine(engine);
+
+    // Grid produces 2×2 = 4 combinations, but limit is 2
+    const grid: SweepParamGrid = { a: [1, 2], b: [3, 4] };
+
+    await expect(
+      sweep.run(dummyFactory, grid, btConfig, { maxCombinations: 2 }),
+    ).rejects.toThrow(/exceeds limit of 2/);
+  });
+
+  test('custom scorer function is used for sorting', async () => {
+    const { engine } = createMockEngine();
+    const sweep = createSweepEngine(engine);
+
+    const grid: SweepParamGrid = { a: [1, 2, 3], b: [10] };
+
+    // Default scorer uses profitFactor (= sum of params), so a=3,b=10 → pf=13 would be first.
+    // Custom scorer inverts: lower profitFactor scores higher.
+    const results = await sweep.run(dummyFactory, grid, btConfig, {
+      scorer: (r: BacktestResult) => -r.metrics.profitFactor,
+    });
+
+    expect(results.length).toBe(3);
+
+    // With inverted scorer, the lowest profitFactor (a=1,b=10 → pf=11) should be first
+    expect(results[0]!.params['a']).toBe(1);
+    // And the highest profitFactor (a=3,b=10 → pf=13) should be last
+    expect(results[2]!.params['a']).toBe(3);
+
+    // Verify sort order: scores descending (i.e. -profitFactor descending → profitFactor ascending)
+    for (let i = 1; i < results.length; i++) {
+      const prevPf = results[i - 1]!.result.metrics.profitFactor;
+      const currPf = results[i]!.result.metrics.profitFactor;
+      expect(prevPf).toBeLessThanOrEqual(currPf);
+    }
+  });
 });

@@ -231,6 +231,68 @@ describe('ReplayDataFeed', () => {
 
     expect(capture.count('candle:close')).toBe(0);
   });
+
+  test('deterministic replay: same data produces same event order', async () => {
+    const candles: Candle[] = Array.from({ length: 10 }, (_, i) => makeCandle(i));
+    const candleMap = new Map<string, Candle[]>([
+      ['BTCUSDT:1m', candles.slice(0, 5)],
+      ['ETHUSDT:1m', candles.slice(3, 8)],
+    ]);
+
+    const runs: Array<Array<{ symbol: string; openTime: number }>> = [];
+
+    for (let run = 0; run < 2; run++) {
+      const { bus, capture }: { bus: IEventBus; capture: EventCapture } = createTestBus();
+      const feed = new ReplayDataFeed(bus, candleMap);
+      await feed.start(['BTCUSDT', 'ETHUSDT'], ['1m']);
+      runs.push(
+        capture.get('candle:close').map((e) => ({ symbol: e.symbol, openTime: e.candle.openTime })),
+      );
+    }
+
+    expect(runs[0]).toEqual(runs[1]);
+    expect(runs[0]!.length).toBeGreaterThan(0);
+  });
+
+  test('empty symbols array replays all symbols', async () => {
+    const { bus, capture }: { bus: IEventBus; capture: EventCapture } = createTestBus();
+
+    const btcCandles: Candle[] = [makeCandle(0), makeCandle(1)];
+    const ethCandles: Candle[] = [makeCandle(2), makeCandle(3)];
+    const candleMap = new Map<string, Candle[]>([
+      ['BTCUSDT:1m', btcCandles],
+      ['ETHUSDT:1m', ethCandles],
+    ]);
+
+    const feed = new ReplayDataFeed(bus, candleMap);
+    // Empty symbols array should replay all symbols
+    await feed.start([], ['1m']);
+
+    const events = capture.get('candle:close');
+    expect(events).toHaveLength(4);
+
+    const symbols = new Set(events.map((e) => e.symbol));
+    expect(symbols.has('BTCUSDT')).toBe(true);
+    expect(symbols.has('ETHUSDT')).toBe(true);
+  });
+
+  test('gap detection emits error event for missing candles', async () => {
+    const { bus, capture }: { bus: IEventBus; capture: EventCapture } = createTestBus();
+
+    // Create candles with a gap: index 0, 1, then skip 2, place candle at index 3
+    const candlesWithGap: Candle[] = [makeCandle(0), makeCandle(1), makeCandle(3)];
+    const candleMap = new Map<string, Candle[]>([['BTCUSDT:1m', candlesWithGap]]);
+
+    const feed = new ReplayDataFeed(bus, candleMap);
+    await feed.start(['BTCUSDT'], ['1m']);
+
+    const errors = capture.get('error');
+    expect(errors.length).toBeGreaterThanOrEqual(1);
+
+    const gapError = errors.find((e) => e.source === 'data-feed');
+    expect(gapError).toBeDefined();
+    expect(gapError!.error.message).toContain('Candle gap detected');
+  });
 });
 
 // === LiveDataFeed tests ===

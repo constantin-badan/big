@@ -348,4 +348,177 @@ describe('RiskManager', () => {
       expect(result2.severity).toBe('KILL');
     }
   });
+
+  // ── additional coverage ─────────────────────────────────────────────────────
+
+  test('MAX_POSITION_SIZE rejection when balance is zero', () => {
+    // To reach the MAX_POSITION_SIZE check (step 7) without tripping MAX_DRAWDOWN
+    // first (step 6), we use entryPrice=0 which makes adjustedEntry=0 and
+    // quantity=Infinity (not finite). We also drain balance to 0 via a large loss
+    // spread across days to confirm that zero balance produces quantity=NaN.
+    // maxDailyLossPct=100 and maxDrawdownPct=100 are set to maximise headroom.
+    // Because the drawdown check uses >=, a 100% drawdown still triggers it,
+    // so we leave a tiny residual balance (0.01) to keep drawdown at 99.9999%.
+    const permissiveConfig: RiskConfig = {
+      ...DEFAULT_CONFIG,
+      maxDailyLossPct: 100,
+      maxDrawdownPct: 100,
+    };
+    const rm = new RiskManager(bus, permissiveConfig);
+
+    // Day 1: lose most of the balance
+    const day1Time = BASE_TIME + 1000;
+    bus.emit('position:closed', {
+      position: fixtures.openLong,
+      trade: makeTrade(-9999.99, day1Time),
+    });
+
+    // balance is now 0.01, drawdown = (10000 - 0.01) / 10000 = 99.999% < 100%
+    // daily PnL = -9999.99 which equals -10000 threshold → need to check:
+    // threshold = -(10000 * 100 / 100) = -10000, dailyPnl = -9999.99 > -10000 → OK
+
+    // Signal after cooldown
+    const signal = makeSignal(day1Time + DEFAULT_CONFIG.cooldownAfterLossMs + 1000);
+    // Use entryPrice=0 to force quantity to be non-finite (Infinity)
+    const result = rm.checkEntry(signal, 0);
+    expect(result.allowed).toBe(false);
+    if (!result.allowed) {
+      expect(result.rule).toBe('MAX_POSITION_SIZE');
+      expect(result.severity).toBe('REJECT');
+    }
+  });
+
+  describe('constructor validation', () => {
+    test('constructor throws for invalid maxPositionSizePct (0)', () => {
+      expect(() => {
+        new RiskManager(bus, { ...DEFAULT_CONFIG, maxPositionSizePct: 0 });
+      }).toThrow('maxPositionSizePct must be in (0, 100]');
+    });
+
+    test('constructor throws for invalid maxDailyLossPct (0)', () => {
+      expect(() => {
+        new RiskManager(bus, { ...DEFAULT_CONFIG, maxDailyLossPct: 0 });
+      }).toThrow('maxDailyLossPct must be in (0, 100]');
+    });
+
+    test('constructor throws for invalid leverage (0)', () => {
+      expect(() => {
+        new RiskManager(bus, { ...DEFAULT_CONFIG, leverage: 0 });
+      }).toThrow('leverage must be > 0');
+    });
+  });
+
+  test('cooldown boundary: exactly at cooldownAfterLossMs does NOT trigger cooldown', () => {
+    const lossTime = BASE_TIME;
+    bus.emit('position:closed', {
+      position: fixtures.openLong,
+      trade: makeTrade(-50, lossTime),
+    });
+
+    // Signal arrives exactly at cooldownAfterLossMs — the check is strict <, so equality is allowed
+    const signal = makeSignal(lossTime + DEFAULT_CONFIG.cooldownAfterLossMs);
+    const result = riskManager.checkEntry(signal, 50020);
+    // Should NOT be rejected by COOLDOWN (may still be allowed overall)
+    if (!result.allowed) {
+      expect(result.rule).not.toBe('COOLDOWN');
+    } else {
+      expect(result.allowed).toBe(true);
+    }
+  });
+
+  test('expectedSlippageBps adjusts quantity calculation', () => {
+    const configNoSlippage: RiskConfig = { ...DEFAULT_CONFIG };
+    const configWithSlippage: RiskConfig = { ...DEFAULT_CONFIG, expectedSlippageBps: 50 }; // 50 bps = 0.5%
+
+    const rmNoSlippage = new RiskManager(bus, configNoSlippage);
+    const rmWithSlippage = new RiskManager(bus, configWithSlippage);
+
+    const entryPrice = 50020;
+    const resultNoSlippage = rmNoSlippage.checkEntry(LONG_SIGNAL, entryPrice);
+    const resultWithSlippage = rmWithSlippage.checkEntry(LONG_SIGNAL, entryPrice);
+
+    expect(resultNoSlippage.allowed).toBe(true);
+    expect(resultWithSlippage.allowed).toBe(true);
+    if (resultNoSlippage.allowed && resultWithSlippage.allowed) {
+      // With slippage, adjusted entry is higher → quantity should be smaller
+      expect(resultWithSlippage.quantity).toBeLessThan(resultNoSlippage.quantity);
+
+      // Verify exact values:
+      // noSlippage: quantity = (10000 * 0.05 * 1) / 50020
+      // withSlippage: quantity = (10000 * 0.05 * 1) / (50020 * (1 + 50/10000))
+      const expectedNoSlippage = (10000 * 0.05 * 1) / entryPrice;
+      const expectedWithSlippage = (10000 * 0.05 * 1) / (entryPrice * (1 + 50 / 10_000));
+      expect(resultNoSlippage.quantity).toBeCloseTo(expectedNoSlippage, 8);
+      expect(resultWithSlippage.quantity).toBeCloseTo(expectedWithSlippage, 8);
+    }
+  });
+
+  test('MAX_DAILY_LOSS kill switch clears at day boundary', () => {
+    // Trigger MAX_DAILY_LOSS: lose more than 2% of 10000 = -200
+    const tradeTime = BASE_TIME + 1000;
+    bus.emit('position:closed', {
+      position: fixtures.openLong,
+      trade: makeTrade(-201, tradeTime),
+    });
+
+    // checkEntry to activate the kill switch (after cooldown)
+    const signal1 = makeSignal(tradeTime + DEFAULT_CONFIG.cooldownAfterLossMs + 1000);
+    const result1 = riskManager.checkEntry(signal1, 50020);
+    expect(result1.allowed).toBe(false);
+    if (!result1.allowed) {
+      expect(result1.rule).toBe('MAX_DAILY_LOSS');
+    }
+    expect(riskManager.isKillSwitchActive()).toBe(true);
+
+    // Emit a position:closed on the next day to trigger daily reset
+    bus.emit('position:closed', {
+      position: fixtures.openLong,
+      trade: makeTrade(0, NEXT_DAY_TIME),
+    });
+
+    // Kill switch should have cleared because it was MAX_DAILY_LOSS
+    expect(riskManager.isKillSwitchActive()).toBe(false);
+  });
+
+  test('MAX_DRAWDOWN kill switch persists across day boundaries', () => {
+    // Trigger MAX_DRAWDOWN: lose > 10% of 10000 = 1000 spread across days
+    // to avoid hitting MAX_DAILY_LOSS first (threshold -200 per day)
+    for (let day = 0; day < 6; day++) {
+      const dayTime = NEXT_DAY_TIME + day * 86_400_000;
+      bus.emit('position:closed', {
+        position: fixtures.openLong,
+        trade: makeTrade(-199, dayTime),
+      });
+    }
+    // balance = 10000 - 6*199 = 8806 → drawdown = 11.94% >= 10%
+
+    // checkEntry to activate the kill switch (on the next day, after cooldown)
+    const signalTime = NEXT_DAY_TIME + 6 * 86_400_000 + DEFAULT_CONFIG.cooldownAfterLossMs + 1000;
+    const signal1 = makeSignal(signalTime);
+    const result1 = riskManager.checkEntry(signal1, 50020);
+    expect(result1.allowed).toBe(false);
+    if (!result1.allowed) {
+      expect(result1.rule).toBe('MAX_DRAWDOWN');
+    }
+    expect(riskManager.isKillSwitchActive()).toBe(true);
+
+    // Cross another day boundary via a position:closed event
+    const nextDayAfterKill = NEXT_DAY_TIME + 7 * 86_400_000;
+    bus.emit('position:closed', {
+      position: fixtures.openLong,
+      trade: makeTrade(0, nextDayAfterKill),
+    });
+
+    // MAX_DRAWDOWN kill switch should still be active — it does NOT reset at day boundaries
+    expect(riskManager.isKillSwitchActive()).toBe(true);
+
+    // Verify checkEntry still blocks
+    const signal2 = makeSignal(nextDayAfterKill + 1000);
+    const result2 = riskManager.checkEntry(signal2, 50020);
+    expect(result2.allowed).toBe(false);
+    if (!result2.allowed) {
+      expect(result2.rule).toBe('MAX_DRAWDOWN');
+      expect(result2.severity).toBe('KILL');
+    }
+  });
 });

@@ -377,6 +377,58 @@ describe('BacktestSimExchange', () => {
     expect(result.status).toBe('FILLED');
   });
 
+  test('LIMIT order with undefined price is rejected', () => {
+    const { exchange } = createExchange();
+    const result = exchange.simulateFill({
+      symbol: 'BTCUSDT',
+      side: 'BUY',
+      type: 'LIMIT',
+      quantity: 1,
+      // price intentionally omitted
+    });
+    expect(result.status).toBe('REJECTED');
+  });
+
+  test('STOP_MARKET with undefined stopPrice is rejected', () => {
+    const { exchange } = createExchange();
+    const result = exchange.simulateFill({
+      symbol: 'BTCUSDT',
+      side: 'BUY',
+      type: 'STOP_MARKET',
+      quantity: 1,
+      // stopPrice intentionally omitted
+    });
+    expect(result.status).toBe('REJECTED');
+  });
+
+  test('TAKE_PROFIT_MARKET with undefined stopPrice is rejected', () => {
+    const { exchange } = createExchange();
+    const result = exchange.simulateFill({
+      symbol: 'BTCUSDT',
+      side: 'SELL',
+      type: 'TAKE_PROFIT_MARKET',
+      quantity: 1,
+      // stopPrice intentionally omitted
+    });
+    expect(result.status).toBe('REJECTED');
+  });
+
+  test('LIMIT order uses maker fee rate', () => {
+    const { exchange } = createExchange(0); // zero slippage
+    const result = exchange.simulateFill({
+      symbol: 'BTCUSDT',
+      side: 'BUY',
+      type: 'LIMIT',
+      quantity: 2,
+      price: 50_000, // equal to current price → fills
+    });
+    expect(result.status).toBe('FILLED');
+    // commission = quantity * fillPrice * maker rate = 2 * 50000 * 0.0002 = 20
+    expect(result.commission).toBeCloseTo(20, 2);
+    // Verify it differs from taker rate: 2 * 50000 * 0.0004 = 40
+    expect(result.commission).not.toBeCloseTo(40, 2);
+  });
+
   test('dispose unsubscribes from candle:close', () => {
     const { bus, exchange } = createExchange();
     exchange.dispose();
@@ -406,6 +458,38 @@ describe('createBacktestEngine', () => {
     expect(() => {
       createBacktestEngine(async () => [], liveConfig);
     }).toThrow("requires 'backtest-sim' config");
+  });
+
+  test('backtest config validation: startTime >= endTime throws', async () => {
+    const candles = makeCandles(5, 50_000);
+    const loader = async () => candles;
+    const engine = createBacktestEngine(loader, simConfig);
+    const factory = tradingFactory(100, 200);
+
+    await expect(
+      engine.run(factory, {}, {
+        startTime: BASE_TIME + 100 * 60_000,
+        endTime: BASE_TIME, // endTime before startTime
+        symbols: ['BTCUSDT'],
+        timeframes: ['1m'],
+      }),
+    ).rejects.toThrow('startTime must be < endTime');
+  });
+
+  test('backtest config validation: empty symbols throws', async () => {
+    const candles = makeCandles(5, 50_000);
+    const loader = async () => candles;
+    const engine = createBacktestEngine(loader, simConfig);
+    const factory = tradingFactory(100, 200);
+
+    await expect(
+      engine.run(factory, {}, {
+        startTime: BASE_TIME,
+        endTime: BASE_TIME + 100 * 60_000,
+        symbols: [],
+        timeframes: ['1m'],
+      }),
+    ).rejects.toThrow('symbols must not be empty');
   });
 
   test('full E2E: trades collected and metrics computed', async () => {

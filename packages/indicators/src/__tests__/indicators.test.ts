@@ -90,6 +90,10 @@ describe('SMA', () => {
     expect(b.update(fixtures.candles[0]!)).toBeNull();
   });
 
+  test('constructor throws for period 0', () => {
+    expect(() => new SMA({ period: 0 })).toThrow();
+  });
+
   test('name and warmupPeriod are correct', () => {
     const sma = new SMA({ period: 10 });
     expect(sma.name).toBe('SMA');
@@ -189,6 +193,27 @@ describe('RSI', () => {
     expect(last).toBe(80);
   });
 
+  test('RSI with all-down candles returns 0', () => {
+    const rsi = new RSI({ period: 3 });
+    // Strictly decreasing closes: 100, 98, 97, 95
+    const downCandles = [100, 98, 97, 95].map((close, i) =>
+      makeCandle({ close, openTime: i * 60000 }),
+    );
+    const results = feedAll(rsi, downCandles);
+    // After 4 candles (period+1), avgGain=0, all losses → RSI = 0
+    expect(results[3]).toBe(0);
+  });
+
+  test('RSI with flat prices returns 50', () => {
+    const rsi = new RSI({ period: 3 });
+    // All same close price → avgGain=0, avgLoss=0 → RSI = 50
+    const flatCandles = [50, 50, 50, 50].map((close, i) =>
+      makeCandle({ close, openTime: i * 60000 }),
+    );
+    const results = feedAll(rsi, flatCandles);
+    expect(results[3]).toBe(50);
+  });
+
   test('known value: all-up fixture candles → RSI(3) = 100 after warmup', () => {
     // fixture candles all increase, so no losses → RSI = 100
     const rsi = new RSI({ period: 3 });
@@ -250,6 +275,25 @@ describe('ATR', () => {
       last = atr.update(fixtures.candles[i]!);
     }
     expect(last).toBe(80);
+  });
+
+  test('ATR with prevClose-dominant true range', () => {
+    const atr = new ATR({ period: 2 });
+    // Candle 0: high=105, low=95, close=100 → TR = 105-95 = 10 (no prevClose)
+    // Candle 1: high=102, low=99, close=101 → high-low=3, |high-prevClose|=|102-100|=2, |low-prevClose|=|99-100|=1 → TR=3
+    // But we want prevClose-dominant, so construct candle 1 with a gap:
+    // prevClose=100, candle1: high=103, low=101 → high-low=2, |high-prevClose|=3, |low-prevClose|=1 → TR=3 (prevClose-dominant)
+    const candle0 = makeCandle({ close: 100, high: 105, low: 95, openTime: 0 });
+    // After candle0, prevClose=100. Now a narrow candle far from prevClose:
+    // high=110, low=108 → high-low=2, |110-100|=10, |108-100|=8 → TR=10 (prevClose-dominant)
+    const candle1 = makeCandle({ close: 109, high: 110, low: 108, openTime: 60000 });
+    atr.update(candle0);
+    const result = atr.update(candle1);
+    // ATR(2) = SMA(10, 10) = 10
+    // candle0 TR = 105-95 = 10, candle1 TR = max(2, 10, 8) = 10
+    expect(result).toBe(10);
+    // Verify that high-low (2) is less than |high-prevClose| (10) — confirming prevClose dominance
+    expect(110 - 108).toBeLessThan(Math.abs(110 - 100));
   });
 
   test('reset: same candles produce same output after reset()', () => {
@@ -353,6 +397,14 @@ describe('VWAP', () => {
     // After session reset, VWAP should equal the typical price of day1Candle only
     const expectedTypical = (day1Candle.high + day1Candle.low + day1Candle.close) / 3;
     expect(day1Result).toBeCloseTo(expectedTypical, 6);
+  });
+
+  test('VWAP returns null when volume is zero', () => {
+    const vwap = new VWAP({});
+    const result = vwap.update(
+      makeCandle({ close: 100, high: 110, low: 90, volume: 0, openTime: 0 }),
+    );
+    expect(result).toBeNull();
   });
 
   test('session reset respects resetOffsetMs', () => {

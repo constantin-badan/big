@@ -186,4 +186,52 @@ describe('parity-checker', () => {
     const result1m = await checker1m.compare('test', stubFactory, {}, PERIOD);
     expect(result1m.matched).toHaveLength(0);
   });
+
+  test('pearson correlation of identical arrays is 1.0', async () => {
+    // Create 5 matched trade pairs with identical PnL values.
+    // pearsonCorrelation is exercised through pnlCorrelation in the summary.
+    const liveTrades = Array.from({ length: 5 }, (_, i) =>
+      makeTrade(`live-${i}`, {
+        entryTime: BASE_TIME + i * 60_000,
+        pnl: 10 + i * 5,
+      }),
+    );
+    const btTrades = Array.from({ length: 5 }, (_, i) =>
+      makeTrade(`bt-${i}`, {
+        entryTime: BASE_TIME + i * 60_000,
+        pnl: 10 + i * 5,
+      }),
+    );
+
+    const checker = createParityChecker(mockEngine(btTrades), mockTradeStore(liveTrades), ['1m']);
+    const result = await checker.compare('test', stubFactory, {}, PERIOD);
+
+    expect(result.matched).toHaveLength(5);
+    expect(result.summary.pnlCorrelation).toBeCloseTo(1.0, 10);
+  });
+
+  test('pearson correlation of perfectly inverse arrays is -1.0', async () => {
+    // Create 5 matched trade pairs where live PnL and backtest PnL are perfectly inversely correlated.
+    const pnlValues = [10, 20, 30, 40, 50];
+    const liveTrades = pnlValues.map((pnl, i) =>
+      makeTrade(`live-${i}`, {
+        entryTime: BASE_TIME + i * 60_000,
+        pnl,
+      }),
+    );
+    // Inverse: when live goes up, backtest goes down by the same amount
+    const inversePnlValues = [50, 40, 30, 20, 10];
+    const btTrades = inversePnlValues.map((pnl, i) =>
+      makeTrade(`bt-${i}`, {
+        entryTime: BASE_TIME + i * 60_000,
+        pnl,
+      }),
+    );
+
+    const checker = createParityChecker(mockEngine(btTrades), mockTradeStore(liveTrades), ['1m']);
+    const result = await checker.compare('test', stubFactory, {}, PERIOD);
+
+    expect(result.matched).toHaveLength(5);
+    expect(result.summary.pnlCorrelation).toBeCloseTo(-1.0, 10);
+  });
 });

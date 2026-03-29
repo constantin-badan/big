@@ -545,6 +545,251 @@ describe('PositionManager', () => {
     });
   });
 
+  // ─── SHORT position: SL exit via tick ────────────────────────────────────
+  describe('SHORT position: SL exit via tick', () => {
+    test('tick at or above stopPrice triggers STOP_LOSS for SHORT', () => {
+      const config = makeConfig({ defaultStopLossPct: 2 });
+      const riskMgr = makeMockRiskManager(true, 0.1);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+
+      bus.emit('signal', { signal: SHORT_SIGNAL });
+      expect(pm.getState(SYMBOL)).toBe('OPEN');
+      capture.clear();
+
+      // SHORT stop price is above entry: signalPrice * (1 + SL%/100)
+      // onSignal uses lastTickPrice ?? signal.price — no prior tick, so signal.price is used
+      const signalPrice = SHORT_SIGNAL.price;
+      const stopPrice = signalPrice * (1 + config.defaultStopLossPct / 100);
+      const tickTimestamp: number = fixtures.tick.timestamp;
+      bus.emit('tick', {
+        symbol: SYMBOL,
+        tick: {
+          symbol: SYMBOL,
+          price: stopPrice + 10,
+          quantity: 1,
+          timestamp: tickTimestamp + 1000,
+          isBuyerMaker: false,
+        },
+      });
+
+      expect(capture.count('position:closed')).toBe(1);
+      expect(capture.last('position:closed')?.trade.exitReason).toBe('STOP_LOSS');
+      expect(pm.getState(SYMBOL)).toBe('IDLE');
+
+      pm.dispose();
+    });
+  });
+
+  // ─── SHORT position: TP exit via tick ──────────────────────────────────────
+  describe('SHORT position: TP exit via tick', () => {
+    test('tick at or below takeProfitPrice triggers TAKE_PROFIT for SHORT', () => {
+      const config = makeConfig({ defaultTakeProfitPct: 4 });
+      const riskMgr = makeMockRiskManager(true, 0.1);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+
+      bus.emit('signal', { signal: SHORT_SIGNAL });
+      expect(pm.getState(SYMBOL)).toBe('OPEN');
+      capture.clear();
+
+      // SHORT TP price is below entry: signalPrice * (1 - TP%/100)
+      // onSignal uses lastTickPrice ?? signal.price — no prior tick, so signal.price is used
+      const signalPrice = SHORT_SIGNAL.price;
+      const tpPrice = signalPrice * (1 - config.defaultTakeProfitPct / 100);
+      const tickTimestamp: number = fixtures.tick.timestamp;
+      bus.emit('tick', {
+        symbol: SYMBOL,
+        tick: {
+          symbol: SYMBOL,
+          price: tpPrice - 10,
+          quantity: 1,
+          timestamp: tickTimestamp + 1000,
+          isBuyerMaker: false,
+        },
+      });
+
+      expect(capture.count('position:closed')).toBe(1);
+      expect(capture.last('position:closed')?.trade.exitReason).toBe('TAKE_PROFIT');
+      expect(pm.getState(SYMBOL)).toBe('IDLE');
+
+      pm.dispose();
+    });
+  });
+
+  // ─── SHORT position: trailing stop activation and breach ───────────────────
+  describe('SHORT position: trailing stop activation and breach', () => {
+    test('price drops to activate, then rises to breach trailing stop for SHORT', () => {
+      const config = makeConfig({
+        trailingStopEnabled: true,
+        trailingStopActivationPct: 1,
+        trailingStopDistancePct: 0.5,
+        defaultStopLossPct: 10,
+        defaultTakeProfitPct: 20,
+      });
+      const riskMgr = makeMockRiskManager(true, 0.1);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+
+      bus.emit('signal', { signal: SHORT_SIGNAL });
+      expect(pm.getState(SYMBOL)).toBe('OPEN');
+      capture.clear();
+
+      const baseTimestamp: number = fixtures.tick.timestamp + 1000;
+
+      // Price drops enough to activate: (entry - low) / entry >= 1%
+      const troughPrice = ENTRY_PRICE * (1 - 0.015);
+      bus.emit('tick', {
+        symbol: SYMBOL,
+        tick: {
+          symbol: SYMBOL,
+          price: troughPrice,
+          quantity: 1,
+          timestamp: baseTimestamp,
+          isBuyerMaker: false,
+        },
+      });
+
+      // Price rises enough to breach: (high - peak) / peak >= 0.5%
+      const risePrice = troughPrice * (1 + 0.006);
+      bus.emit('tick', {
+        symbol: SYMBOL,
+        tick: {
+          symbol: SYMBOL,
+          price: risePrice,
+          quantity: 1,
+          timestamp: baseTimestamp + 1000,
+          isBuyerMaker: false,
+        },
+      });
+
+      expect(capture.count('position:closed')).toBe(1);
+      expect(capture.last('position:closed')?.trade.exitReason).toBe('TRAILING_STOP');
+
+      pm.dispose();
+    });
+  });
+
+  // ─── EXIT signal is ignored (no state change) ─────────────────────────────
+  describe('EXIT signal is ignored', () => {
+    test('EXIT signal on an OPEN position does not change state', () => {
+      const riskMgr = makeMockRiskManager(true, 0.1);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, makeConfig());
+
+      bus.emit('signal', { signal: LONG_SIGNAL });
+      expect(pm.getState(SYMBOL)).toBe('OPEN');
+      capture.clear();
+
+      const exitSignal: Signal = {
+        ...LONG_SIGNAL,
+        action: 'EXIT',
+        timestamp: LONG_SIGNAL.timestamp + 1000,
+      };
+      bus.emit('signal', { signal: exitSignal });
+
+      // State should still be OPEN — EXIT is ignored by onSignal
+      expect(pm.getState(SYMBOL)).toBe('OPEN');
+      expect(capture.count('order:submitted')).toBe(0);
+
+      pm.dispose();
+    });
+  });
+
+  // ─── NO_ACTION signal is ignored ──────────────────────────────────────────
+  describe('NO_ACTION signal is ignored', () => {
+    test('NO_ACTION signal does not change IDLE state', () => {
+      const riskMgr = makeMockRiskManager(true, 0.1);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, makeConfig());
+
+      const noActionSignal: Signal = {
+        ...LONG_SIGNAL,
+        action: 'NO_ACTION',
+      };
+      bus.emit('signal', { signal: noActionSignal });
+
+      expect(pm.getState(SYMBOL)).toBe('IDLE');
+      expect(capture.count('order:submitted')).toBe(0);
+
+      pm.dispose();
+    });
+  });
+
+  // ─── risk REJECT severity does NOT emit risk:breach ───────────────────────
+  describe('risk REJECT severity does NOT emit risk:breach', () => {
+    test('REJECT severity blocks entry but does not emit risk:breach', () => {
+      const riskMgr = makeMockRiskManager(false); // returns severity 'REJECT'
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, makeConfig());
+
+      bus.emit('signal', { signal: LONG_SIGNAL });
+
+      expect(capture.count('risk:breach')).toBe(0);
+      expect(capture.count('order:submitted')).toBe(0);
+      expect(pm.getState(SYMBOL)).toBe('IDLE');
+
+      pm.dispose();
+    });
+  });
+
+  // ─── exit order type is STOP_MARKET for SL exit ───────────────────────────
+  describe('exit order type is STOP_MARKET for SL exit', () => {
+    test('SL exit submits an order with type STOP_MARKET', () => {
+      const config = makeConfig({ defaultStopLossPct: 2 });
+      const riskMgr = makeMockRiskManager(true, 0.1);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+
+      bus.emit('signal', { signal: LONG_SIGNAL });
+      expect(pm.getState(SYMBOL)).toBe('OPEN');
+      capture.clear();
+
+      const stopPrice = ENTRY_PRICE * (1 - config.defaultStopLossPct / 100);
+      const tickTimestamp: number = fixtures.tick.timestamp;
+      bus.emit('tick', {
+        symbol: SYMBOL,
+        tick: {
+          symbol: SYMBOL,
+          price: stopPrice - 10,
+          quantity: 1,
+          timestamp: tickTimestamp + 1000,
+          isBuyerMaker: false,
+        },
+      });
+
+      expect(capture.count('order:submitted')).toBe(1);
+      const submitted = capture.last('order:submitted');
+      expect(submitted?.receipt.type).toBe('STOP_MARKET');
+
+      pm.dispose();
+    });
+  });
+
+  // ─── exit order type is MARKET for timeout exit ───────────────────────────
+  describe('exit order type is MARKET for timeout exit', () => {
+    test('timeout exit submits an order with type MARKET', () => {
+      const config = makeConfig({ maxHoldTimeMs: 5000 });
+      const riskMgr = makeMockRiskManager(true, 0.1);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+
+      const entryTimestamp: number = LONG_SIGNAL.timestamp;
+      bus.emit('signal', { signal: LONG_SIGNAL });
+      expect(pm.getState(SYMBOL)).toBe('OPEN');
+      capture.clear();
+
+      bus.emit('tick', {
+        symbol: SYMBOL,
+        tick: {
+          symbol: SYMBOL,
+          price: ENTRY_PRICE,
+          quantity: 1,
+          timestamp: entryTimestamp + 6000,
+          isBuyerMaker: false,
+        },
+      });
+
+      expect(capture.count('order:submitted')).toBe(1);
+      const submitted = capture.last('order:submitted');
+      expect(submitted?.receipt.type).toBe('MARKET');
+
+      pm.dispose();
+    });
+  });
+
   // ─── Additional: EventCapture integration ─────────────────────────────────
   describe('EventCapture integration', () => {
     test('EventCapture records all expected events during full trade lifecycle', () => {
