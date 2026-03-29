@@ -19,3 +19,4 @@ config.prod.*
 # Databases
 *.db
 *.sqlite
+data
