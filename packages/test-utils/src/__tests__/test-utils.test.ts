@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 
 import { EventBus } from '@trading-bot/event-bus';
+import { toSymbol } from '@trading-bot/types';
 
 import { EventCapture } from '../event-capture';
 import { fixtures } from '../fixtures';
@@ -13,27 +14,27 @@ describe('EventCapture', () => {
     const bus = new EventBus();
     const capture = new EventCapture(bus);
 
-    bus.emit('tick', { symbol: 'BTCUSDT', tick: fixtures.tick });
+    bus.emit('tick', { symbol: toSymbol('BTCUSDT'), tick: fixtures.tick });
 
     expect(capture.count('tick')).toBe(1);
-    expect(capture.get('tick')[0]?.symbol).toBe('BTCUSDT');
+    expect(capture.get('tick')[0]?.symbol).toBe(toSymbol('BTCUSDT'));
   });
 
   test('last returns most recent event', () => {
     const bus = new EventBus();
     const capture = new EventCapture(bus);
 
-    bus.emit('tick', { symbol: 'BTCUSDT', tick: fixtures.tick });
-    bus.emit('tick', { symbol: 'ETHUSDT', tick: { ...fixtures.tick, symbol: 'ETHUSDT' } });
+    bus.emit('tick', { symbol: toSymbol('BTCUSDT'), tick: fixtures.tick });
+    bus.emit('tick', { symbol: toSymbol('ETHUSDT'), tick: { ...fixtures.tick, symbol: toSymbol('ETHUSDT') } });
 
-    expect(capture.last('tick')?.symbol).toBe('ETHUSDT');
+    expect(capture.last('tick')?.symbol).toBe(toSymbol('ETHUSDT'));
   });
 
   test('clear resets all recorded events', () => {
     const bus = new EventBus();
     const capture = new EventCapture(bus);
 
-    bus.emit('tick', { symbol: 'BTCUSDT', tick: fixtures.tick });
+    bus.emit('tick', { symbol: toSymbol('BTCUSDT'), tick: fixtures.tick });
     capture.clear();
 
     expect(capture.count('tick')).toBe(0);
@@ -44,7 +45,7 @@ describe('EventCapture', () => {
     const capture = new EventCapture(bus);
 
     capture.dispose();
-    bus.emit('tick', { symbol: 'BTCUSDT', tick: fixtures.tick });
+    bus.emit('tick', { symbol: toSymbol('BTCUSDT'), tick: fixtures.tick });
 
     expect(capture.count('tick')).toBe(0);
   });
@@ -54,7 +55,7 @@ describe('createTestBus', () => {
   test('returns bus and capture pre-wired', () => {
     const { bus, capture } = createTestBus();
 
-    bus.emit('tick', { symbol: 'BTCUSDT', tick: fixtures.tick });
+    bus.emit('tick', { symbol: toSymbol('BTCUSDT'), tick: fixtures.tick });
 
     expect(capture.count('tick')).toBe(1);
   });
@@ -64,10 +65,10 @@ describe('createMockExchange', () => {
   test('returns an IExchange where all methods resolve', async () => {
     const exchange = createMockExchange();
 
-    const candles = await exchange.getCandles('BTCUSDT', '1m', 100);
+    const candles = await exchange.getCandles(toSymbol('BTCUSDT'), '1m', 100);
     expect(candles).toEqual([]);
 
-    const position = await exchange.getPosition('BTCUSDT');
+    const position = await exchange.getPosition(toSymbol('BTCUSDT'));
     expect(position).toBeNull();
 
     expect(exchange.isConnected()).toBe(false);
@@ -77,7 +78,7 @@ describe('createMockExchange', () => {
 
   test('returns configured candles', async () => {
     const exchange = createMockExchange({ candles: fixtures.candles });
-    const result = await exchange.getCandles('BTCUSDT', '1m', 100);
+    const result = await exchange.getCandles(toSymbol('BTCUSDT'), '1m', 100);
     expect(result).toHaveLength(100);
   });
 });
@@ -88,13 +89,13 @@ describe('createMockExecutor', () => {
     const executor = createMockExecutor(bus, { syncFill: true });
 
     const receipt = executor.submit({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 0.1,
     });
 
-    expect(receipt.symbol).toBe('BTCUSDT');
+    expect(receipt.symbol).toBe(toSymbol('BTCUSDT'));
     expect(capture.count('order:submitted')).toBe(1);
     expect(capture.count('order:filled')).toBe(1);
   });
@@ -104,7 +105,7 @@ describe('createMockExecutor', () => {
     const executor = createMockExecutor(bus, { syncFill: false });
 
     executor.submit({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 0.1,
@@ -119,7 +120,7 @@ describe('createMockExecutor', () => {
     const executor = createMockExecutor(bus, { rejectAll: true });
 
     executor.submit({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 0.1,

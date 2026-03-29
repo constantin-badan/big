@@ -8,9 +8,11 @@ import type {
   OrderRequest,
   OrderResult,
   Position,
+  Symbol,
   Tick,
   Timeframe,
 } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 export interface MockExchangeConfig {
   candles?: Candle[];
@@ -22,7 +24,7 @@ export interface MockExchangeConfig {
 export function createMockExchange(config?: MockExchangeConfig): IExchange {
   const candles = config?.candles ?? [];
   const orderBook = config?.orderBook ?? {
-    symbol: '',
+    symbol: toSymbol(''),
     timestamp: 0,
     bids: [],
     asks: [],
@@ -39,16 +41,16 @@ export function createMockExchange(config?: MockExchangeConfig): IExchange {
       return orderBook;
     },
     subscribeCandles(
-      _symbol: string,
+      _symbol: Symbol,
       _timeframe: Timeframe,
       _callback: (candle: Candle) => void,
     ): () => void {
       return () => {};
     },
-    subscribeTicks(_symbol: string, _callback: (tick: Tick) => void): () => void {
+    subscribeTicks(_symbol: Symbol, _callback: (tick: Tick) => void): () => void {
       return () => {};
     },
-    subscribeOrderBookDiff(_symbol: string, _callback: (diff: OrderBookDiff) => void): () => void {
+    subscribeOrderBookDiff(_symbol: Symbol, _callback: (diff: OrderBookDiff) => void): () => void {
       return () => {};
     },
     async placeOrder(_request: OrderRequest): Promise<OrderResult> {

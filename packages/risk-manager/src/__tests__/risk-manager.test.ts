@@ -3,6 +3,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import type { IEventBus } from '@trading-bot/event-bus';
 import { createTestBus, fixtures } from '@trading-bot/test-utils';
 import type { RiskCheckResult, Signal, TradeRecord } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import { RiskManager } from '../risk-manager';
 import type { RiskConfig } from '../types';
@@ -22,7 +23,7 @@ const DEFAULT_CONFIG: RiskConfig = fixtures.defaultRiskConfig;
 
 function makeSignal(timestamp: number): Signal {
   return {
-    symbol: 'BTCUSDT',
+    symbol: toSymbol('BTCUSDT'),
     action: 'ENTER_LONG',
     confidence: 0.85,
     price: 50020,
@@ -35,7 +36,7 @@ function makeSignal(timestamp: number): Signal {
 function makeTrade(pnl: number, exitTime = BASE_TIME + 3600000): TradeRecord {
   return {
     id: `trade-${exitTime}-${pnl}`,
-    symbol: 'BTCUSDT',
+    symbol: toSymbol('BTCUSDT'),
     side: 'LONG',
     entryPrice: 50000,
     exitPrice: 51000,

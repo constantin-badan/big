@@ -172,7 +172,8 @@ export class Evolver implements IEvolver {
       .sort((a, b) => b.score - a.score);
 
     // 2. Update best params and detect stagnation
-    const topScore = scored[0]?.score ?? -Infinity;
+    let topScore = scored[0]?.score ?? -Infinity;
+    if (!Number.isFinite(topScore)) topScore = -Infinity;
     const topRanking = scored[0]?.ranking;
 
     if (topScore > this._bestScore) {
@@ -236,9 +237,14 @@ export class Evolver implements IEvolver {
         effectiveMutationRate,
       );
       const key = paramsKey(mutated);
-      // Remove old instance regardless — it was not elite
-      this.arena.removeInstance(survivor.ranking.params);
-      if (!seen.has(key)) {
+      // Check for duplicates FIRST — if duplicate, keep the old survivor
+      if (seen.has(key)) {
+        const oldKey = paramsKey(survivor.ranking.params);
+        seen.add(oldKey);
+        newPopulation.push({ ...survivor.ranking.params });
+      } else {
+        // Unique mutation — remove old and add new
+        this.arena.removeInstance(survivor.ranking.params);
         seen.add(key);
         newPopulation.push(mutated);
         this.arena.addInstance(mutated);

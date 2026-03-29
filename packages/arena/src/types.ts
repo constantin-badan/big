@@ -2,6 +2,7 @@ import type { StrategyFactory } from '@trading-bot/strategy';
 import type {
   ExchangeConfig,
   PerformanceMetrics,
+  Symbol,
   Timeframe,
   TradeRecord,
 } from '@trading-bot/types';
@@ -9,7 +10,7 @@ import type {
 export interface ArenaConfig {
   exchangeConfig: ExchangeConfig; // live or testnet (for real market data)
   simExchangeConfig: ExchangeConfig; // backtest-sim (for paper fills)
-  symbols: string[];
+  symbols: Symbol[];
   timeframes: Timeframe[];
   factory: StrategyFactory;
   paramSets: Record<string, number>[]; // N param vectors to run

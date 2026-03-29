@@ -5,6 +5,7 @@ import type { IIndicator } from '@trading-bot/indicators';
 import { createTestBus, fixtures } from '@trading-bot/test-utils';
 import type { EventCapture } from '@trading-bot/test-utils';
 import type { Candle } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import type { ScannerEvaluate, ScannerFactory } from '../index';
 import { Scanner, createScannerFactory } from '../index';
@@ -69,7 +70,7 @@ describe('Scanner', () => {
       bus,
       'test-scanner',
       {
-        symbols: ['BTCUSDT'],
+        symbols: [toSymbol('BTCUSDT')],
         timeframe: '1m',
         indicators: {
           passthrough: () => makePassthroughIndicator(),
@@ -79,12 +80,12 @@ describe('Scanner', () => {
     );
 
     const candle = fixtures.candles[0]!;
-    bus.emit('candle:close', { symbol: 'BTCUSDT', timeframe: '1m', candle });
+    bus.emit('candle:close', { symbol: toSymbol('BTCUSDT'), timeframe: '1m', candle });
 
     expect(capture.count('scanner:signal')).toBe(1);
 
     const event = capture.last('scanner:signal');
-    expect(event?.signal.symbol).toBe('BTCUSDT');
+    expect(event?.signal.symbol).toBe(toSymbol('BTCUSDT'));
     expect(event?.signal.sourceScanner).toBe('test-scanner');
     expect(event?.signal.timestamp).toBe(candle.closeTime);
     expect(event?.signal.price).toBe(candle.close);
@@ -101,7 +102,7 @@ describe('Scanner', () => {
       bus,
       'slow-scanner',
       {
-        symbols: ['BTCUSDT'],
+        symbols: [toSymbol('BTCUSDT')],
         timeframe: '1m',
         indicators: {
           passthrough: () => makePassthroughIndicator(),
@@ -112,12 +113,12 @@ describe('Scanner', () => {
     );
 
     // First two candles: slow indicator still warming up
-    bus.emit('candle:close', { symbol: 'BTCUSDT', timeframe: '1m', candle: fixtures.candles[0]! });
-    bus.emit('candle:close', { symbol: 'BTCUSDT', timeframe: '1m', candle: fixtures.candles[1]! });
+    bus.emit('candle:close', { symbol: toSymbol('BTCUSDT'), timeframe: '1m', candle: fixtures.candles[0]! });
+    bus.emit('candle:close', { symbol: toSymbol('BTCUSDT'), timeframe: '1m', candle: fixtures.candles[1]! });
     expect(capture.count('scanner:signal')).toBe(0);
 
     // Third candle: both indicators warmed up
-    bus.emit('candle:close', { symbol: 'BTCUSDT', timeframe: '1m', candle: fixtures.candles[2]! });
+    bus.emit('candle:close', { symbol: toSymbol('BTCUSDT'), timeframe: '1m', candle: fixtures.candles[2]! });
     expect(capture.count('scanner:signal')).toBe(1);
 
     scanner.dispose();
@@ -130,7 +131,7 @@ describe('Scanner', () => {
       bus,
       'null-scanner',
       {
-        symbols: ['BTCUSDT'],
+        symbols: [toSymbol('BTCUSDT')],
         timeframe: '1m',
         indicators: {
           passthrough: () => makePassthroughIndicator(),
@@ -139,7 +140,7 @@ describe('Scanner', () => {
       nullEvaluate,
     );
 
-    bus.emit('candle:close', { symbol: 'BTCUSDT', timeframe: '1m', candle: fixtures.candles[0]! });
+    bus.emit('candle:close', { symbol: toSymbol('BTCUSDT'), timeframe: '1m', candle: fixtures.candles[0]! });
     expect(capture.count('scanner:signal')).toBe(0);
 
     scanner.dispose();
@@ -152,7 +153,7 @@ describe('Scanner', () => {
       bus,
       'tf-scanner',
       {
-        symbols: ['BTCUSDT'],
+        symbols: [toSymbol('BTCUSDT')],
         timeframe: '1m',
         indicators: {
           passthrough: () => makePassthroughIndicator(),
@@ -162,11 +163,11 @@ describe('Scanner', () => {
     );
 
     // Emit a 5m candle — should be ignored
-    bus.emit('candle:close', { symbol: 'BTCUSDT', timeframe: '5m', candle: fixtures.candles[0]! });
+    bus.emit('candle:close', { symbol: toSymbol('BTCUSDT'), timeframe: '5m', candle: fixtures.candles[0]! });
     expect(capture.count('scanner:signal')).toBe(0);
 
     // Emit the correct 1m candle — should be processed
-    bus.emit('candle:close', { symbol: 'BTCUSDT', timeframe: '1m', candle: fixtures.candles[0]! });
+    bus.emit('candle:close', { symbol: toSymbol('BTCUSDT'), timeframe: '1m', candle: fixtures.candles[0]! });
     expect(capture.count('scanner:signal')).toBe(1);
 
     scanner.dispose();
@@ -182,7 +183,7 @@ describe('Scanner', () => {
       bus,
       'multi-sym-scanner',
       {
-        symbols: ['BTCUSDT', 'ETHUSDT'],
+        symbols: [toSymbol('BTCUSDT'), toSymbol('ETHUSDT')],
         timeframe: '1m',
         indicators: {
           passthrough: () => {
@@ -215,12 +216,12 @@ describe('Scanner', () => {
     );
 
     // Feed 3 candles for BTCUSDT
-    bus.emit('candle:close', { symbol: 'BTCUSDT', timeframe: '1m', candle: fixtures.candles[0]! });
-    bus.emit('candle:close', { symbol: 'BTCUSDT', timeframe: '1m', candle: fixtures.candles[1]! });
-    bus.emit('candle:close', { symbol: 'BTCUSDT', timeframe: '1m', candle: fixtures.candles[2]! });
+    bus.emit('candle:close', { symbol: toSymbol('BTCUSDT'), timeframe: '1m', candle: fixtures.candles[0]! });
+    bus.emit('candle:close', { symbol: toSymbol('BTCUSDT'), timeframe: '1m', candle: fixtures.candles[1]! });
+    bus.emit('candle:close', { symbol: toSymbol('BTCUSDT'), timeframe: '1m', candle: fixtures.candles[2]! });
 
     // Feed 1 candle for ETHUSDT
-    bus.emit('candle:close', { symbol: 'ETHUSDT', timeframe: '1m', candle: fixtures.candles[0]! });
+    bus.emit('candle:close', { symbol: toSymbol('ETHUSDT'), timeframe: '1m', candle: fixtures.candles[0]! });
 
     const signals = capture.get('scanner:signal');
     // 3 BTC signals + 1 ETH signal = 4 total
@@ -231,7 +232,7 @@ describe('Scanner', () => {
     expect(btcSignals.length).toBe(3);
 
     // ETH signals have correct symbol
-    const ethSignals = signals.filter((e) => e.signal.symbol === 'ETHUSDT');
+    const ethSignals = signals.filter((e) => e.signal.symbol === toSymbol('ETHUSDT'));
     expect(ethSignals.length).toBe(1);
 
     scanner.dispose();
@@ -244,7 +245,7 @@ describe('Scanner', () => {
       bus,
       'payload-scanner',
       {
-        symbols: ['BTCUSDT'],
+        symbols: [toSymbol('BTCUSDT')],
         timeframe: '1m',
         indicators: {
           passthrough: () => makePassthroughIndicator(),
@@ -254,11 +255,11 @@ describe('Scanner', () => {
     );
 
     const candle = fixtures.candles[5]!;
-    bus.emit('candle:close', { symbol: 'BTCUSDT', timeframe: '1m', candle });
+    bus.emit('candle:close', { symbol: toSymbol('BTCUSDT'), timeframe: '1m', candle });
 
     const event = capture.last('scanner:signal');
     expect(event).toBeDefined();
-    expect(event?.signal.symbol).toBe('BTCUSDT');
+    expect(event?.signal.symbol).toBe(toSymbol('BTCUSDT'));
     expect(event?.signal.sourceScanner).toBe('payload-scanner');
     expect(event?.signal.timestamp).toBe(candle.closeTime);
     expect(event?.signal.price).toBe(candle.close);
@@ -273,7 +274,7 @@ describe('Scanner', () => {
       bus,
       'dispose-scanner',
       {
-        symbols: ['BTCUSDT'],
+        symbols: [toSymbol('BTCUSDT')],
         timeframe: '1m',
         indicators: {
           passthrough: () => makePassthroughIndicator(),
@@ -283,14 +284,14 @@ describe('Scanner', () => {
     );
 
     // Emit one candle before dispose — should produce a signal
-    bus.emit('candle:close', { symbol: 'BTCUSDT', timeframe: '1m', candle: fixtures.candles[0]! });
+    bus.emit('candle:close', { symbol: toSymbol('BTCUSDT'), timeframe: '1m', candle: fixtures.candles[0]! });
     expect(capture.count('scanner:signal')).toBe(1);
 
     scanner.dispose();
 
     // Emit candles after dispose — should be ignored
-    bus.emit('candle:close', { symbol: 'BTCUSDT', timeframe: '1m', candle: fixtures.candles[1]! });
-    bus.emit('candle:close', { symbol: 'BTCUSDT', timeframe: '1m', candle: fixtures.candles[2]! });
+    bus.emit('candle:close', { symbol: toSymbol('BTCUSDT'), timeframe: '1m', candle: fixtures.candles[1]! });
+    bus.emit('candle:close', { symbol: toSymbol('BTCUSDT'), timeframe: '1m', candle: fixtures.candles[2]! });
     expect(capture.count('scanner:signal')).toBe(1);
   });
 
@@ -301,7 +302,7 @@ describe('Scanner', () => {
       createTestBus();
 
     const config = {
-      symbols: ['BTCUSDT'],
+      symbols: [toSymbol('BTCUSDT')],
       timeframe: '1m' as const,
       indicators: {
         passthrough: () => makePassthroughIndicator(),
@@ -312,7 +313,7 @@ describe('Scanner', () => {
     const scanner1 = factory(bus1, config);
     const scanner2 = factory(bus2, config);
 
-    bus1.emit('candle:close', { symbol: 'BTCUSDT', timeframe: '1m', candle: fixtures.candles[0]! });
+    bus1.emit('candle:close', { symbol: toSymbol('BTCUSDT'), timeframe: '1m', candle: fixtures.candles[0]! });
 
     // scanner2 on bus2 should not see bus1's events
     expect(capture1.count('scanner:signal')).toBe(1);

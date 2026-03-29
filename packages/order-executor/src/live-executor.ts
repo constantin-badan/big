@@ -1,6 +1,7 @@
 import type { IEventBus } from '@trading-bot/event-bus';
 import type { IExchange } from '@trading-bot/exchange-client';
-import type { OrderRequest, SubmissionReceipt } from '@trading-bot/types';
+import type { ClientOrderId, OrderRequest, SubmissionReceipt, Symbol } from '@trading-bot/types';
+import { toClientOrderId, toOrderId } from '@trading-bot/types';
 
 import type { IOrderExecutor, OrderExecutorConfig } from './types';
 
@@ -32,7 +33,7 @@ export class LiveExecutor implements IOrderExecutor {
   private processingPromise: Promise<void> = Promise.resolve();
 
   // Pending order tracking: clientOrderId → symbol
-  private readonly pending = new Map<string, string>();
+  private readonly pending = new Map<ClientOrderId, Symbol>();
 
   // Token bucket rate limiter
   private tokens: number;
@@ -41,9 +42,9 @@ export class LiveExecutor implements IOrderExecutor {
   private readonly refillRate: number; // tokens per millisecond
 
   // Bus event handlers (stored for cleanup)
-  private readonly handleFilled: (data: { order: { clientOrderId: string } }) => void;
-  private readonly handleRejected: (data: { clientOrderId: string }) => void;
-  private readonly handleCanceled: (data: { order: { clientOrderId: string } }) => void;
+  private readonly handleFilled: (data: { order: { clientOrderId: ClientOrderId } }) => void;
+  private readonly handleRejected: (data: { clientOrderId: ClientOrderId }) => void;
+  private readonly handleCanceled: (data: { order: { clientOrderId: ClientOrderId } }) => void;
 
   constructor(bus: IEventBus, exchange: IExchange, config: OrderExecutorConfig) {
     if (config.rateLimitPerMinute <= 0) {
@@ -79,7 +80,7 @@ export class LiveExecutor implements IOrderExecutor {
 
   submit(request: OrderRequest): SubmissionReceipt {
     this.counter += 1;
-    const clientOrderId = request.clientOrderId ?? `live-${this.counter}`;
+    const clientOrderId = request.clientOrderId ?? toClientOrderId(`live-${this.counter}`);
 
     const receipt: SubmissionReceipt = {
       clientOrderId,
@@ -100,14 +101,12 @@ export class LiveExecutor implements IOrderExecutor {
 
     this.bus.emit('order:submitted', { receipt });
 
-    if (this.running && !this.processing) {
-      this.processingPromise = this.drainQueue();
-    }
+    this.maybeStartDrain();
 
     return receipt;
   }
 
-  cancelAll(symbol: string): void {
+  cancelAll(symbol: Symbol): void {
     // Remove unprocessed queue items for this symbol
     for (let i = this.queue.length - 1; i >= 0; i--) {
       if (this.queue[i]!.request.symbol === symbol) {
@@ -120,14 +119,15 @@ export class LiveExecutor implements IOrderExecutor {
     // will arrive via bus events and clean up the pending map)
     for (const [clientOrderId, sym] of this.pending) {
       if (sym === symbol) {
-        void this.exchange.cancelOrder(symbol, clientOrderId).catch(() => {
+        // cancelOrder expects OrderId but we only have clientOrderId — use it as best effort
+        void this.exchange.cancelOrder(symbol, toOrderId(String(clientOrderId))).catch(() => {
           // Best-effort — order may have already filled
         });
       }
     }
   }
 
-  hasPending(symbol: string): boolean {
+  hasPending(symbol: Symbol): boolean {
     for (const [, sym] of this.pending) {
       if (sym === symbol) return true;
     }
@@ -140,7 +140,12 @@ export class LiveExecutor implements IOrderExecutor {
 
   async start(): Promise<void> {
     this.running = true;
-    if (this.queue.length > 0 && !this.processing) {
+    this.maybeStartDrain();
+  }
+
+  private maybeStartDrain(): void {
+    if (this.running && !this.processing && this.queue.length > 0) {
+      this.processing = true; // set synchronously to prevent concurrent drainQueue calls
       this.processingPromise = this.drainQueue();
     }
   }
@@ -158,7 +163,7 @@ export class LiveExecutor implements IOrderExecutor {
   // === Internal: Queue processing ===
 
   private async drainQueue(): Promise<void> {
-    this.processing = true;
+    // this.processing is already true (set by maybeStartDrain)
     while (this.queue.length > 0 && this.running) {
       await this.consumeToken();
       const item = this.queue.shift();
@@ -176,11 +181,12 @@ export class LiveExecutor implements IOrderExecutor {
 
       if (ack.status === 'REJECTED') {
         // Exchange rejected the order — definitive, never retry
+        const coid = request.clientOrderId ?? toClientOrderId('');
         this.bus.emit('order:rejected', {
-          clientOrderId: request.clientOrderId ?? '',
+          clientOrderId: coid,
           reason: 'Order rejected by exchange',
         });
-        this.pending.delete(request.clientOrderId ?? '');
+        this.pending.delete(coid);
       }
       // If status is NEW or FILLED: do nothing here.
       // Fills arrive via user data stream → adapter emits order:filled → pending set updated.
@@ -198,11 +204,12 @@ export class LiveExecutor implements IOrderExecutor {
 
       // Max retries exhausted — emit rejection
       const reason = err instanceof Error ? err.message : 'Unknown transport error';
+      const coid = request.clientOrderId ?? toClientOrderId('');
       this.bus.emit('order:rejected', {
-        clientOrderId: request.clientOrderId ?? '',
+        clientOrderId: coid,
         reason: `Transport error after ${attempt + 1} attempts: ${reason}`,
       });
-      this.pending.delete(request.clientOrderId ?? '');
+      this.pending.delete(coid);
     }
   }
 

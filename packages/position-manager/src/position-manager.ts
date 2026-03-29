@@ -3,15 +3,18 @@ import type { IOrderExecutor } from '@trading-bot/order-executor';
 import type { IRiskManager } from '@trading-bot/risk-manager';
 import type {
   Candle,
+  ClientOrderId,
   OrderRequest,
   OrderResult,
   Position,
   PositionSide,
   Signal,
+  Symbol,
   Tick,
   Timeframe,
   TradeRecord,
 } from '@trading-bot/types';
+import { toClientOrderId } from '@trading-bot/types';
 
 import type { IPositionManager, PositionManagerConfig, PositionState } from './types';
 
@@ -19,7 +22,7 @@ type SymbolState = {
   state: PositionState;
   entryOrder: OrderResult | null;
   // Stored BEFORE calling submit() so re-entrant order:filled can match it
-  pendingClientOrderId: string | null;
+  pendingClientOrderId: ClientOrderId | null;
   stopPrice: number | null;
   takeProfitPrice: number | null;
   peakPrice: number | null;
@@ -43,12 +46,12 @@ function makeSymbolState(): SymbolState {
 }
 
 export class PositionManager implements IPositionManager {
-  private readonly symbolStates = new Map<string, SymbolState>();
-  private readonly lastTickPrice = new Map<string, number>();
+  private readonly symbolStates = new Map<Symbol, SymbolState>();
+  private readonly lastTickPrice = new Map<Symbol, number>();
 
-  private readonly handleTick: (data: { symbol: string; tick: Tick }) => void;
+  private readonly handleTick: (data: { symbol: Symbol; tick: Tick }) => void;
   private readonly handleCandleClose: (data: {
-    symbol: string;
+    symbol: Symbol;
     timeframe: Timeframe;
     candle: Candle;
   }) => void;
@@ -56,7 +59,7 @@ export class PositionManager implements IPositionManager {
   private readonly handleSignal: (data: { signal: Signal }) => void;
 
   private readonly handleOrderFilled: (data: { order: OrderResult }) => void;
-  private readonly handleOrderRejected: (data: { clientOrderId: string; reason: string }) => void;
+  private readonly handleOrderRejected: (data: { clientOrderId: ClientOrderId; reason: string }) => void;
 
   private readonly eventBus: IEventBus;
   private readonly executor: IOrderExecutor;
@@ -116,7 +119,7 @@ export class PositionManager implements IPositionManager {
 
   // === Event handler methods ===
 
-  private onTick({ symbol, tick }: { symbol: string; tick: Tick }): void {
+  private onTick({ symbol, tick }: { symbol: Symbol; tick: Tick }): void {
     this.lastTickPrice.set(symbol, tick.price);
     if (this.getState(symbol) === 'OPEN') {
       this.evaluateSLTP(symbol, tick.price, tick.timestamp);
@@ -125,12 +128,14 @@ export class PositionManager implements IPositionManager {
 
   private onCandleClose({
     symbol,
+    timeframe,
     candle,
   }: {
-    symbol: string;
+    symbol: Symbol;
     timeframe: Timeframe;
     candle: Candle;
   }): void {
+    if (this.config.evaluationTimeframe && timeframe !== this.config.evaluationTimeframe) return;
     if (this.getState(symbol) !== 'OPEN') return;
     const symState = this.getSymbolState(symbol);
     const entryOrder = symState.entryOrder;
@@ -210,9 +215,16 @@ export class PositionManager implements IPositionManager {
       ? entryPrice * (1 + this.config.defaultTakeProfitPct / 100)
       : entryPrice * (1 - this.config.defaultTakeProfitPct / 100);
 
+    // Round quantity to exchange step size if configured
+    let qty = result.quantity;
+    if (this.config.quantityStepSize && this.config.quantityStepSize > 0) {
+      qty = Math.floor(qty / this.config.quantityStepSize) * this.config.quantityStepSize;
+      if (qty <= 0) return; // rounded to zero — skip
+    }
+
     // Generate clientOrderId upfront so it's stored BEFORE submit() is called
     // This ensures re-entrant order:filled can match it correctly (ADR-2)
-    const clientOrderId = crypto.randomUUID();
+    const clientOrderId = toClientOrderId(crypto.randomUUID());
 
     // State-before-emit: update all state before calling submit()
     symState.state = 'PENDING_ENTRY';
@@ -227,7 +239,7 @@ export class PositionManager implements IPositionManager {
       symbol,
       side,
       type: 'MARKET',
-      quantity: result.quantity,
+      quantity: qty,
       clientOrderId,
     };
 
@@ -249,6 +261,16 @@ export class PositionManager implements IPositionManager {
       symState.state = 'OPEN';
       symState.pendingClientOrderId = null;
 
+      // Recalculate SL/TP from actual fill price (pre-fill estimate may differ due to slippage)
+      const isLong = order.side === 'BUY';
+      const fillPrice = order.avgPrice;
+      symState.stopPrice = isLong
+        ? fillPrice * (1 - this.config.defaultStopLossPct / 100)
+        : fillPrice * (1 + this.config.defaultStopLossPct / 100);
+      symState.takeProfitPrice = isLong
+        ? fillPrice * (1 + this.config.defaultTakeProfitPct / 100)
+        : fillPrice * (1 - this.config.defaultTakeProfitPct / 100);
+
       const position = this.buildPositionFromEntry(symbol, order);
       this.eventBus.emit('position:opened', { position });
     } else if (symState.state === 'PENDING_EXIT') {
@@ -268,7 +290,7 @@ export class PositionManager implements IPositionManager {
     }
   }
 
-  private onOrderRejected({ clientOrderId, reason }: { clientOrderId: string; reason: string }): void {
+  private onOrderRejected({ clientOrderId, reason }: { clientOrderId: ClientOrderId; reason: string }): void {
     for (const [symbol, symState] of this.symbolStates) {
       if (symState.pendingClientOrderId !== clientOrderId) continue;
 
@@ -335,7 +357,7 @@ export class PositionManager implements IPositionManager {
 
   // === Private helpers ===
 
-  private getSymbolState(symbol: string): SymbolState {
+  private getSymbolState(symbol: Symbol): SymbolState {
     let state = this.symbolStates.get(symbol);
     if (!state) {
       state = makeSymbolState();
@@ -356,7 +378,7 @@ export class PositionManager implements IPositionManager {
     symState.exitReason = null;
   }
 
-  private evaluateSLTP(symbol: string, price: number, timestamp: number): void {
+  private evaluateSLTP(symbol: Symbol, price: number, timestamp: number): void {
     const symState = this.symbolStates.get(symbol);
     if (!symState || symState.state !== 'OPEN') return;
 
@@ -399,46 +421,44 @@ export class PositionManager implements IPositionManager {
     }
   }
 
-  private triggerExit(symbol: string, reason: TradeRecord['exitReason'], fillPrice: number): void {
+  private triggerExit(symbol: Symbol, reason: TradeRecord['exitReason'], fillPrice: number): void {
     const symState = this.symbolStates.get(symbol);
     if (!symState || symState.state !== 'OPEN') return;
 
     const entry = symState.entryOrder;
     if (!entry) return;
 
-    let orderType: OrderRequest['type'];
-    if (reason === 'STOP_LOSS' || reason === 'TRAILING_STOP') {
-      orderType = 'STOP_MARKET';
-    } else if (reason === 'TAKE_PROFIT') {
-      orderType = 'TAKE_PROFIT_MARKET';
-    } else {
-      orderType = 'MARKET';
-    }
-
     const exitSide = entry.side === 'BUY' ? 'SELL' : 'BUY';
 
     // Generate clientOrderId upfront before submit() — ADR-2 re-entrancy safety
-    const clientOrderId = crypto.randomUUID();
+    const clientOrderId = toClientOrderId(crypto.randomUUID());
 
     // State-before-emit: update state before submit()
     symState.state = 'PENDING_EXIT';
     symState.exitReason = reason;
     symState.pendingClientOrderId = clientOrderId;
 
-    const request: OrderRequest = {
+    const base = {
       symbol,
       side: exitSide,
-      type: orderType,
       quantity: entry.filledQuantity,
-      stopPrice: fillPrice,
       reduceOnly: true,
       clientOrderId,
-    };
+    } as const;
+
+    let request: OrderRequest;
+    if (reason === 'STOP_LOSS' || reason === 'TRAILING_STOP') {
+      request = { ...base, type: 'STOP_MARKET', stopPrice: fillPrice };
+    } else if (reason === 'TAKE_PROFIT') {
+      request = { ...base, type: 'TAKE_PROFIT_MARKET', stopPrice: fillPrice };
+    } else {
+      request = { ...base, type: 'MARKET' };
+    }
 
     this.executor.submit(request);
   }
 
-  private buildPositionFromEntry(symbol: string, entry: OrderResult): Position {
+  private buildPositionFromEntry(symbol: Symbol, entry: OrderResult): Position {
     const side: PositionSide = entry.side === 'BUY' ? 'LONG' : 'SHORT';
     const currentPrice = this.lastTickPrice.get(symbol) ?? entry.avgPrice;
     const direction = entry.side === 'BUY' ? 1 : -1;
@@ -458,7 +478,7 @@ export class PositionManager implements IPositionManager {
   }
 
   private buildTradeRecord(
-    symbol: string,
+    symbol: Symbol,
     symState: SymbolState,
     entryOrder: OrderResult,
     exitOrder: OrderResult,
@@ -521,15 +541,15 @@ export class PositionManager implements IPositionManager {
     };
   }
 
-  getState(symbol: string): PositionState {
+  getState(symbol: Symbol): PositionState {
     return this.symbolStates.get(symbol)?.state ?? 'IDLE';
   }
 
-  hasOpenPosition(symbol: string): boolean {
+  hasOpenPosition(symbol: Symbol): boolean {
     return this.getState(symbol) === 'OPEN';
   }
 
-  hasPendingOrder(symbol: string): boolean {
+  hasPendingOrder(symbol: Symbol): boolean {
     const state = this.getState(symbol);
     return state === 'PENDING_ENTRY' || state === 'PENDING_EXIT';
   }

@@ -1,5 +1,6 @@
 import type { IEventBus } from '@trading-bot/event-bus';
-import type { IOrderExecutor, OrderRequest, SubmissionReceipt } from '@trading-bot/types';
+import type { IOrderExecutor, OrderRequest, SubmissionReceipt, Symbol } from '@trading-bot/types';
+import { toClientOrderId, toOrderId } from '@trading-bot/types';
 
 export interface MockExecutorConfig {
   syncFill?: boolean;
@@ -21,7 +22,7 @@ export function createMockExecutor(bus: IEventBus, config?: MockExecutorConfig):
   return {
     submit(request: OrderRequest): SubmissionReceipt {
       idCounter++;
-      const clientOrderId = request.clientOrderId ?? `mock-${String(idCounter)}`;
+      const clientOrderId = request.clientOrderId ?? toClientOrderId(`mock-${String(idCounter)}`);
       const receipt: SubmissionReceipt = {
         clientOrderId,
         symbol: request.symbol,
@@ -38,16 +39,22 @@ export function createMockExecutor(bus: IEventBus, config?: MockExecutorConfig):
         if (rejectAll) {
           bus.emit('order:rejected', { clientOrderId, reason: rejectReason });
         } else {
+          const orderPrice =
+            request.type === 'LIMIT'
+              ? request.price
+              : request.type === 'STOP_MARKET' || request.type === 'TAKE_PROFIT_MARKET'
+                ? request.stopPrice
+                : undefined;
           bus.emit('order:filled', {
             order: {
-              orderId: `fill-${String(idCounter)}`,
+              orderId: toOrderId(`fill-${String(idCounter)}`),
               clientOrderId,
               symbol: request.symbol,
               side: request.side,
               type: request.type,
               status: 'FILLED',
-              price: request.price ?? fillPrice ?? 50000,
-              avgPrice: fillPrice ?? request.price ?? 50000,
+              price: orderPrice ?? fillPrice ?? 50000,
+              avgPrice: fillPrice ?? orderPrice ?? 50000,
               quantity: request.quantity,
               filledQuantity: request.quantity,
               commission,
@@ -61,8 +68,8 @@ export function createMockExecutor(bus: IEventBus, config?: MockExecutorConfig):
 
       return receipt;
     },
-    cancelAll(): void {},
-    hasPending(): boolean {
+    cancelAll(_symbol: Symbol): void {},
+    hasPending(_symbol: Symbol): boolean {
       return false;
     },
     getPendingCount(): number {

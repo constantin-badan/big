@@ -1,30 +1,35 @@
 import type { IEventBus, TradingEventMap } from '@trading-bot/event-bus';
-import type { PositionSide } from '@trading-bot/types';
+import type { PositionSide, Symbol } from '@trading-bot/types';
 
 import type { IMarginGuard, MarginGuardConfig } from './types';
 
 interface TrackedPosition {
-  symbol: string;
+  symbol: Symbol;
   side: PositionSide;
   entryPrice: number;
   quantity: number;
+  leverage: number;
+  timestamp: number; // integer — safe for === matching (unlike float entryPrice)
 }
 
 export class MarginGuard implements IMarginGuard {
   private _isBreached = false;
   private readonly bus: IEventBus;
   private readonly config: MarginGuardConfig;
-  private readonly positions = new Map<string, TrackedPosition[]>();
-  private readonly markPrices = new Map<string, number>();
+  private balance: number;
+  private readonly positions = new Map<Symbol, TrackedPosition[]>();
+  private readonly markPrices = new Map<Symbol, number>();
   private readonly disposers: (() => void)[] = [];
 
   constructor(bus: IEventBus, config: MarginGuardConfig) {
     this.bus = bus;
     this.config = config;
+    this.balance = config.balance;
     const onOpened = (data: TradingEventMap['position:opened']): void => {
       this.handlePositionOpened(data);
     };
     const onClosed = (data: TradingEventMap['position:closed']): void => {
+      this.balance += data.trade.pnl;
       this.handlePositionClosed(data);
     };
 
@@ -70,6 +75,8 @@ export class MarginGuard implements IMarginGuard {
       side: position.side,
       entryPrice: position.entryPrice,
       quantity: position.quantity,
+      leverage: position.leverage ?? 1,
+      timestamp: position.timestamp,
     };
     const existing = this.positions.get(position.symbol);
     if (existing) {
@@ -84,12 +91,11 @@ export class MarginGuard implements IMarginGuard {
     const list = this.positions.get(position.symbol);
     if (!list) return;
 
-    // Remove the first matching position (same side, entry price, quantity)
+    // Match by side + timestamp (integers compare exactly, unlike floats)
     const idx = list.findIndex(
       (p) =>
         p.side === position.side &&
-        p.entryPrice === position.entryPrice &&
-        p.quantity === position.quantity,
+        p.timestamp === position.timestamp,
     );
     if (idx !== -1) {
       list.splice(idx, 1);
@@ -99,7 +105,7 @@ export class MarginGuard implements IMarginGuard {
     }
   }
 
-  private updateMarkPrice(symbol: string, price: number): void {
+  private updateMarkPrice(symbol: Symbol, price: number): void {
     this.markPrices.set(symbol, price);
   }
 
@@ -123,12 +129,13 @@ export class MarginGuard implements IMarginGuard {
       for (const pos of list) {
         const direction = pos.side === 'LONG' ? 1 : -1;
         totalUnrealizedPnl += (markPrice - pos.entryPrice) * direction * pos.quantity;
-        totalNotional += markPrice * pos.quantity;
+        totalNotional += markPrice * pos.quantity * pos.leverage;
       }
     }
 
-    const unrealizedLossPct = (totalUnrealizedPnl / this.config.balance) * 100;
-    const exposurePct = (totalNotional / this.config.balance) * 100;
+    if (this.balance <= 0) return; // no valid denominator
+    const unrealizedLossPct = (totalUnrealizedPnl / this.balance) * 100;
+    const exposurePct = (totalNotional / this.balance) * 100;
 
     if (unrealizedLossPct <= -this.config.maxUnrealizedLossPct) {
       this._isBreached = true;

@@ -6,8 +6,10 @@ import type {
   OrderSide,
   OrderStatus,
   OrderType,
+  Symbol,
   Tick,
 } from '@trading-bot/types';
+import { toSymbol, toOrderId, toClientOrderId } from '@trading-bot/types';
 
 import { OrderTradeUpdateSchema, AlgoUpdateSchema, WsApiOrderResponseSchema } from './schemas';
 import { jsonParse, numPair, unsafeCast } from './unsafe-cast';
@@ -44,6 +46,7 @@ interface BinanceKline {
 
 interface BinanceKlineEvent {
   e: string; // event type
+  s: string; // symbol
   k: BinanceKline;
 }
 
@@ -51,6 +54,7 @@ export function parseKlineMessage(data: unknown): Candle {
   const event = unsafeCast<BinanceKlineEvent>(data);
   const k = event.k;
   return {
+    symbol: toSymbol(event.s),
     openTime: k.t,
     closeTime: k.T,
     open: Number(k.o),
@@ -78,7 +82,7 @@ interface BinanceAggTrade {
 export function parseAggTradeMessage(data: unknown): Tick {
   const event = unsafeCast<BinanceAggTrade>(data);
   return {
-    symbol: event.s,
+    symbol: toSymbol(event.s),
     price: Number(event.p),
     quantity: Number(event.q),
     timestamp: event.T,
@@ -101,7 +105,7 @@ interface BinanceDepthEvent {
 export function parseDepthMessage(data: unknown): OrderBookDiff {
   const event = unsafeCast<BinanceDepthEvent>(data);
   return {
-    symbol: event.s,
+    symbol: toSymbol(event.s),
     timestamp: event.T,
     bids: event.b.map(([p, q]) => numPair(Number(p), Number(q))),
     asks: event.a.map(([p, q]) => numPair(Number(p), Number(q))),
@@ -124,9 +128,10 @@ interface BinanceRestCandle {
   8: number; // number of trades
 }
 
-export function parseRestCandles(data: unknown): Candle[] {
+export function parseRestCandles(data: unknown, symbol: Symbol): Candle[] {
   const rows = unsafeCast<BinanceRestCandle[]>(data);
   return rows.map((row) => ({
+    symbol,
     openTime: row[0],
     closeTime: row[6],
     open: Number(row[1]),
@@ -140,7 +145,7 @@ export function parseRestCandles(data: unknown): Candle[] {
   }));
 }
 
-export function parseRestOrderBook(data: unknown, symbol: string): OrderBookSnapshot {
+export function parseRestOrderBook(data: unknown, symbol: Symbol): OrderBookSnapshot {
   const book = unsafeCast<{
     T: number;
     bids: [string, string][];
@@ -189,9 +194,9 @@ export function parseOrderTradeUpdate(data: unknown): OrderResult {
   const event = OrderTradeUpdateSchema.parse(data);
   const o = event.o;
   return {
-    orderId: String(o.i),
-    clientOrderId: o.c,
-    symbol: o.s,
+    orderId: toOrderId(String(o.i)),
+    clientOrderId: toClientOrderId(o.c),
+    symbol: toSymbol(o.s),
     side: lookupOrThrow(ORDER_SIDE_MAP, o.S, 'order side'),
     type: lookupOrThrow(ORDER_TYPE_MAP, o.o, 'order type'),
     status: lookupOrThrow(ORDER_STATUS_MAP, o.X, 'order status'),
@@ -210,9 +215,9 @@ export function parseAlgoUpdate(data: unknown): OrderResult {
   const event = AlgoUpdateSchema.parse(data);
   const o = event.o;
   return {
-    orderId: String(o.i),
-    clientOrderId: o.c,
-    symbol: o.s,
+    orderId: toOrderId(String(o.i)),
+    clientOrderId: toClientOrderId(o.c),
+    symbol: toSymbol(o.s),
     side: lookupOrThrow(ORDER_SIDE_MAP, o.S, 'order side'),
     type: lookupOrThrow(ORDER_TYPE_MAP, o.o, 'order type'),
     status: lookupOrThrow(ORDER_STATUS_MAP, o.X, 'order status'),
@@ -232,9 +237,9 @@ export function parseAlgoUpdate(data: unknown): OrderResult {
 export function parseWsApiOrderResponse(data: unknown, requestTime: number): OrderResult {
   const r = WsApiOrderResponseSchema.parse(data);
   return {
-    orderId: String(r.orderId),
-    clientOrderId: r.clientOrderId,
-    symbol: r.symbol,
+    orderId: toOrderId(String(r.orderId)),
+    clientOrderId: toClientOrderId(r.clientOrderId),
+    symbol: toSymbol(r.symbol),
     side: lookupOrThrow(ORDER_SIDE_MAP, r.side, 'order side'),
     type: lookupOrThrow(ORDER_TYPE_MAP, r.type, 'order type'),
     status: lookupOrThrow(ORDER_STATUS_MAP, r.status, 'order status'),
@@ -274,22 +279,18 @@ export function buildOrderParams(
     quantity: request.quantity,
   };
 
-  if (request.type === 'MARKET') {
-    params.newOrderRespType = 'RESULT';
-  }
-
-  if (request.price !== undefined) {
-    params.price = request.price;
-  }
-
-  if (request.stopPrice !== undefined) {
-    params.stopPrice = request.stopPrice;
-  }
-
-  if (request.timeInForce !== undefined) {
-    params.timeInForce = request.timeInForce;
-  } else if (request.type === 'LIMIT') {
-    params.timeInForce = 'GTC';
+  switch (request.type) {
+    case 'MARKET':
+      params.newOrderRespType = 'RESULT';
+      break;
+    case 'LIMIT':
+      params.price = request.price;
+      params.timeInForce = request.timeInForce ?? 'GTC';
+      break;
+    case 'STOP_MARKET':
+    case 'TAKE_PROFIT_MARKET':
+      params.stopPrice = request.stopPrice;
+      break;
   }
 
   if (request.reduceOnly === true) {

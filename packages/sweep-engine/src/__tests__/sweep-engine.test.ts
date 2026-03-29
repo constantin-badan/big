@@ -3,6 +3,7 @@ import { describe, test, expect } from 'bun:test';
 import type { IBacktestEngine } from '@trading-bot/backtest-engine';
 import type { StrategyFactory, SweepParamGrid } from '@trading-bot/strategy';
 import type { BacktestConfig, BacktestResult, PerformanceMetrics } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import { createSweepEngine } from '../sweep-engine';
 
@@ -11,7 +12,7 @@ const BASE_TIME = 1700000000000;
 const btConfig: BacktestConfig = {
   startTime: BASE_TIME,
   endTime: BASE_TIME + 100 * 60_000,
-  symbols: ['BTCUSDT'],
+  symbols: [toSymbol('BTCUSDT')],
   timeframes: ['1m'],
 };
 

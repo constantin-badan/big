@@ -56,11 +56,22 @@ export async function signRequest(
 // === Internal helpers ===
 
 function pemToArrayBuffer(pem: string): ArrayBuffer {
+  // Validate PEM contains a PRIVATE KEY header
+  if (!/-----BEGIN PRIVATE KEY-----/i.test(pem)) {
+    throw new Error('Invalid PEM format: expected PKCS#8 private key');
+  }
+
   // Strip PEM header/footer and whitespace
   const base64 = pem
     .replace(/-----BEGIN [\w\s]+-----/, '')
     .replace(/-----END [\w\s]+-----/, '')
     .replace(/\s/g, '');
+
+  // Validate base64 content is non-empty
+  if (base64.length === 0) {
+    throw new Error('Invalid PEM format: expected PKCS#8 private key');
+  }
+
   return base64ToArrayBuffer(base64);
 }
 

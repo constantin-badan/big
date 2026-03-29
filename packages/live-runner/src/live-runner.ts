@@ -5,7 +5,7 @@ import { createExchange, type IExchange } from '@trading-bot/exchange-client';
 import { LiveExecutor } from '@trading-bot/order-executor';
 import type { IOrderExecutor } from '@trading-bot/order-executor';
 import type { IStrategy, StrategyFactory } from '@trading-bot/strategy';
-import type { ExchangeConfig, Timeframe } from '@trading-bot/types';
+import type { ExchangeConfig, Symbol, Timeframe } from '@trading-bot/types';
 
 export type RunnerStatus = 'idle' | 'running' | 'stopping' | 'stopped';
 
@@ -13,7 +13,7 @@ export interface LiveRunnerConfig {
   factory: StrategyFactory;
   params: Record<string, number>;
   exchangeConfig: ExchangeConfig;
-  symbols: string[];
+  symbols: Symbol[];
   timeframes: Timeframe[];
   shutdownBehavior: 'close-all' | 'leave-open';
   healthCheckIntervalMs: number;
@@ -104,34 +104,38 @@ export class LiveRunner implements ILiveRunner {
     // 3. Connect to exchange
     await this.exchange.connect();
 
-    // 3b. Check for orphan positions
-    if (this.config.checkOrphanPositions) {
-      const positions = await this.exchange.getPositions();
-      if (positions.length > 0) {
-        await this.exchange.disconnect();
-        const symbols = positions.map((p) => `${p.symbol}(${p.side})`).join(', ');
-        throw new Error(
-          `Orphan positions detected: ${symbols}. ` +
-            'Close them manually or set checkOrphanPositions: false to proceed.',
-        );
+    try {
+      // 3b. Check for orphan positions
+      if (this.config.checkOrphanPositions) {
+        const positions = await this.exchange.getPositions();
+        if (positions.length > 0) {
+          const symbols = positions.map((p) => `${p.symbol}(${p.side})`).join(', ');
+          throw new Error(
+            `Orphan positions detected: ${symbols}. ` +
+              'Close them manually or set checkOrphanPositions: false to proceed.',
+          );
+        }
       }
+
+      // 4. Create strategy via factory
+      this._strategy = this.config.factory(this.config.params, {
+        bus: this.bus,
+        exchange: this.exchange,
+        executor: this.executor,
+      });
+
+      // 5. Start executor queue
+      await this.executor.start();
+
+      // 6. Start strategy
+      await this._strategy.start();
+
+      // 7. Start data feed (subscribe to streams, returns when ready)
+      await this.dataFeed.start(this.config.symbols, this.config.timeframes);
+    } catch (err) {
+      await this.exchange.disconnect();
+      throw err;
     }
-
-    // 4. Create strategy via factory
-    this._strategy = this.config.factory(this.config.params, {
-      bus: this.bus,
-      exchange: this.exchange,
-      executor: this.executor,
-    });
-
-    // 5. Start executor queue
-    await this.executor.start();
-
-    // 6. Start strategy
-    await this._strategy.start();
-
-    // 7. Start data feed (subscribe to streams, returns when ready)
-    await this.dataFeed.start(this.config.symbols, this.config.timeframes);
 
     // 8. Start heartbeat
     this.startTime = Date.now();

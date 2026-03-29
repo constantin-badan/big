@@ -6,12 +6,15 @@ import type {
   FeeStructure,
   OrderBookDiff,
   OrderBookSnapshot,
+  OrderId,
   OrderRequest,
   OrderResult,
   Position,
+  Symbol,
   Tick,
   Timeframe,
 } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 import { z } from 'zod';
 
 import { ConnectionError, ExchangeApiError } from '../errors';
@@ -170,7 +173,7 @@ export class BinanceAdapter implements IExchange {
   // === Market data subscriptions ===
 
   subscribeCandles(
-    symbol: string,
+    symbol: Symbol,
     timeframe: Timeframe,
     callback: (candle: Candle) => void,
   ): () => void {
@@ -180,14 +183,14 @@ export class BinanceAdapter implements IExchange {
     });
   }
 
-  subscribeTicks(symbol: string, callback: (tick: Tick) => void): () => void {
+  subscribeTicks(symbol: Symbol, callback: (tick: Tick) => void): () => void {
     const streamName = buildStreamName(symbol, 'aggTrade');
     return this.addStreamCallback(streamName, (data) => {
       callback(parseAggTradeMessage(data));
     });
   }
 
-  subscribeOrderBookDiff(symbol: string, callback: (diff: OrderBookDiff) => void): () => void {
+  subscribeOrderBookDiff(symbol: Symbol, callback: (diff: OrderBookDiff) => void): () => void {
     const streamName = buildStreamName(symbol, 'depth@100ms');
     return this.addStreamCallback(streamName, (data) => {
       callback(parseDepthMessage(data));
@@ -196,17 +199,17 @@ export class BinanceAdapter implements IExchange {
 
   // === REST API: Market data ===
 
-  async getCandles(symbol: string, timeframe: Timeframe, limit: number): Promise<Candle[]> {
+  async getCandles(symbol: Symbol, timeframe: Timeframe, limit: number): Promise<Candle[]> {
     const params = {
       symbol,
       interval: toBinanceInterval(timeframe),
       limit: String(limit),
     };
     const data = await this.restClient.restGet('/fapi/v1/klines', params);
-    return parseRestCandles(data);
+    return parseRestCandles(data, symbol);
   }
 
-  async getOrderBook(symbol: string, depth?: number): Promise<OrderBookSnapshot> {
+  async getOrderBook(symbol: Symbol, depth?: number): Promise<OrderBookSnapshot> {
     const params: Record<string, string> = { symbol };
     if (depth !== undefined) params.limit = String(depth);
     const data = await this.restClient.restGet('/fapi/v1/depth', params);
@@ -223,11 +226,11 @@ export class BinanceAdapter implements IExchange {
     return parseWsApiOrderResponse(result, requestTime);
   }
 
-  async cancelOrder(symbol: string, orderId: string): Promise<void> {
+  async cancelOrder(symbol: Symbol, orderId: OrderId): Promise<void> {
     await this.wsApiRequest('order.cancel', { symbol, orderId: Number(orderId) });
   }
 
-  async getOpenOrders(symbol: string): Promise<OrderResult[]> {
+  async getOpenOrders(symbol: Symbol): Promise<OrderResult[]> {
     const params = { symbol };
     const requestTime = Date.now();
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
@@ -240,7 +243,7 @@ export class BinanceAdapter implements IExchange {
 
   // === REST API: Positions ===
 
-  async getPosition(symbol: string): Promise<Position | null> {
+  async getPosition(symbol: Symbol): Promise<Position | null> {
     const positions = await this.getPositions();
     return positions.find((p) => p.symbol === symbol) ?? null;
   }
@@ -259,7 +262,7 @@ export class BinanceAdapter implements IExchange {
         const marginType: Position['marginType'] =
           p.marginType.toUpperCase() === 'ISOLATED' ? 'ISOLATED' : 'CROSS';
         return {
-          symbol: p.symbol,
+          symbol: toSymbol(p.symbol),
           side,
           entryPrice: Number(p.entryPrice),
           quantity: Math.abs(amt),
@@ -272,7 +275,7 @@ export class BinanceAdapter implements IExchange {
       });
   }
 
-  async setLeverage(symbol: string, leverage: number): Promise<void> {
+  async setLeverage(symbol: Symbol, leverage: number): Promise<void> {
     const params = { symbol, leverage };
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
     await this.restClient.restPost('/fapi/v1/leverage', signed);
@@ -295,7 +298,7 @@ export class BinanceAdapter implements IExchange {
       }));
   }
 
-  async getFees(symbol: string): Promise<FeeStructure> {
+  async getFees(symbol: Symbol): Promise<FeeStructure> {
     const params = { symbol };
     const signed = await signRequest(params, this.privateKey, this.recvWindow);
     const data = await this.restClient.restGet('/fapi/v1/commissionRate', signed);
@@ -356,7 +359,8 @@ export class BinanceAdapter implements IExchange {
 
       const callbacks = this.streamCallbacks.get(stream);
       if (callbacks) {
-        for (const cb of callbacks) {
+        const snapshot = [...callbacks];
+        for (const cb of snapshot) {
           try {
             cb(data);
           } catch (err) {

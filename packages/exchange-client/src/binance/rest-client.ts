@@ -28,7 +28,17 @@ export class RestClient {
         `Binance REST ${response.status}: ${body.substring(0, 500)}`,
       );
     }
-    return await response.json();
+    try {
+      return await response.json();
+    } catch (err) {
+      if (err instanceof SyntaxError) {
+        throw new ExchangeApiError(
+          response.status,
+          `Binance REST ${response.status}: invalid JSON in response body`,
+        );
+      }
+      throw err;
+    }
   }
 
   async restPost(path: string, params: Record<string, string | number>): Promise<unknown> {
@@ -50,6 +60,16 @@ export class RestClient {
         `Binance REST ${response.status}: ${respBody.substring(0, 500)}`,
       );
     }
-    return await response.json();
+    try {
+      return await response.json();
+    } catch (err) {
+      if (err instanceof SyntaxError) {
+        throw new ExchangeApiError(
+          response.status,
+          `Binance REST ${response.status}: invalid JSON in response body`,
+        );
+      }
+      throw err;
+    }
   }
 }

@@ -13,7 +13,7 @@ import { createBacktestEngine } from '@trading-bot/backtest-engine';
 import type { CandleLoader } from '@trading-bot/backtest-engine';
 import { createStorage } from '@trading-bot/storage';
 import type { StrategyFactory } from '@trading-bot/strategy';
-import type { Timeframe } from '@trading-bot/types';
+import type { Symbol, Timeframe } from '@trading-bot/types';
 
 import type { WorkerRequest, WorkerResponse } from './parallel-types';
 import { unsafeCast } from './unsafe-cast';
@@ -44,7 +44,7 @@ self.onmessage = (event: MessageEvent) => {
     // 2. Open own SQLite connection for candle loading
     const { candles } = createStorage(msg.dbPath);
     const loader: CandleLoader = (
-      symbol: string,
+      symbol: Symbol,
       timeframe: Timeframe,
       startTime: number,
       endTime: number,

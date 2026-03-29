@@ -33,6 +33,7 @@ export function createParallelSweepEngine(config: ParallelSweepConfig): IParalle
 
       const results: SweepResult[] = [];
       const errors: Array<{ params: Record<string, number>; error: string }> = [];
+      const failures: Array<{ params: Record<string, number>; error: string }> = [];
       let nextIndex = 0;
 
       const workerUrl = new URL('./sweep-worker.ts', import.meta.url).href;
@@ -65,7 +66,11 @@ export function createParallelSweepEngine(config: ParallelSweepConfig): IParalle
 
             if (completed === paramSets.length) {
               if (errors.length > 0 && results.length === 0) {
-                reject(new Error(`All sweep runs failed. First error: ${errors[0]?.error ?? 'unknown'}`));
+                reject(new Error(
+                  `All ${paramSets.length} sweep runs failed` +
+                  (failures.length > 0 ? ` (${failures.length} worker crashes)` : '') +
+                  `. First error: ${errors[0]?.error ?? 'unknown'}`,
+                ));
                 return;
               }
 
@@ -89,14 +94,29 @@ export function createParallelSweepEngine(config: ParallelSweepConfig): IParalle
           worker.onerror = () => {
             activeWorkers.delete(worker);
             worker.terminate();
-            errors.push({ params, error: 'Worker crashed' });
+            const failure = { params, error: 'Worker crashed' };
+            errors.push(failure);
+            failures.push(failure);
             completed++;
 
             if (completed === paramSets.length) {
               if (results.length === 0) {
-                reject(new Error(`All sweep runs failed. First error: ${errors[0]?.error ?? 'unknown'}`));
+                reject(new Error(
+                  `All ${paramSets.length} sweep runs failed (${failures.length} worker crashes). ` +
+                  `First error: ${errors[0]?.error ?? 'unknown'}`,
+                ));
               } else {
-                results.sort((a, b) => scorer(b.result) - scorer(a.result));
+                results.sort((a, b) => {
+                  const scoreA = scorer(a.result);
+                  const scoreB = scorer(b.result);
+                  if (Number.isNaN(scoreA) && Number.isNaN(scoreB)) return 0;
+                  if (Number.isNaN(scoreA)) return 1;
+                  if (Number.isNaN(scoreB)) return -1;
+                  if (scoreA === scoreB) return 0;
+                  if (scoreA === Infinity) return -1;
+                  if (scoreB === Infinity) return 1;
+                  return scoreB - scoreA;
+                });
                 resolve({ results, errors });
               }
             } else {

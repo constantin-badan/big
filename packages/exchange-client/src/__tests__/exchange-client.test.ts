@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 
 import type { ExchangeConfig } from '@trading-bot/types';
+import { toSymbol, toClientOrderId, toOrderId } from '@trading-bot/types';
 
 import {
   buildQueryString,
@@ -95,6 +96,7 @@ describe('parseKlineMessage', () => {
   test('parses Binance kline event into Candle', () => {
     const data = {
       e: 'kline',
+      s: 'BTCUSDT',
       k: {
         t: 1700000000000,
         T: 1700000059999,
@@ -109,6 +111,7 @@ describe('parseKlineMessage', () => {
       },
     };
     const candle = parseKlineMessage(data);
+    expect(candle.symbol).toBe(toSymbol('BTCUSDT'));
     expect(candle.openTime).toBe(1700000000000);
     expect(candle.closeTime).toBe(1700000059999);
     expect(candle.open).toBe(50000);
@@ -124,6 +127,7 @@ describe('parseKlineMessage', () => {
   test('isClosed is false for forming candle', () => {
     const data = {
       e: 'kline',
+      s: 'BTCUSDT',
       k: {
         t: 0,
         T: 0,
@@ -152,7 +156,7 @@ describe('parseAggTradeMessage', () => {
       m: true,
     };
     const tick = parseAggTradeMessage(data);
-    expect(tick.symbol).toBe('BTCUSDT');
+    expect(tick.symbol).toBe(toSymbol('BTCUSDT'));
     expect(tick.price).toBe(50000.5);
     expect(tick.quantity).toBe(0.123);
     expect(tick.timestamp).toBe(1700000000000);
@@ -175,7 +179,7 @@ describe('parseDepthMessage', () => {
       u: 105,
     };
     const diff = parseDepthMessage(data);
-    expect(diff.symbol).toBe('BTCUSDT');
+    expect(diff.symbol).toBe(toSymbol('BTCUSDT'));
     expect(diff.timestamp).toBe(1700000000000);
     expect(diff.bids).toEqual([
       [50000, 1.5],
@@ -209,9 +213,9 @@ describe('parseOrderTradeUpdate', () => {
       },
     };
     const result = parseOrderTradeUpdate(data);
-    expect(result.orderId).toBe('12345');
-    expect(result.clientOrderId).toBe('client-123');
-    expect(result.symbol).toBe('BTCUSDT');
+    expect(result.orderId).toBe(toOrderId('12345'));
+    expect(result.clientOrderId).toBe(toClientOrderId('client-123'));
+    expect(result.symbol).toBe(toSymbol('BTCUSDT'));
     expect(result.side).toBe('BUY');
     expect(result.type).toBe('MARKET');
     expect(result.status).toBe('FILLED');
@@ -243,8 +247,8 @@ describe('parseAlgoUpdate', () => {
       },
     };
     const result = parseAlgoUpdate(data);
-    expect(result.orderId).toBe('67890');
-    expect(result.symbol).toBe('ETHUSDT');
+    expect(result.orderId).toBe(toOrderId('67890'));
+    expect(result.symbol).toBe(toSymbol('ETHUSDT'));
     expect(result.side).toBe('SELL');
     expect(result.type).toBe('STOP_MARKET');
     expect(result.status).toBe('FILLED');
@@ -272,12 +276,12 @@ describe('routeOrderType', () => {
 describe('buildOrderParams', () => {
   test('builds MARKET order params with RESULT response type', () => {
     const params = buildOrderParams({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 0.1,
     });
-    expect(params.symbol).toBe('BTCUSDT');
+    expect(params.symbol).toBe(toSymbol('BTCUSDT'));
     expect(params.side).toBe('BUY');
     expect(params.type).toBe('MARKET');
     expect(params.quantity).toBe(0.1);
@@ -286,7 +290,7 @@ describe('buildOrderParams', () => {
 
   test('builds LIMIT order params with default GTC timeInForce', () => {
     const params = buildOrderParams({
-      symbol: 'ETHUSDT',
+      symbol: toSymbol('ETHUSDT'),
       side: 'SELL',
       type: 'LIMIT',
       quantity: 1.0,
@@ -299,7 +303,7 @@ describe('buildOrderParams', () => {
 
   test('builds STOP_MARKET order params with stopPrice', () => {
     const params = buildOrderParams({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'SELL',
       type: 'STOP_MARKET',
       quantity: 0.1,
@@ -312,11 +316,11 @@ describe('buildOrderParams', () => {
 
   test('includes clientOrderId as newClientOrderId', () => {
     const params = buildOrderParams({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 0.1,
-      clientOrderId: 'my-order-1',
+      clientOrderId: toClientOrderId('my-order-1'),
     });
     expect(params.newClientOrderId).toBe('my-order-1');
   });
@@ -327,8 +331,9 @@ describe('parseRestCandles', () => {
     const data = [
       [1700000000000, '50000', '50100', '49900', '50050', '100.5', 1700000059999, '5025000', 500],
     ];
-    const candles = parseRestCandles(data);
+    const candles = parseRestCandles(data, toSymbol('BTCUSDT'));
     expect(candles).toHaveLength(1);
+    expect(candles[0]!.symbol).toBe(toSymbol('BTCUSDT'));
     expect(candles[0]!.openTime).toBe(1700000000000);
     expect(candles[0]!.close).toBe(50050);
     expect(candles[0]!.isClosed).toBe(true);

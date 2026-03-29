@@ -5,6 +5,7 @@ import type { IOrderExecutor } from '@trading-bot/order-executor';
 import type { IRiskManager } from '@trading-bot/risk-manager';
 import { createTestBus, createMockExecutor, EventCapture, fixtures } from '@trading-bot/test-utils';
 import type { OrderRequest, Signal, SubmissionReceipt } from '@trading-bot/types';
+import { toSymbol, toOrderId, toClientOrderId } from '@trading-bot/types';
 
 import type { PositionManagerConfig, PositionState } from '../index';
 import { PositionManager } from '../position-manager';
@@ -15,7 +16,7 @@ const SHORT_SIGNAL: Signal = fixtures.shortSignal;
 const DEFAULT_PM_CONFIG: PositionManagerConfig = fixtures.defaultPositionManagerConfig;
 
 // ── constants ─────────────────────────────────────────────────────────────────
-const SYMBOL = 'BTCUSDT';
+const SYMBOL = toSymbol('BTCUSDT');
 const ENTRY_PRICE = 50000;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -409,7 +410,7 @@ describe('PositionManager', () => {
       const mockExecutor: IOrderExecutor = {
         submit(request: OrderRequest): SubmissionReceipt {
           fillCount++;
-          const clientOrderId = request.clientOrderId ?? `mock-${String(fillCount)}`;
+          const clientOrderId = request.clientOrderId ?? toClientOrderId(`mock-${String(fillCount)}`);
           const receipt: SubmissionReceipt = {
             clientOrderId,
             symbol: request.symbol,
@@ -424,7 +425,7 @@ describe('PositionManager', () => {
           if (fillCount === 1) {
             bus.emit('order:filled', {
               order: {
-                orderId: `fill-${String(fillCount)}`,
+                orderId: toOrderId(`fill-${String(fillCount)}`),
                 clientOrderId,
                 symbol: request.symbol,
                 side: request.side,
@@ -516,14 +517,14 @@ describe('PositionManager', () => {
       const riskMgr = makeMockRiskManager(true, 0.1);
       const pm = new PositionManager(bus, syncExecutor, riskMgr, makeConfig());
 
-      const ethSignal: Signal = { ...LONG_SIGNAL, symbol: 'ETHUSDT' };
+      const ethSignal: Signal = { ...LONG_SIGNAL, symbol: toSymbol('ETHUSDT') };
 
       bus.emit('signal', { signal: LONG_SIGNAL });
       bus.emit('signal', { signal: ethSignal });
 
       expect(pm.getOpenPositions()).toHaveLength(2);
       expect(pm.hasOpenPosition(SYMBOL)).toBe(true);
-      expect(pm.hasOpenPosition('ETHUSDT')).toBe(true);
+      expect(pm.hasOpenPosition(toSymbol('ETHUSDT'))).toBe(true);
 
       pm.dispose();
     });
@@ -556,10 +557,10 @@ describe('PositionManager', () => {
       expect(pm.getState(SYMBOL)).toBe('OPEN');
       capture.clear();
 
-      // SHORT stop price is above entry: signalPrice * (1 + SL%/100)
-      // onSignal uses lastTickPrice ?? signal.price — no prior tick, so signal.price is used
-      const signalPrice = SHORT_SIGNAL.price;
-      const stopPrice = signalPrice * (1 + config.defaultStopLossPct / 100);
+      // SHORT stop price is above entry: fillPrice * (1 + SL%/100)
+      // SL/TP are recalculated from actual fill price after order:filled (not signal price)
+      const fillPrice = 50000; // mock executor default avgPrice
+      const stopPrice = fillPrice * (1 + config.defaultStopLossPct / 100);
       const tickTimestamp: number = fixtures.tick.timestamp;
       bus.emit('tick', {
         symbol: SYMBOL,
@@ -591,10 +592,10 @@ describe('PositionManager', () => {
       expect(pm.getState(SYMBOL)).toBe('OPEN');
       capture.clear();
 
-      // SHORT TP price is below entry: signalPrice * (1 - TP%/100)
-      // onSignal uses lastTickPrice ?? signal.price — no prior tick, so signal.price is used
-      const signalPrice = SHORT_SIGNAL.price;
-      const tpPrice = signalPrice * (1 - config.defaultTakeProfitPct / 100);
+      // SHORT TP price is below entry: fillPrice * (1 - TP%/100)
+      // SL/TP are recalculated from actual fill price after order:filled (not signal price)
+      const fillPrice = 50000; // mock executor default avgPrice
+      const tpPrice = fillPrice * (1 - config.defaultTakeProfitPct / 100);
       const tickTimestamp: number = fixtures.tick.timestamp;
       bus.emit('tick', {
         symbol: SYMBOL,
@@ -662,6 +663,113 @@ describe('PositionManager', () => {
 
       expect(capture.count('position:closed')).toBe(1);
       expect(capture.last('position:closed')?.trade.exitReason).toBe('TRAILING_STOP');
+
+      pm.dispose();
+    });
+  });
+
+  // ─── SHORT position: SL exit via candle:close ─────────────────────────────
+  describe('SHORT position: SL exit via candle:close', () => {
+    test('candle high >= stopPrice triggers STOP_LOSS for SHORT', () => {
+      const config = makeConfig({ defaultStopLossPct: 2 });
+      const riskMgr = makeMockRiskManager(true, 0.1);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+
+      bus.emit('signal', { signal: SHORT_SIGNAL });
+      expect(pm.getState(SYMBOL)).toBe('OPEN');
+      capture.clear();
+
+      // SHORT stop price is above entry: fillPrice * (1 + SL%/100)
+      const stopPrice = ENTRY_PRICE * (1 + config.defaultStopLossPct / 100);
+      const baseCandle = fixtures.candle;
+      bus.emit('candle:close', {
+        symbol: SYMBOL,
+        timeframe: '1m',
+        candle: {
+          ...baseCandle,
+          openTime: baseCandle.openTime + 60000,
+          closeTime: baseCandle.closeTime + 60000,
+          open: ENTRY_PRICE,
+          high: stopPrice + 50,
+          low: ENTRY_PRICE - 100,
+          close: ENTRY_PRICE + 200,
+        },
+      });
+
+      expect(capture.count('position:closed')).toBe(1);
+      expect(capture.last('position:closed')?.trade.exitReason).toBe('STOP_LOSS');
+      expect(pm.getState(SYMBOL)).toBe('IDLE');
+
+      pm.dispose();
+    });
+  });
+
+  // ─── SHORT position: TP exit via candle:close ─────────────────────────────
+  describe('SHORT position: TP exit via candle:close', () => {
+    test('candle low <= takeProfitPrice triggers TAKE_PROFIT for SHORT', () => {
+      const config = makeConfig({ defaultTakeProfitPct: 4 });
+      const riskMgr = makeMockRiskManager(true, 0.1);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+
+      bus.emit('signal', { signal: SHORT_SIGNAL });
+      expect(pm.getState(SYMBOL)).toBe('OPEN');
+      capture.clear();
+
+      // SHORT TP price is below entry: fillPrice * (1 - TP%/100)
+      const tpPrice = ENTRY_PRICE * (1 - config.defaultTakeProfitPct / 100);
+      const baseCandle = fixtures.candle;
+      bus.emit('candle:close', {
+        symbol: SYMBOL,
+        timeframe: '1m',
+        candle: {
+          ...baseCandle,
+          openTime: baseCandle.openTime + 60000,
+          closeTime: baseCandle.closeTime + 60000,
+          open: ENTRY_PRICE,
+          high: ENTRY_PRICE + 10,
+          low: tpPrice - 100,
+          close: tpPrice - 50,
+        },
+      });
+
+      expect(capture.count('position:closed')).toBe(1);
+      expect(capture.last('position:closed')?.trade.exitReason).toBe('TAKE_PROFIT');
+      expect(pm.getState(SYMBOL)).toBe('IDLE');
+
+      pm.dispose();
+    });
+  });
+
+  // ─── SHORT position: timeout exit via candle:close ────────────────────────
+  describe('SHORT position: timeout exit via candle:close', () => {
+    test('candle closeTime past maxHoldTimeMs triggers TIMEOUT for SHORT', () => {
+      const config = makeConfig({ maxHoldTimeMs: 5000 });
+      const riskMgr = makeMockRiskManager(true, 0.1);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+
+      bus.emit('signal', { signal: SHORT_SIGNAL });
+      expect(pm.getState(SYMBOL)).toBe('OPEN');
+      capture.clear();
+
+      const entryTimestamp: number = SHORT_SIGNAL.timestamp;
+      const baseCandle = fixtures.candle;
+      bus.emit('candle:close', {
+        symbol: SYMBOL,
+        timeframe: '1m',
+        candle: {
+          ...baseCandle,
+          openTime: entryTimestamp + 5000,
+          closeTime: entryTimestamp + 6000,
+          open: ENTRY_PRICE,
+          high: ENTRY_PRICE + 10,
+          low: ENTRY_PRICE - 10,
+          close: ENTRY_PRICE,
+        },
+      });
+
+      expect(capture.count('position:closed')).toBe(1);
+      expect(capture.last('position:closed')?.trade.exitReason).toBe('TIMEOUT');
+      expect(pm.getState(SYMBOL)).toBe('IDLE');
 
       pm.dispose();
     });

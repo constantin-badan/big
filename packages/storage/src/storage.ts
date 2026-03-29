@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite';
 
-import type { Candle, Timeframe, TradeRecord } from '@trading-bot/types';
+import type { Candle, Symbol, Timeframe, TradeRecord } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import type { ICandleStore, ITradeStore, TradeFilter } from './types';
 import { jsonParse, unsafeCast } from './unsafe-cast';
@@ -94,7 +95,7 @@ class CandleStore implements ICandleStore {
     `);
   }
 
-  insertCandles(symbol: string, timeframe: Timeframe, candles: Candle[]): void {
+  insertCandles(symbol: Symbol, timeframe: Timeframe, candles: Candle[]): void {
     const insert = this.db.transaction(() => {
       for (const c of candles) {
         this.insertStmt.run(
@@ -115,7 +116,7 @@ class CandleStore implements ICandleStore {
     insert();
   }
 
-  getCandles(symbol: string, timeframe: Timeframe, startTime: number, endTime: number): Candle[] {
+  getCandles(symbol: Symbol, timeframe: Timeframe, startTime: number, endTime: number): Candle[] {
     interface CandleRow {
       open_time: number;
       close_time: number;
@@ -133,6 +134,7 @@ class CandleStore implements ICandleStore {
     );
     return rows.map(
       (r): Candle => ({
+        symbol,
         openTime: r.open_time,
         closeTime: r.close_time,
         open: r.open,
@@ -147,7 +149,7 @@ class CandleStore implements ICandleStore {
     );
   }
 
-  getLatestTimestamp(symbol: string, timeframe: Timeframe): number | null {
+  getLatestTimestamp(symbol: Symbol, timeframe: Timeframe): number | null {
     interface LatestRow {
       latest: number | null;
     }
@@ -155,7 +157,7 @@ class CandleStore implements ICandleStore {
     return row?.latest ?? null;
   }
 
-  getGaps(symbol: string, timeframe: Timeframe): Array<{ from: number; to: number }> {
+  getGaps(symbol: Symbol, timeframe: Timeframe): Array<{ from: number; to: number }> {
     interface TimeRow {
       open_time: number;
     }
@@ -257,7 +259,10 @@ class TradeStore implements ITradeStore {
     const rows = unsafeCast<TradeRow[]>(stmt.all(...params));
 
     return rows.map((r): TradeRecord => {
-      const side: TradeRecord['side'] = r.side === 'SHORT' ? 'SHORT' : 'LONG';
+      if (r.side !== 'LONG' && r.side !== 'SHORT') {
+        throw new Error(`Invalid side value in trade record: '${r.side}'`);
+      }
+      const side: TradeRecord['side'] = r.side;
       const exitReason: TradeRecord['exitReason'] = unsafeCast<TradeRecord['exitReason']>(
         r.exit_reason,
       );
@@ -266,7 +271,7 @@ class TradeStore implements ITradeStore {
         : {};
       return {
         id: r.id,
-        symbol: r.symbol,
+        symbol: toSymbol(r.symbol),
         side,
         entryPrice: r.entry_price,
         exitPrice: r.exit_price,

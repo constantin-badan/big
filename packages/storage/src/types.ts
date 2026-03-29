@@ -1,10 +1,10 @@
-import type { Candle, Timeframe, TradeRecord } from '@trading-bot/types';
+import type { Candle, Symbol, Timeframe, TradeRecord } from '@trading-bot/types';
 
 export interface ICandleStore {
-  insertCandles(symbol: string, timeframe: Timeframe, candles: Candle[]): void;
-  getCandles(symbol: string, timeframe: Timeframe, startTime: number, endTime: number): Candle[];
-  getLatestTimestamp(symbol: string, timeframe: Timeframe): number | null;
-  getGaps(symbol: string, timeframe: Timeframe): Array<{ from: number; to: number }>;
+  insertCandles(symbol: Symbol, timeframe: Timeframe, candles: Candle[]): void;
+  getCandles(symbol: Symbol, timeframe: Timeframe, startTime: number, endTime: number): Candle[];
+  getLatestTimestamp(symbol: Symbol, timeframe: Timeframe): number | null;
+  getGaps(symbol: Symbol, timeframe: Timeframe): Array<{ from: number; to: number }>;
 }
 
 export interface TradeFilter {

@@ -4,6 +4,7 @@ import type { IBacktestEngine } from '@trading-bot/backtest-engine';
 import type { ITradeStore } from '@trading-bot/storage';
 import type { IStrategy } from '@trading-bot/strategy';
 import type { BacktestResult, PerformanceMetrics, TradeRecord } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import { createParityChecker } from '../parity-checker';
 
@@ -27,7 +28,7 @@ const ZERO_METRICS: PerformanceMetrics = {
 function makeTrade(id: string, overrides?: Partial<TradeRecord>): TradeRecord {
   return {
     id,
-    symbol: 'BTCUSDT',
+    symbol: toSymbol('BTCUSDT'),
     side: 'LONG',
     entryPrice: 50000,
     exitPrice: 50500,
@@ -150,8 +151,8 @@ describe('parity-checker', () => {
   });
 
   test('does not match different symbols', async () => {
-    const liveTrade = makeTrade('t1', { symbol: 'BTCUSDT' });
-    const btTrade = makeTrade('bt1', { symbol: 'ETHUSDT' });
+    const liveTrade = makeTrade('t1', { symbol: toSymbol('BTCUSDT') });
+    const btTrade = makeTrade('bt1', { symbol: toSymbol('ETHUSDT') });
 
     const checker = createParityChecker(mockEngine([btTrade]), mockTradeStore([liveTrade]), ['1m']);
     const result = await checker.compare('test', stubFactory, {}, PERIOD);

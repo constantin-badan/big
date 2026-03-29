@@ -11,9 +11,11 @@ import type {
   OrderResult,
   Position,
   SlippageModel,
+  Symbol,
   Tick,
   Timeframe,
 } from '@trading-bot/types';
+import { toOrderId, toClientOrderId } from '@trading-bot/types';
 
 interface BacktestExchangeConfig {
   feeStructure: FeeStructure;
@@ -74,16 +76,13 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
     }
   }
 
-  private fillMarket(request: OrderRequest, basePrice: number, slippageMult: number): OrderResult {
+  private fillMarket(request: OrderRequest & { type: 'MARKET' }, basePrice: number, slippageMult: number): OrderResult {
     const direction = request.side === 'BUY' ? 1 : -1;
     const fillPrice = basePrice * (1 + direction * slippageMult);
     return this.makeFilled(request, fillPrice);
   }
 
-  private fillLimit(request: OrderRequest, currentPrice: number): OrderResult {
-    if (request.price === undefined) {
-      return this.makeRejected(request, 'LIMIT order requires price');
-    }
+  private fillLimit(request: OrderRequest & { type: 'LIMIT' }, currentPrice: number): OrderResult {
     // BUY LIMIT fills when market <= limit; SELL LIMIT fills when market >= limit
     const canFill =
       request.side === 'BUY' ? currentPrice <= request.price : currentPrice >= request.price;
@@ -93,10 +92,7 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
     return this.makeFilled(request, request.price);
   }
 
-  private fillStop(request: OrderRequest, currentPrice: number, slippageMult: number): OrderResult {
-    if (request.stopPrice === undefined) {
-      return this.makeRejected(request, 'STOP_MARKET requires stopPrice');
-    }
+  private fillStop(request: OrderRequest & { type: 'STOP_MARKET' }, currentPrice: number, slippageMult: number): OrderResult {
     // BUY STOP triggers when price >= stop; SELL STOP triggers when price <= stop
     const triggered =
       request.side === 'BUY'
@@ -111,13 +107,10 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
   }
 
   private fillTakeProfit(
-    request: OrderRequest,
+    request: OrderRequest & { type: 'TAKE_PROFIT_MARKET' },
     currentPrice: number,
     slippageMult: number,
   ): OrderResult {
-    if (request.stopPrice === undefined) {
-      return this.makeRejected(request, 'TAKE_PROFIT_MARKET requires stopPrice');
-    }
     // BUY TP triggers when price <= stop; SELL TP triggers when price >= stop
     const triggered =
       request.side === 'BUY'
@@ -139,7 +132,7 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
     // Uses margin-based check but full-notional balance tracking so that
     // round-trip PnL = (exitPrice - entryPrice) * qty - fees, regardless of leverage.
     const requiredMargin = notional / this.leverage + fee;
-    if (request.side === 'BUY' && this.balance < requiredMargin) {
+    if (this.balance < requiredMargin) {
       return this.makeRejected(
         request,
         `Insufficient margin: need ${requiredMargin.toFixed(2)}, have ${this.balance.toFixed(2)}`,
@@ -154,8 +147,8 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
     }
     this.orderCounter += 1;
     return {
-      orderId: `sim-${this.orderCounter}`,
-      clientOrderId: request.clientOrderId ?? `sim-${this.orderCounter}`,
+      orderId: toOrderId(`sim-${this.orderCounter}`),
+      clientOrderId: request.clientOrderId ?? toClientOrderId(`sim-${this.orderCounter}`),
       symbol: request.symbol,
       side: request.side,
       type: request.type,
@@ -174,8 +167,8 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
   private makeRejected(request: OrderRequest, _reason: string): OrderResult {
     this.orderCounter += 1;
     return {
-      orderId: `sim-${this.orderCounter}`,
-      clientOrderId: request.clientOrderId ?? `sim-${this.orderCounter}`,
+      orderId: toOrderId(`sim-${this.orderCounter}`),
+      clientOrderId: request.clientOrderId ?? toClientOrderId(`sim-${this.orderCounter}`),
       symbol: request.symbol,
       side: request.side,
       type: request.type,
@@ -201,7 +194,7 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
     return Promise.resolve([]);
   }
 
-  getOrderBook(symbol: string): Promise<OrderBookSnapshot> {
+  getOrderBook(symbol: Symbol): Promise<OrderBookSnapshot> {
     return Promise.resolve({ symbol, timestamp: 0, bids: [], asks: [] });
   }
 

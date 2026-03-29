@@ -1,9 +1,9 @@
 import type { IEventBus } from '@trading-bot/event-bus';
 import type { IndicatorFactory } from '@trading-bot/indicators';
-import type { Candle, Signal, Timeframe } from '@trading-bot/types';
+import type { Candle, Signal, Symbol, Timeframe } from '@trading-bot/types';
 
 export interface IScannerConfig {
-  symbols: string[];
+  symbols: Symbol[];
   timeframe: Timeframe;
   indicators: Record<string, IndicatorFactory>;
 }
@@ -23,5 +23,5 @@ export type ScannerFactory = (eventBus: IEventBus, config: IScannerConfig) => IS
 export type ScannerEvaluate = (
   indicators: Record<string, number>,
   candle: Candle,
-  symbol: string,
+  symbol: Symbol,
 ) => Omit<Signal, 'symbol' | 'sourceScanner' | 'timestamp'> | null;

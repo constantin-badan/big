@@ -47,6 +47,16 @@ export class EventBus implements IEventBus {
       } catch (err) {
         const name = handler.name || '<anonymous>';
         console.error(`EventBus: error in "${String(event)}" handler [${name}]:`, err);
+        // Propagate to 'error' event so monitoring systems can react.
+        // Guard: if the failing event IS 'error', don't recurse — just console.error above.
+        if (event !== 'error') {
+          const error = err instanceof Error ? err : new Error(String(err));
+          this.emit('error', {
+            source: 'event-bus',
+            error,
+            context: { event: String(event), handler: name },
+          });
+        }
       }
     }
   }

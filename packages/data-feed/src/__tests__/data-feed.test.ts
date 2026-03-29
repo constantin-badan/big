@@ -4,7 +4,8 @@ import type { IEventBus } from '@trading-bot/event-bus';
 import type { IExchange } from '@trading-bot/exchange-client';
 import { createTestBus, fixtures } from '@trading-bot/test-utils';
 import type { EventCapture } from '@trading-bot/test-utils';
-import type { Candle, Tick, Timeframe, OrderBookDiff } from '@trading-bot/types';
+import type { Candle, Symbol, Tick, Timeframe, OrderBookDiff } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import { LiveDataFeed } from '../live-data-feed';
 import { ReplayDataFeed } from '../replay-data-feed';
@@ -19,14 +20,14 @@ function createStreamableExchange(overrides: {
   subscribeOrderBookDiff?: IExchange['subscribeOrderBookDiff'];
 }): IExchange {
   const noopCandles: IExchange['subscribeCandles'] =
-    (_s: string, _tf: Timeframe, _cb: (c: Candle) => void) => () => {};
-  const noopTicks: IExchange['subscribeTicks'] = (_s: string, _cb: (t: Tick) => void) => () => {};
+    (_s: Symbol, _tf: Timeframe, _cb: (c: Candle) => void) => () => {};
+  const noopTicks: IExchange['subscribeTicks'] = (_s: Symbol, _cb: (t: Tick) => void) => () => {};
   const noopDepth: IExchange['subscribeOrderBookDiff'] =
-    (_s: string, _cb: (d: OrderBookDiff) => void) => () => {};
+    (_s: Symbol, _cb: (d: OrderBookDiff) => void) => () => {};
 
   const exchange: IExchange = {
     getCandles: async () => [],
-    getOrderBook: async () => ({ symbol: '', timestamp: 0, bids: [], asks: [] }),
+    getOrderBook: async () => ({ symbol: toSymbol(''), timestamp: 0, bids: [], asks: [] }),
     subscribeCandles: overrides.subscribeCandles ?? noopCandles,
     subscribeTicks: overrides.subscribeTicks ?? noopTicks,
     subscribeOrderBookDiff: overrides.subscribeOrderBookDiff ?? noopDepth,
@@ -52,6 +53,7 @@ const BASE_TIME = 1700000000000;
 function makeCandle(index: number): Candle {
   const open = 50000 + index * 10;
   return {
+    symbol: toSymbol('BTCUSDT'),
     openTime: BASE_TIME + index * 60000,
     closeTime: BASE_TIME + (index + 1) * 60000 - 1,
     open,
@@ -79,7 +81,7 @@ describe('ReplayDataFeed', () => {
     const candleMap = new Map<string, Candle[]>([['BTCUSDT:1m', slice]]);
 
     const feed = new ReplayDataFeed(bus, candleMap);
-    await feed.start(['BTCUSDT'], ['1m']);
+    await feed.start([toSymbol('BTCUSDT')], ['1m']);
 
     const events = capture.get('candle:close');
     expect(events).toHaveLength(5);
@@ -104,6 +106,7 @@ describe('ReplayDataFeed', () => {
     // 2 candles on 4h (4h = 240 minutes = 240 * 60000 ms steps, starting at base time)
     const fourHourCandles: Candle[] = [
       {
+        symbol: toSymbol('BTCUSDT'),
         openTime: BASE_TIME,
         closeTime: BASE_TIME + 240 * 60000 - 1,
         open: 50000,
@@ -116,6 +119,7 @@ describe('ReplayDataFeed', () => {
         isClosed: true,
       },
       {
+        symbol: toSymbol('BTCUSDT'),
         openTime: BASE_TIME + 240 * 60000,
         closeTime: BASE_TIME + 480 * 60000 - 1,
         open: 50200,
@@ -135,7 +139,7 @@ describe('ReplayDataFeed', () => {
     ]);
 
     const feed = new ReplayDataFeed(bus, candleMap);
-    await feed.start(['BTCUSDT'], ['1m', '4h']);
+    await feed.start([toSymbol('BTCUSDT')], ['1m', '4h']);
 
     const events = capture.get('candle:close');
     // 5 one-minute + 2 four-hour = 7 events
@@ -171,7 +175,7 @@ describe('ReplayDataFeed', () => {
     const candleMap = new Map<string, Candle[]>([['ETHUSDT:5m', [testCandle]]]);
 
     const feed = new ReplayDataFeed(bus, candleMap);
-    await feed.start(['ETHUSDT'], ['5m']);
+    await feed.start([toSymbol('ETHUSDT')], ['5m']);
 
     const events = capture.get('candle:close');
     expect(events).toHaveLength(1);
@@ -179,7 +183,7 @@ describe('ReplayDataFeed', () => {
     const evt = events[0];
     expect(evt).toBeDefined();
     if (evt !== undefined) {
-      expect(evt.symbol).toBe('ETHUSDT');
+      expect(evt.symbol).toBe(toSymbol('ETHUSDT'));
       expect(evt.timeframe).toBe('5m');
       expect(evt.candle.openTime).toBe(testCandle.openTime);
       expect(evt.candle.close).toBe(testCandle.close);
@@ -206,7 +210,7 @@ describe('ReplayDataFeed', () => {
       }
     });
 
-    await feed.start(['BTCUSDT'], ['1m']);
+    await feed.start([toSymbol('BTCUSDT')], ['1m']);
 
     // With stop() called on first emit, the loop checks running before each iteration.
     // The first candle fires, stop() sets running=false, then the loop breaks.
@@ -218,16 +222,16 @@ describe('ReplayDataFeed', () => {
     const { bus }: { bus: IEventBus } = createTestBus();
     const feed = new ReplayDataFeed(bus, new Map());
 
-    expect(feed.getOrderBook('BTCUSDT')).toBeNull();
-    expect(feed.getOrderBook('ETHUSDT')).toBeNull();
-    expect(feed.getOrderBook('')).toBeNull();
+    expect(feed.getOrderBook(toSymbol('BTCUSDT'))).toBeNull();
+    expect(feed.getOrderBook(toSymbol('ETHUSDT'))).toBeNull();
+    expect(feed.getOrderBook(toSymbol(''))).toBeNull();
   });
 
   test('empty map: start() completes immediately, no events emitted', async () => {
     const { bus, capture }: { bus: IEventBus; capture: EventCapture } = createTestBus();
 
     const feed = new ReplayDataFeed(bus, new Map());
-    await feed.start(['BTCUSDT'], ['1m']);
+    await feed.start([toSymbol('BTCUSDT')], ['1m']);
 
     expect(capture.count('candle:close')).toBe(0);
   });
@@ -244,7 +248,7 @@ describe('ReplayDataFeed', () => {
     for (let run = 0; run < 2; run++) {
       const { bus, capture }: { bus: IEventBus; capture: EventCapture } = createTestBus();
       const feed = new ReplayDataFeed(bus, candleMap);
-      await feed.start(['BTCUSDT', 'ETHUSDT'], ['1m']);
+      await feed.start([toSymbol('BTCUSDT'), toSymbol('ETHUSDT')], ['1m']);
       runs.push(
         capture.get('candle:close').map((e) => ({ symbol: e.symbol, openTime: e.candle.openTime })),
       );
@@ -284,7 +288,7 @@ describe('ReplayDataFeed', () => {
     const candleMap = new Map<string, Candle[]>([['BTCUSDT:1m', candlesWithGap]]);
 
     const feed = new ReplayDataFeed(bus, candleMap);
-    await feed.start(['BTCUSDT'], ['1m']);
+    await feed.start([toSymbol('BTCUSDT')], ['1m']);
 
     const errors = capture.get('error');
     expect(errors.length).toBeGreaterThanOrEqual(1);
@@ -310,7 +314,7 @@ describe('LiveDataFeed', () => {
     });
 
     const feed = new LiveDataFeed(bus, exchange);
-    await feed.start(['BTCUSDT'], ['1m']);
+    await feed.start([toSymbol('BTCUSDT')], ['1m']);
 
     expect(candleCallback).not.toBeNull();
 
@@ -320,7 +324,7 @@ describe('LiveDataFeed', () => {
     expect(capture.count('candle:close')).toBe(1);
     const evt = capture.get('candle:close')[0];
     expect(evt).toBeDefined();
-    expect(evt!.symbol).toBe('BTCUSDT');
+    expect(evt!.symbol).toBe(toSymbol('BTCUSDT'));
     expect(evt!.timeframe).toBe('1m');
     expect(evt!.candle.isClosed).toBe(true);
   });
@@ -337,7 +341,7 @@ describe('LiveDataFeed', () => {
     });
 
     const feed = new LiveDataFeed(bus, exchange);
-    await feed.start(['BTCUSDT'], ['1m']);
+    await feed.start([toSymbol('BTCUSDT')], ['1m']);
 
     const formingCandle: Candle = { ...fixtures.candle, isClosed: false };
     candleCallback!(formingCandle);
@@ -358,11 +362,11 @@ describe('LiveDataFeed', () => {
     });
 
     const feed = new LiveDataFeed(bus, exchange);
-    await feed.start(['BTCUSDT'], ['1m']);
+    await feed.start([toSymbol('BTCUSDT')], ['1m']);
 
     expect(tickCallback).not.toBeNull();
     const testTick: Tick = {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       price: 50000,
       quantity: 0.5,
       timestamp: 1700000000000,
@@ -386,11 +390,11 @@ describe('LiveDataFeed', () => {
     });
 
     const feed = new LiveDataFeed(bus, exchange);
-    await feed.start(['BTCUSDT', 'ETHUSDT'], ['1m', '5m']);
+    await feed.start([toSymbol('BTCUSDT'), toSymbol('ETHUSDT')], ['1m', '5m']);
 
     expect(subscriptions).toHaveLength(4);
-    expect(subscriptions).toContainEqual({ symbol: 'BTCUSDT', timeframe: '1m' });
-    expect(subscriptions).toContainEqual({ symbol: 'BTCUSDT', timeframe: '5m' });
+    expect(subscriptions).toContainEqual({ symbol: toSymbol('BTCUSDT'), timeframe: '1m' });
+    expect(subscriptions).toContainEqual({ symbol: toSymbol('BTCUSDT'), timeframe: '5m' });
     expect(subscriptions).toContainEqual({ symbol: 'ETHUSDT', timeframe: '1m' });
     expect(subscriptions).toContainEqual({ symbol: 'ETHUSDT', timeframe: '5m' });
   });
@@ -409,7 +413,7 @@ describe('LiveDataFeed', () => {
     });
 
     const feed = new LiveDataFeed(bus, exchange);
-    await feed.start(['BTCUSDT'], ['1m']);
+    await feed.start([toSymbol('BTCUSDT')], ['1m']);
     await feed.stop();
 
     expect(unsubCount).toBe(2);
@@ -420,9 +424,9 @@ describe('LiveDataFeed', () => {
     const exchange = createStreamableExchange({});
 
     const feed = new LiveDataFeed(bus, exchange);
-    await feed.start(['BTCUSDT'], ['1m']);
+    await feed.start([toSymbol('BTCUSDT')], ['1m']);
 
-    expect(feed.getOrderBook('BTCUSDT')).toBeNull();
+    expect(feed.getOrderBook(toSymbol('BTCUSDT'))).toBeNull();
   });
 
   test('does not emit events after stop()', async () => {
@@ -437,7 +441,7 @@ describe('LiveDataFeed', () => {
     });
 
     const feed = new LiveDataFeed(bus, exchange);
-    await feed.start(['BTCUSDT'], ['1m']);
+    await feed.start([toSymbol('BTCUSDT')], ['1m']);
     await feed.stop();
 
     const closedCandle: Candle = { ...fixtures.candle, isClosed: true };

@@ -9,8 +9,10 @@ import type {
   BacktestConfig,
   TradeRecord,
   PerformanceMetrics,
+  Symbol,
   Timeframe,
 } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import { createBacktestEngine } from '../backtest-engine';
 import { BacktestSimExchange } from '../backtest-sim-exchange';
@@ -19,6 +21,7 @@ const BASE_TIME = 1700000000000;
 
 function makeCandles(count: number, basePrice: number): Candle[] {
   return Array.from({ length: count }, (_, i) => ({
+    symbol: toSymbol('BTCUSDT'),
     openTime: BASE_TIME + i * 60_000,
     closeTime: BASE_TIME + (i + 1) * 60_000 - 1,
     open: basePrice + i * 10,
@@ -42,7 +45,7 @@ const simConfig: ExchangeConfig = {
 const btConfig: BacktestConfig = {
   startTime: BASE_TIME,
   endTime: BASE_TIME + 100 * 60_000,
-  symbols: ['BTCUSDT'],
+  symbols: [toSymbol('BTCUSDT')],
   timeframes: ['1m'],
 };
 
@@ -61,7 +64,7 @@ const zeroMetrics: PerformanceMetrics = {
   totalSlippage: 0,
 };
 
-function seedPrice(bus: EventBus, symbol: string, price: number): void {
+function seedPrice(bus: EventBus, symbol: Symbol, price: number): void {
   const tf: Timeframe = '1m';
   bus.emit('candle:close', {
     symbol,
@@ -78,7 +81,7 @@ function tradingFactory(buyAt: number, sellAt: number): StrategyFactory {
     let entryPrice = 0;
     let entryTime = 0;
 
-    const handler = (data: { symbol: string; timeframe: Timeframe; candle: Candle }) => {
+    const handler = (data: { symbol: Symbol; timeframe: Timeframe; candle: Candle }) => {
       count += 1;
 
       if (count === buyAt) {
@@ -164,14 +167,14 @@ describe('BacktestSimExchange', () => {
       initialBalance: 10_000,
       leverage: 125, // high leverage so margin check doesn't interfere with fill mechanics tests
     });
-    seedPrice(bus, 'BTCUSDT', 50_000);
+    seedPrice(bus, toSymbol('BTCUSDT'), 50_000);
     return { bus, exchange };
   }
 
   test('MARKET BUY fills at current price + slippage', () => {
     const { exchange } = createExchange(10); // 10 bps
     const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 1,
@@ -184,7 +187,7 @@ describe('BacktestSimExchange', () => {
   test('MARKET SELL fills at current price - slippage', () => {
     const { exchange } = createExchange(10);
     const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'SELL',
       type: 'MARKET',
       quantity: 1,
@@ -197,7 +200,7 @@ describe('BacktestSimExchange', () => {
   test('LIMIT BUY fills at limit price when market <= limit', () => {
     const { exchange } = createExchange();
     const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'LIMIT',
       quantity: 1,
@@ -210,7 +213,7 @@ describe('BacktestSimExchange', () => {
   test('LIMIT BUY rejected when market > limit', () => {
     const { exchange } = createExchange();
     const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'LIMIT',
       quantity: 1,
@@ -222,7 +225,7 @@ describe('BacktestSimExchange', () => {
   test('LIMIT SELL fills at limit price when market >= limit', () => {
     const { exchange } = createExchange();
     const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'SELL',
       type: 'LIMIT',
       quantity: 1,
@@ -235,7 +238,7 @@ describe('BacktestSimExchange', () => {
   test('LIMIT SELL rejected when market < limit', () => {
     const { exchange } = createExchange();
     const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'SELL',
       type: 'LIMIT',
       quantity: 1,
@@ -247,7 +250,7 @@ describe('BacktestSimExchange', () => {
   test('STOP_MARKET BUY triggers when price >= stopPrice', () => {
     const { exchange } = createExchange(10);
     const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'STOP_MARKET',
       quantity: 1,
@@ -261,7 +264,7 @@ describe('BacktestSimExchange', () => {
   test('STOP_MARKET BUY rejected when price < stopPrice', () => {
     const { exchange } = createExchange();
     const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'STOP_MARKET',
       quantity: 1,
@@ -273,7 +276,7 @@ describe('BacktestSimExchange', () => {
   test('STOP_MARKET SELL triggers when price <= stopPrice', () => {
     const { exchange } = createExchange(10);
     const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'SELL',
       type: 'STOP_MARKET',
       quantity: 1,
@@ -287,7 +290,7 @@ describe('BacktestSimExchange', () => {
   test('TAKE_PROFIT_MARKET SELL triggers when price >= stopPrice', () => {
     const { exchange } = createExchange(10);
     const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'SELL',
       type: 'TAKE_PROFIT_MARKET',
       quantity: 1,
@@ -301,7 +304,7 @@ describe('BacktestSimExchange', () => {
   test('TAKE_PROFIT_MARKET BUY triggers when price <= stopPrice', () => {
     const { exchange } = createExchange(10);
     const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'TAKE_PROFIT_MARKET',
       quantity: 1,
@@ -315,7 +318,7 @@ describe('BacktestSimExchange', () => {
   test('fee is quantity * fillPrice * taker rate', () => {
     const { exchange } = createExchange(0); // zero slippage for easy math
     const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 2,
@@ -328,7 +331,7 @@ describe('BacktestSimExchange', () => {
   test('rejects when no price data for symbol', () => {
     const { exchange } = createExchange();
     const result = exchange.simulateFill({
-      symbol: 'ETHUSDT', // never received a candle
+      symbol: toSymbol('ETHUSDT'), // never received a candle
       side: 'BUY',
       type: 'MARKET',
       quantity: 1,
@@ -348,10 +351,10 @@ describe('BacktestSimExchange', () => {
       initialBalance: 1_000,
       leverage: 1, // 1x leverage → full notional as margin
     });
-    seedPrice(bus, 'BTCUSDT', 50_000);
+    seedPrice(bus, toSymbol('BTCUSDT'), 50_000);
     // Need 50_000 margin but only have 1_000
     const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 1,
@@ -367,9 +370,9 @@ describe('BacktestSimExchange', () => {
       initialBalance: 1_000,
       leverage: 100, // 100x → margin = 50_000/100 = 500 < 1_000
     });
-    seedPrice(bus, 'BTCUSDT', 50_000);
+    seedPrice(bus, toSymbol('BTCUSDT'), 50_000);
     const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 1,
@@ -377,46 +380,13 @@ describe('BacktestSimExchange', () => {
     expect(result.status).toBe('FILLED');
   });
 
-  test('LIMIT order with undefined price is rejected', () => {
-    const { exchange } = createExchange();
-    const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
-      side: 'BUY',
-      type: 'LIMIT',
-      quantity: 1,
-      // price intentionally omitted
-    });
-    expect(result.status).toBe('REJECTED');
-  });
-
-  test('STOP_MARKET with undefined stopPrice is rejected', () => {
-    const { exchange } = createExchange();
-    const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
-      side: 'BUY',
-      type: 'STOP_MARKET',
-      quantity: 1,
-      // stopPrice intentionally omitted
-    });
-    expect(result.status).toBe('REJECTED');
-  });
-
-  test('TAKE_PROFIT_MARKET with undefined stopPrice is rejected', () => {
-    const { exchange } = createExchange();
-    const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
-      side: 'SELL',
-      type: 'TAKE_PROFIT_MARKET',
-      quantity: 1,
-      // stopPrice intentionally omitted
-    });
-    expect(result.status).toBe('REJECTED');
-  });
+  // Tests for missing price/stopPrice removed: the discriminated union on OrderRequest
+  // now makes these invalid states unrepresentable at compile time.
 
   test('LIMIT order uses maker fee rate', () => {
     const { exchange } = createExchange(0); // zero slippage
     const result = exchange.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'LIMIT',
       quantity: 2,
@@ -432,10 +402,10 @@ describe('BacktestSimExchange', () => {
   test('dispose unsubscribes from candle:close', () => {
     const { bus, exchange } = createExchange();
     exchange.dispose();
-    seedPrice(bus, 'ETHUSDT', 3000);
+    seedPrice(bus, toSymbol('ETHUSDT'), 3000);
     // Should still have no price for ETHUSDT since handler was removed
     const result = exchange.simulateFill({
-      symbol: 'ETHUSDT',
+      symbol: toSymbol('ETHUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 1,
@@ -470,7 +440,7 @@ describe('createBacktestEngine', () => {
       engine.run(factory, {}, {
         startTime: BASE_TIME + 100 * 60_000,
         endTime: BASE_TIME, // endTime before startTime
-        symbols: ['BTCUSDT'],
+        symbols: [toSymbol('BTCUSDT')],
         timeframes: ['1m'],
       }),
     ).rejects.toThrow('startTime must be < endTime');
@@ -546,7 +516,7 @@ describe('createBacktestEngine', () => {
 
     const multiConfig: BacktestConfig = {
       ...btConfig,
-      symbols: ['BTCUSDT', 'ETHUSDT'],
+      symbols: [toSymbol('BTCUSDT'), toSymbol('ETHUSDT')],
       timeframes: ['1m', '5m'],
     };
 
@@ -556,10 +526,10 @@ describe('createBacktestEngine', () => {
     await engine.run(factory, {}, multiConfig);
 
     expect(calls.length).toBe(4);
-    expect(calls).toContainEqual({ symbol: 'BTCUSDT', tf: '1m' });
-    expect(calls).toContainEqual({ symbol: 'BTCUSDT', tf: '5m' });
-    expect(calls).toContainEqual({ symbol: 'ETHUSDT', tf: '1m' });
-    expect(calls).toContainEqual({ symbol: 'ETHUSDT', tf: '5m' });
+    expect(calls).toContainEqual({ symbol: toSymbol('BTCUSDT'), tf: '1m' });
+    expect(calls).toContainEqual({ symbol: toSymbol('BTCUSDT'), tf: '5m' });
+    expect(calls).toContainEqual({ symbol: toSymbol('ETHUSDT'), tf: '1m' });
+    expect(calls).toContainEqual({ symbol: toSymbol('ETHUSDT'), tf: '5m' });
   });
 
   test('order:filled events emitted during run', async () => {
@@ -570,7 +540,7 @@ describe('createBacktestEngine', () => {
     let filledCount = 0;
     const factory: StrategyFactory = (_params, deps) => {
       let count = 0;
-      const candleHandler = (data: { symbol: string; timeframe: Timeframe; candle: Candle }) => {
+      const candleHandler = (data: { symbol: Symbol; timeframe: Timeframe; candle: Candle }) => {
         count += 1;
         if (count === 5) {
           deps.executor.submit({

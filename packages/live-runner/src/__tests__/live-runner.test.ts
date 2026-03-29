@@ -4,6 +4,7 @@ import type { IExchange } from '@trading-bot/exchange-client';
 import type { IStrategy } from '@trading-bot/strategy';
 import { createMockExchange } from '@trading-bot/test-utils';
 import type { Position, ExchangeConfig } from '@trading-bot/types';
+import { toSymbol, toOrderId, toClientOrderId } from '@trading-bot/types';
 
 // Mutable mock state — reset between tests
 let mockExchange: IExchange;
@@ -75,7 +76,7 @@ function makeConfig() {
       apiKey: 'test-key',
       privateKey: 'test-private-key',
     },
-    symbols: ['BTCUSDT'],
+    symbols: [toSymbol('BTCUSDT')],
     timeframes: ['1m' as const],
   };
 }
@@ -142,7 +143,7 @@ describe('live-runner', () => {
   test('orphan positions detected and reported', async () => {
     mockPositions = [
       {
-        symbol: 'BTCUSDT',
+        symbol: toSymbol('BTCUSDT'),
         side: 'LONG',
         entryPrice: 50000,
         quantity: 0.1,
@@ -162,7 +163,7 @@ describe('live-runner', () => {
   test('orphan check skipped when disabled', async () => {
     mockPositions = [
       {
-        symbol: 'BTCUSDT',
+        symbol: toSymbol('BTCUSDT'),
         side: 'LONG',
         entryPrice: 50000,
         quantity: 0.1,
@@ -203,7 +204,7 @@ describe('live-runner', () => {
       if (callCount <= 1) return [];
       return [
         {
-          symbol: 'ETHUSDT',
+          symbol: toSymbol('ETHUSDT'),
           side: 'SHORT',
           entryPrice: 3000,
           quantity: 1,
@@ -218,8 +219,8 @@ describe('live-runner', () => {
     mockExchange.placeOrder = async (req) => {
       closedSymbols.push(req.symbol);
       return {
-        orderId: '1',
-        clientOrderId: 'close-1',
+        orderId: toOrderId('1'),
+        clientOrderId: toClientOrderId('close-1'),
         symbol: req.symbol,
         side: req.side,
         type: 'MARKET',

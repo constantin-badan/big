@@ -1,8 +1,30 @@
+// === Branded Types ===
+// Nominal types prevent accidental swaps between string fields (e.g., passing orderId where symbol is expected).
+// Constructor functions (toSymbol, toOrderId, toClientOrderId) are the ONLY trust boundary.
+// Internal code passes the branded value through without casting.
+
+declare const __brand: unique symbol;
+export type Symbol = string & { readonly [__brand]: 'Symbol' };
+export type OrderId = string & { readonly [__brand]: 'OrderId' };
+export type ClientOrderId = string & { readonly [__brand]: 'ClientOrderId' };
+
+// Trust-boundary constructors — the ONLY place raw strings become branded types.
+// Uses the overload trick to avoid `as` casts (banned by oxlint assertionStyle: "never").
+export function toSymbol(s: string): Symbol;
+export function toSymbol(s: string) { return s; }
+
+export function toOrderId(s: string): OrderId;
+export function toOrderId(s: string) { return s; }
+
+export function toClientOrderId(s: string): ClientOrderId;
+export function toClientOrderId(s: string) { return s; }
+
 // === Market Data ===
 
 export type Timeframe = '1m' | '3m' | '5m' | '15m' | '1h' | '4h' | '1d';
 
 export interface Candle {
+  symbol: Symbol;
   openTime: number;
   closeTime: number;
   open: number;
@@ -16,7 +38,7 @@ export interface Candle {
 }
 
 export interface Tick {
-  symbol: string;
+  symbol: Symbol;
   price: number;
   quantity: number;
   timestamp: number;
@@ -24,14 +46,14 @@ export interface Tick {
 }
 
 export interface OrderBookSnapshot {
-  symbol: string;
+  symbol: Symbol;
   timestamp: number;
   bids: [price: number, quantity: number][];
   asks: [price: number, quantity: number][];
 }
 
 export interface OrderBookDiff {
-  symbol: string;
+  symbol: Symbol;
   timestamp: number;
   bids: [price: number, quantity: number][];
   asks: [price: number, quantity: number][];
@@ -52,22 +74,24 @@ export type OrderStatus =
   | 'EXPIRED';
 export type PositionSide = 'LONG' | 'SHORT';
 
-export interface OrderRequest {
-  symbol: string;
+interface OrderRequestBase {
+  symbol: Symbol;
   side: OrderSide;
-  type: OrderType;
   quantity: number;
-  price?: number;
-  stopPrice?: number;
-  timeInForce?: 'GTC' | 'IOC' | 'FOK';
   reduceOnly?: boolean;
-  clientOrderId?: string;
+  clientOrderId?: ClientOrderId;
 }
 
+export type OrderRequest =
+  | (OrderRequestBase & { type: 'MARKET' })
+  | (OrderRequestBase & { type: 'LIMIT'; price: number; timeInForce?: 'GTC' | 'IOC' | 'FOK' })
+  | (OrderRequestBase & { type: 'STOP_MARKET'; stopPrice: number })
+  | (OrderRequestBase & { type: 'TAKE_PROFIT_MARKET'; stopPrice: number });
+
 export interface OrderResult {
-  orderId: string;
-  clientOrderId: string;
-  symbol: string;
+  orderId: OrderId;
+  clientOrderId: ClientOrderId;
+  symbol: Symbol;
   side: OrderSide;
   type: OrderType;
   status: OrderStatus;
@@ -82,8 +106,8 @@ export interface OrderResult {
 }
 
 export interface SubmissionReceipt {
-  clientOrderId: string;
-  symbol: string;
+  clientOrderId: ClientOrderId;
+  symbol: Symbol;
   side: OrderSide;
   type: OrderType;
   quantity: number;
@@ -91,7 +115,7 @@ export interface SubmissionReceipt {
 }
 
 export interface Position {
-  symbol: string;
+  symbol: Symbol;
   side: PositionSide;
   entryPrice: number;
   quantity: number;
@@ -107,7 +131,7 @@ export interface Position {
 export type SignalAction = 'ENTER_LONG' | 'ENTER_SHORT' | 'EXIT' | 'NO_ACTION';
 
 export interface Signal {
-  symbol: string;
+  symbol: Symbol;
   action: SignalAction;
   confidence: number;
   price: number; // last close price at signal time — used by position-manager for entry sizing
@@ -169,6 +193,8 @@ export interface PositionManagerConfig {
   trailingStopActivationPct: number;
   trailingStopDistancePct: number;
   maxHoldTimeMs: number;
+  evaluationTimeframe?: Timeframe; // if set, only evaluate SL/TP on this timeframe's candle:close
+  quantityStepSize?: number; // if set, round order quantity down to nearest step size
 }
 
 export type PositionState = 'IDLE' | 'PENDING_ENTRY' | 'OPEN' | 'PENDING_EXIT';
@@ -176,27 +202,27 @@ export type PositionState = 'IDLE' | 'PENDING_ENTRY' | 'OPEN' | 'PENDING_EXIT';
 // === Interfaces: Exchange ===
 
 export interface IExchange {
-  getCandles(symbol: string, timeframe: Timeframe, limit: number): Promise<Candle[]>;
-  getOrderBook(symbol: string, depth?: number): Promise<OrderBookSnapshot>;
+  getCandles(symbol: Symbol, timeframe: Timeframe, limit: number): Promise<Candle[]>;
+  getOrderBook(symbol: Symbol, depth?: number): Promise<OrderBookSnapshot>;
 
   subscribeCandles(
-    symbol: string,
+    symbol: Symbol,
     timeframe: Timeframe,
     callback: (candle: Candle) => void,
   ): () => void;
-  subscribeTicks(symbol: string, callback: (tick: Tick) => void): () => void;
-  subscribeOrderBookDiff(symbol: string, callback: (diff: OrderBookDiff) => void): () => void;
+  subscribeTicks(symbol: Symbol, callback: (tick: Tick) => void): () => void;
+  subscribeOrderBookDiff(symbol: Symbol, callback: (diff: OrderBookDiff) => void): () => void;
 
   placeOrder(request: OrderRequest): Promise<OrderResult>;
-  cancelOrder(symbol: string, orderId: string): Promise<void>;
-  getOpenOrders(symbol: string): Promise<OrderResult[]>;
+  cancelOrder(symbol: Symbol, orderId: OrderId): Promise<void>;
+  getOpenOrders(symbol: Symbol): Promise<OrderResult[]>;
 
-  getPosition(symbol: string): Promise<Position | null>;
+  getPosition(symbol: Symbol): Promise<Position | null>;
   getPositions(): Promise<Position[]>;
-  setLeverage(symbol: string, leverage: number): Promise<void>;
+  setLeverage(symbol: Symbol, leverage: number): Promise<void>;
 
   getBalance(): Promise<AccountBalance[]>;
-  getFees(symbol: string): Promise<FeeStructure>;
+  getFees(symbol: Symbol): Promise<FeeStructure>;
 
   connect(): Promise<void>;
   disconnect(): Promise<void>;
@@ -207,8 +233,8 @@ export interface IExchange {
 
 export interface IOrderExecutor {
   submit(request: OrderRequest): SubmissionReceipt;
-  cancelAll(symbol: string): void;
-  hasPending(symbol: string): boolean;
+  cancelAll(symbol: Symbol): void;
+  hasPending(symbol: Symbol): boolean;
   getPendingCount(): number;
   start(): Promise<void>;
   stop(): Promise<void>;
@@ -236,9 +262,9 @@ export interface IRiskManager {
 // === Interfaces: Position Manager ===
 
 export interface IPositionManager {
-  getState(symbol: string): PositionState;
-  hasOpenPosition(symbol: string): boolean;
-  hasPendingOrder(symbol: string): boolean;
+  getState(symbol: Symbol): PositionState;
+  hasOpenPosition(symbol: Symbol): boolean;
+  hasPendingOrder(symbol: Symbol): boolean;
   getOpenPositions(): Position[];
   dispose(): void;
 }
@@ -247,7 +273,7 @@ export interface IPositionManager {
 
 export interface TradeRecord {
   id: string;
-  symbol: string;
+  symbol: Symbol;
   side: PositionSide;
   entryPrice: number;
   exitPrice: number;
@@ -351,6 +377,6 @@ export type SlippageModel =
 export interface BacktestConfig {
   startTime: number;
   endTime: number;
-  symbols: string[];
+  symbols: Symbol[];
   timeframes: Timeframe[]; // plural — engine calls loader for every symbol × timeframe combination
 }

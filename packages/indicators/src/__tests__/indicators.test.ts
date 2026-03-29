@@ -2,6 +2,7 @@ import { describe, test, expect } from 'bun:test';
 
 import { fixtures } from '@trading-bot/test-utils';
 import type { Candle } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import {
   SMA,
@@ -23,6 +24,7 @@ import {
 function makeCandle(overrides: Partial<Candle> & { close: number }): Candle {
   const close = overrides.close;
   return {
+    symbol: overrides.symbol ?? toSymbol('BTCUSDT'),
     openTime: overrides.openTime ?? 0,
     closeTime: overrides.closeTime ?? 59999,
     open: overrides.open ?? close,

@@ -1,5 +1,6 @@
 import type { IEventBus } from '@trading-bot/event-bus';
-import type { OrderRequest, SubmissionReceipt } from '@trading-bot/types';
+import type { OrderRequest, SubmissionReceipt, Symbol } from '@trading-bot/types';
+import { toClientOrderId } from '@trading-bot/types';
 
 import type { IFillSimulator, IOrderExecutor } from './types';
 
@@ -15,7 +16,7 @@ export class BacktestExecutor implements IOrderExecutor {
 
   submit(request: OrderRequest): SubmissionReceipt {
     this.counter += 1;
-    const clientOrderId = request.clientOrderId ?? `backtest-order-${this.counter}`;
+    const clientOrderId = request.clientOrderId ?? toClientOrderId(`backtest-order-${this.counter}`);
 
     // Build receipt BEFORE any emit (state-before-emit rule, ADR-2)
     const receipt: SubmissionReceipt = {
@@ -45,11 +46,11 @@ export class BacktestExecutor implements IOrderExecutor {
     return receipt;
   }
 
-  cancelAll(_symbol: string): void {
+  cancelAll(_symbol: Symbol): void {
     // No-op: fills are instant in backtest, nothing is pending
   }
 
-  hasPending(_symbol: string): boolean {
+  hasPending(_symbol: Symbol): boolean {
     return false;
   }
 

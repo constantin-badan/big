@@ -7,12 +7,15 @@ import type {
   Signal,
   Tick,
 } from '@trading-bot/types';
+import { toSymbol, toOrderId, toClientOrderId } from '@trading-bot/types';
 
 const BASE_TIME = 1700000000000;
+const BTCUSDT = toSymbol('BTCUSDT');
 
 function makeCandle(index: number): Candle {
   const open = 50000 + index * 10;
   return {
+    symbol: BTCUSDT,
     openTime: BASE_TIME + index * 60000,
     closeTime: BASE_TIME + (index + 1) * 60000 - 1,
     open,
@@ -31,7 +34,7 @@ const candles: Candle[] = Array.from({ length: 100 }, (_, i) => makeCandle(i));
 const candle: Candle = candles[0]!;
 
 const tick: Tick = {
-  symbol: 'BTCUSDT',
+  symbol: BTCUSDT,
   price: 50000,
   quantity: 0.5,
   timestamp: BASE_TIME,
@@ -39,7 +42,7 @@ const tick: Tick = {
 };
 
 const longSignal: Signal = {
-  symbol: 'BTCUSDT',
+  symbol: BTCUSDT,
   action: 'ENTER_LONG',
   confidence: 0.85,
   price: 50020,
@@ -49,7 +52,7 @@ const longSignal: Signal = {
 };
 
 const shortSignal: Signal = {
-  symbol: 'BTCUSDT',
+  symbol: BTCUSDT,
   action: 'ENTER_SHORT',
   confidence: 0.75,
   price: 50020,
@@ -59,7 +62,7 @@ const shortSignal: Signal = {
 };
 
 const exitSignal: Signal = {
-  symbol: 'BTCUSDT',
+  symbol: BTCUSDT,
   action: 'EXIT',
   confidence: 1.0,
   price: 50020,
@@ -69,9 +72,9 @@ const exitSignal: Signal = {
 };
 
 const filledBuy: OrderResult = {
-  orderId: 'order-1',
-  clientOrderId: 'client-1',
-  symbol: 'BTCUSDT',
+  orderId: toOrderId('order-1'),
+  clientOrderId: toClientOrderId('client-1'),
+  symbol: BTCUSDT,
   side: 'BUY',
   type: 'MARKET',
   status: 'FILLED',
@@ -86,9 +89,9 @@ const filledBuy: OrderResult = {
 };
 
 const filledSell: OrderResult = {
-  orderId: 'order-2',
-  clientOrderId: 'client-2',
-  symbol: 'BTCUSDT',
+  orderId: toOrderId('order-2'),
+  clientOrderId: toClientOrderId('client-2'),
+  symbol: BTCUSDT,
   side: 'SELL',
   type: 'MARKET',
   status: 'FILLED',
@@ -103,9 +106,9 @@ const filledSell: OrderResult = {
 };
 
 const rejectedOrder: OrderResult = {
-  orderId: 'order-3',
-  clientOrderId: 'client-3',
-  symbol: 'BTCUSDT',
+  orderId: toOrderId('order-3'),
+  clientOrderId: toClientOrderId('client-3'),
+  symbol: BTCUSDT,
   side: 'BUY',
   type: 'LIMIT',
   status: 'REJECTED',
@@ -120,7 +123,7 @@ const rejectedOrder: OrderResult = {
 };
 
 const openLong: Position = {
-  symbol: 'BTCUSDT',
+  symbol: BTCUSDT,
   side: 'LONG',
   entryPrice: 50000,
   quantity: 0.1,

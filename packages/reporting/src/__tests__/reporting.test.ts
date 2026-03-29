@@ -1,13 +1,14 @@
 import { describe, test, expect } from 'bun:test';
 
 import type { TradeRecord, Timeframe } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import { computeMetrics } from '../metrics';
 
 function makeTrade(overrides: Partial<TradeRecord> & { pnl: number }): TradeRecord {
   return {
     id: 'test',
-    symbol: 'BTCUSDT',
+    symbol: toSymbol('BTCUSDT'),
     side: 'LONG',
     entryPrice: 100,
     exitPrice: 110,

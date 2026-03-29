@@ -3,6 +3,7 @@ import { describe, test, expect } from 'bun:test';
 import type { IEventBus } from '@trading-bot/event-bus';
 import { createTestBus, EventCapture } from '@trading-bot/test-utils';
 import type { OrderRequest, OrderResult, OrderStatus } from '@trading-bot/types';
+import { toSymbol, toOrderId, toClientOrderId } from '@trading-bot/types';
 
 import { BacktestExecutor } from '../backtest-executor';
 import type { IFillSimulator } from '../types';
@@ -10,15 +11,21 @@ import type { IFillSimulator } from '../types';
 function makeFillSim(status: OrderStatus = 'FILLED'): IFillSimulator {
   return {
     simulateFill(request): OrderResult {
+      const orderPrice =
+        request.type === 'LIMIT'
+          ? request.price
+          : request.type === 'STOP_MARKET' || request.type === 'TAKE_PROFIT_MARKET'
+            ? request.stopPrice
+            : undefined;
       return {
-        orderId: 'sim-order-1',
-        clientOrderId: request.clientOrderId ?? 'sim-client-1',
+        orderId: toOrderId('sim-order-1'),
+        clientOrderId: request.clientOrderId ?? toClientOrderId('sim-client-1'),
         symbol: request.symbol,
         side: request.side,
         type: request.type,
         status,
-        price: request.price ?? 50000,
-        avgPrice: request.price ?? 50000,
+        price: orderPrice ?? 50000,
+        avgPrice: orderPrice ?? 50000,
         quantity: request.quantity,
         filledQuantity: status === 'FILLED' ? request.quantity : 0,
         commission: 0,
@@ -31,11 +38,11 @@ function makeFillSim(status: OrderStatus = 'FILLED'): IFillSimulator {
 }
 
 const baseRequest: OrderRequest = {
-  symbol: 'BTCUSDT',
+  symbol: toSymbol('BTCUSDT'),
   side: 'BUY',
   type: 'MARKET',
   quantity: 0.1,
-  clientOrderId: 'test-client-1',
+  clientOrderId: toClientOrderId('test-client-1'),
 };
 
 function makeExecutor(status: OrderStatus = 'FILLED'): {
@@ -69,8 +76,8 @@ describe('BacktestExecutor', () => {
 
     const receipt = executor.submit(baseRequest);
 
-    expect(receipt.clientOrderId).toBe('test-client-1');
-    expect(receipt.symbol).toBe('BTCUSDT');
+    expect(receipt.clientOrderId).toBe(toClientOrderId('test-client-1'));
+    expect(receipt.symbol).toBe(toSymbol('BTCUSDT'));
     expect(receipt.side).toBe('BUY');
     expect(receipt.type).toBe('MARKET');
     expect(receipt.quantity).toBe(0.1);
@@ -112,9 +119,9 @@ describe('BacktestExecutor', () => {
   test('hasPending() always returns false', () => {
     const { executor } = makeExecutor('FILLED');
 
-    expect(executor.hasPending('BTCUSDT')).toBe(false);
+    expect(executor.hasPending(toSymbol('BTCUSDT'))).toBe(false);
     executor.submit(baseRequest);
-    expect(executor.hasPending('BTCUSDT')).toBe(false);
+    expect(executor.hasPending(toSymbol('BTCUSDT'))).toBe(false);
   });
 
   test('getPendingCount() always returns 0', () => {
@@ -128,8 +135,8 @@ describe('BacktestExecutor', () => {
   test('multiple sequential submit() calls each emit their own events', () => {
     const { capture, executor } = makeExecutor('FILLED');
 
-    const request2: OrderRequest = { ...baseRequest, clientOrderId: 'test-client-2' };
-    const request3: OrderRequest = { ...baseRequest, clientOrderId: 'test-client-3' };
+    const request2: OrderRequest = { ...baseRequest, clientOrderId: toClientOrderId('test-client-2') };
+    const request3: OrderRequest = { ...baseRequest, clientOrderId: toClientOrderId('test-client-3') };
 
     executor.submit(baseRequest);
     executor.submit(request2);
@@ -145,7 +152,7 @@ describe('BacktestExecutor', () => {
     const { capture, executor } = makeExecutor('FILLED');
 
     const requestWithoutId: OrderRequest = {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 0.1,
@@ -167,7 +174,7 @@ describe('BacktestExecutor', () => {
     const { executor } = makeExecutor('FILLED');
 
     const requestWithoutId: OrderRequest = {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 0.1,

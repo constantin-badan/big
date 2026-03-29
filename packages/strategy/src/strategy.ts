@@ -50,8 +50,14 @@ export class Strategy implements IStrategy {
     let merged;
     try {
       merged = this.config.signalMerge(signal, snapshot);
-    } catch {
-      return; // merge function threw — drop this signal
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.bus.emit('error', {
+        source: 'strategy',
+        error,
+        context: { action: 'signalMerge', scanner: signal.sourceScanner, symbol: signal.symbol },
+      });
+      return;
     }
     if (merged !== null) {
       this.bus.emit('signal', { signal: merged });

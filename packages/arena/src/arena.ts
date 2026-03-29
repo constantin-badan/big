@@ -13,8 +13,10 @@ import type {
   OrderRequest,
   SlippageModel,
   SubmissionReceipt,
+  Symbol,
   TradeRecord,
 } from '@trading-bot/types';
+import { toClientOrderId } from '@trading-bot/types';
 
 import type { ArenaConfig, ArenaRanking, IArena } from './types';
 
@@ -34,6 +36,7 @@ interface ArenaInstance {
   executor: IOrderExecutor;
   strategy: IStrategy;
   trades: TradeRecord[];
+  openPositions: number;
   tradeHandler: (data: TradingEventMap['position:closed']) => void;
   positionHandler: (data: TradingEventMap['position:opened']) => void;
   positionClosedHandler: (data: TradingEventMap['position:closed']) => void;
@@ -70,8 +73,7 @@ export class Arena implements IArena {
   private dataFeed: LiveDataFeed | null = null;
   private running = false;
 
-  // Global position budget across all instances
-  private globalOpenPositions = 0;
+  // Global position budget is computed by summing per-instance counts
 
   constructor(config: ArenaConfig) {
     if (config.simExchangeConfig.type !== 'backtest-sim') {
@@ -127,7 +129,6 @@ export class Arena implements IArena {
     this.exchange = null;
     this.sourceBus = null;
     this.dataFeed = null;
-    this.globalOpenPositions = 0;
   }
 
   getRankings(): ArenaRanking[] {
@@ -220,21 +221,21 @@ export class Arena implements IArena {
     };
     bus.on('position:closed', tradeHandler);
 
-    // Track global open positions
-    const positionHandler = (): void => {
-      this.globalOpenPositions++;
-    };
-    const positionClosedHandler = (): void => {
-      this.globalOpenPositions = Math.max(0, this.globalOpenPositions - 1);
-    };
-    bus.on('position:opened', positionHandler);
-    bus.on('position:closed', positionClosedHandler);
-
     // Wire up event forwarding from source bus to this instance bus
     const forwarders = this.setupForwarding(bus);
 
     // Create strategy via factory
     const strategy = this.config.factory(params, { bus, exchange: simExchange, executor });
+
+    // Track per-instance open positions via handlers that reference the instance
+    const positionHandler = (): void => {
+      instance.openPositions++;
+    };
+    const positionClosedHandler = (): void => {
+      instance.openPositions = Math.max(0, instance.openPositions - 1);
+    };
+    bus.on('position:opened', positionHandler);
+    bus.on('position:closed', positionClosedHandler);
 
     const instance: ArenaInstance = {
       params,
@@ -243,6 +244,7 @@ export class Arena implements IArena {
       executor,
       strategy,
       trades,
+      openPositions: 0,
       tradeHandler,
       positionHandler,
       positionClosedHandler,
@@ -252,15 +254,26 @@ export class Arena implements IArena {
     this.instances.set(key, instance);
 
     // Start strategy (fire-and-forget since createInstance is sync)
-    void strategy.start();
+    void strategy.start().catch((err) => {
+      const error = err instanceof Error ? err : new Error(String(err));
+      bus.emit('error', {
+        source: 'arena',
+        error,
+        context: { action: 'strategy-start', params },
+      });
+    });
   }
 
   private wrapExecutorWithBudget(executor: IOrderExecutor, bus: IEventBus): IOrderExecutor {
     const maxGlobal = this.config.maxGlobalPositions!;
     return {
       submit: (request: OrderRequest): SubmissionReceipt => {
-        if (this.globalOpenPositions >= maxGlobal && !request.reduceOnly) {
-          const clientOrderId = request.clientOrderId ?? '';
+        let globalOpenPositions = 0;
+        for (const inst of this.instances.values()) {
+          globalOpenPositions += inst.openPositions;
+        }
+        if (globalOpenPositions >= maxGlobal && !request.reduceOnly) {
+          const clientOrderId = request.clientOrderId ?? toClientOrderId('');
           bus.emit('order:submitted', {
             receipt: {
               clientOrderId,
@@ -286,8 +299,8 @@ export class Arena implements IArena {
         }
         return executor.submit(request);
       },
-      cancelAll: (symbol: string): void => executor.cancelAll(symbol),
-      hasPending: (symbol: string): boolean => executor.hasPending(symbol),
+      cancelAll: (symbol: Symbol): void => executor.cancelAll(symbol),
+      hasPending: (symbol: Symbol): boolean => executor.hasPending(symbol),
       getPendingCount: (): number => executor.getPendingCount(),
       start: (): Promise<void> => executor.start(),
       stop: (): Promise<void> => executor.stop(),

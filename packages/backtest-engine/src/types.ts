@@ -4,6 +4,7 @@ import type {
   BacktestResult,
   Candle,
   ExchangeConfig,
+  Symbol,
   Timeframe,
 } from '@trading-bot/types';
 
@@ -12,7 +13,7 @@ import type {
 // In tests: async () => fixtures.candles
 // In production: reads files, queries DB, or fetches from a REST API
 export type CandleLoader = (
-  symbol: string,
+  symbol: Symbol,
   timeframe: Timeframe,
   startTime: number,
   endTime: number,

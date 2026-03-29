@@ -11,6 +11,7 @@ import {
   fixtures,
 } from '@trading-bot/test-utils';
 import type { Signal } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import { Strategy, passthroughMerge } from '../strategy';
 import type { StrategyConfig, StrategyDeps, SignalBuffer, SignalMerge } from '../types';
@@ -22,7 +23,7 @@ function makeScanner(name: string): IScanner & { disposeCount: number } {
   return {
     name,
     config: {
-      symbols: ['BTCUSDT'],
+      symbols: [toSymbol('BTCUSDT')],
       timeframe: '1m',
       indicators: {},
     } satisfies IScannerConfig,
@@ -91,7 +92,7 @@ function makeDeps(bus: EventBus): StrategyDeps {
 function makeStrategyConfig(overrides?: Partial<StrategyConfig>): StrategyConfig {
   return {
     name: 'test-strategy',
-    symbols: ['BTCUSDT'],
+    symbols: [toSymbol('BTCUSDT')],
     scanners: [],
     signalMerge: passthroughMerge,
     signalBufferWindowMs: 5000,

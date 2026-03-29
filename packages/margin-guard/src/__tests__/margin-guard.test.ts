@@ -3,6 +3,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import type { IEventBus } from '@trading-bot/event-bus';
 import { createTestBus, EventCapture, fixtures } from '@trading-bot/test-utils';
 import type { Position } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import { MarginGuard } from '../margin-guard';
 import type { MarginGuardConfig } from '../types';
@@ -13,14 +14,14 @@ const BASE_TIME = 1700000000000;
 
 const DEFAULT_CONFIG: MarginGuardConfig = {
   maxUnrealizedLossPct: 10,
-  maxTotalExposurePct: 200, // high default so exposure doesn't trigger in most tests
+  maxTotalExposurePct: 2000, // high default so exposure doesn't trigger in most tests (accounts for leverage)
   evaluationEvent: 'tick',
   balance: 10000,
 };
 
 function makePosition(overrides: Partial<Position> = {}): Position {
   return {
-    symbol: 'BTCUSDT',
+    symbol: toSymbol('BTCUSDT'),
     side: 'LONG',
     entryPrice: 50000,
     quantity: 0.1,
@@ -55,7 +56,7 @@ describe('MarginGuard', () => {
     // Price drops to 39000 → unrealized PnL = (39000 - 50000) * 1 * 0.1 = -1100
     // -1100 / 10000 * 100 = -11% → exceeds -10% threshold
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       tick: { ...fixtures.tick, price: 39000 },
     });
 
@@ -83,7 +84,7 @@ describe('MarginGuard', () => {
     // markPrice = 50100 → notional = 50100 * 0.1 = 5010
     // 5010 / 10000 * 100 = 50.1% >= 50% → breach
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       tick: { ...fixtures.tick, price: 50100 },
     });
 
@@ -99,7 +100,7 @@ describe('MarginGuard', () => {
 
     // Trigger unrealized loss breach
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       tick: { ...fixtures.tick, price: 39000 },
     });
 
@@ -118,7 +119,7 @@ describe('MarginGuard', () => {
 
     // Price at entry — no breach
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       tick: { ...fixtures.tick, price: 50000 },
     });
     expect(guard.isBreached).toBe(false);
@@ -128,7 +129,7 @@ describe('MarginGuard', () => {
       position: pos,
       trade: {
         id: 'trade-1',
-        symbol: 'BTCUSDT',
+        symbol: toSymbol('BTCUSDT'),
         side: 'LONG',
         entryPrice: 50000,
         exitPrice: 49000,
@@ -146,7 +147,7 @@ describe('MarginGuard', () => {
 
     // Even with a very low price, no breach — position was closed
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       tick: { ...fixtures.tick, price: 1000 },
     });
     expect(guard.isBreached).toBe(false);
@@ -158,14 +159,14 @@ describe('MarginGuard', () => {
 
     // Trigger breach
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       tick: { ...fixtures.tick, price: 39000 },
     });
     expect(guard.isBreached).toBe(true);
 
     // Price recovers — still breached
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       tick: { ...fixtures.tick, price: 55000 },
     });
     expect(guard.isBreached).toBe(true);
@@ -182,14 +183,14 @@ describe('MarginGuard', () => {
 
     // No breach with a benign price
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       tick: { ...fixtures.tick, price: 49500 },
     });
     expect(guard.isBreached).toBe(false);
 
     // Breach with a bad price
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       tick: { ...fixtures.tick, price: 39000 },
     });
     expect(guard.isBreached).toBe(true);
@@ -203,14 +204,14 @@ describe('MarginGuard', () => {
 
     // Tick events should NOT trigger evaluation (subscribed to candle:close)
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       tick: { ...fixtures.tick, price: 39000 },
     });
     expect(guard.isBreached).toBe(false);
 
     // Candle close with a bad price triggers breach
     bus.emit('candle:close', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       timeframe: '1m',
       candle: { ...fixtures.candle, close: 39000 },
     });
@@ -225,7 +226,7 @@ describe('MarginGuard', () => {
 
     // Bad price arrives after dispose — should NOT trigger breach
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       tick: { ...fixtures.tick, price: 39000 },
     });
     expect(guard.isBreached).toBe(false);
@@ -238,7 +239,7 @@ describe('MarginGuard', () => {
 
     // Price drops to 45000 → PnL = (45000-50000)*0.1 = -500 → -5% (within -10%)
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       tick: { ...fixtures.tick, price: 45000 },
     });
     expect(guard.isBreached).toBe(false);
@@ -254,7 +255,7 @@ describe('MarginGuard', () => {
     // Price drops to 45000 → each PnL = -500, total = -1000 → -10% exactly at threshold
     // <= -10% → breach
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       tick: { ...fixtures.tick, price: 45000 },
     });
     expect(guard.isBreached).toBe(true);
@@ -268,7 +269,7 @@ describe('MarginGuard', () => {
 
     // Price rises to 61000 → PnL = (61000-50000) * -1 * 0.1 = -1100 → -11%
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       tick: { ...fixtures.tick, price: 61000 },
     });
     expect(guard.isBreached).toBe(true);
@@ -286,7 +287,7 @@ describe('MarginGuard', () => {
 
     // notional = 50000 * 0.1 = 5000 → 50% >= 40%
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       tick: { ...fixtures.tick, price: 50000 },
     });
 
@@ -298,23 +299,23 @@ describe('MarginGuard', () => {
   // 13. Positions across multiple symbols
   test('tracks positions across multiple symbols', () => {
     bus.emit('position:opened', {
-      position: makePosition({ symbol: 'BTCUSDT', entryPrice: 50000, quantity: 0.05 }),
+      position: makePosition({ symbol: toSymbol('BTCUSDT'), entryPrice: 50000, quantity: 0.05 }),
     });
     bus.emit('position:opened', {
-      position: makePosition({ symbol: 'ETHUSDT', entryPrice: 3000, quantity: 1.0 }),
+      position: makePosition({ symbol: toSymbol('ETHUSDT'), entryPrice: 3000, quantity: 1.0 }),
     });
 
     // BTC stays flat, ETH drops heavily
     bus.emit('tick', {
-      symbol: 'BTCUSDT',
-      tick: { ...fixtures.tick, symbol: 'BTCUSDT', price: 50000 },
+      symbol: toSymbol('BTCUSDT'),
+      tick: { ...fixtures.tick, symbol: toSymbol('BTCUSDT'), price: 50000 },
     });
     expect(guard.isBreached).toBe(false);
 
     // ETH drops: PnL = (1800-3000)*1*1.0 = -1200 → total = 0 + (-1200) = -1200 → -12% > 10%
     bus.emit('tick', {
-      symbol: 'ETHUSDT',
-      tick: { ...fixtures.tick, symbol: 'ETHUSDT', price: 1800 },
+      symbol: toSymbol('ETHUSDT'),
+      tick: { ...fixtures.tick, symbol: toSymbol('ETHUSDT'), price: 1800 },
     });
     expect(guard.isBreached).toBe(true);
   });

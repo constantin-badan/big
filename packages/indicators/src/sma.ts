@@ -12,7 +12,6 @@ export class SMA implements IIndicator<SMAConfig, number> {
   readonly config: SMAConfig;
 
   private window: number[] = [];
-  private runningSum = 0;
 
   constructor(config: SMAConfig) {
     if (config.period <= 0 || !Number.isInteger(config.period)) {
@@ -24,19 +23,19 @@ export class SMA implements IIndicator<SMAConfig, number> {
 
   update(candle: Candle): number | null {
     this.window.push(candle.close);
-    this.runningSum += candle.close;
     if (this.window.length > this.config.period) {
-      this.runningSum -= this.window.shift()!;
+      this.window.shift();
     }
     if (this.window.length < this.config.period) {
       return null;
     }
-    return this.runningSum / this.config.period;
+    let sum = 0;
+    for (const v of this.window) { sum += v; }
+    return sum / this.config.period;
   }
 
   reset(): void {
     this.window = [];
-    this.runningSum = 0;
   }
 }
 

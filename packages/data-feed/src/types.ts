@@ -1,7 +1,7 @@
-import type { OrderBookSnapshot, Timeframe } from '@trading-bot/types';
+import type { OrderBookSnapshot, Symbol, Timeframe } from '@trading-bot/types';
 
 export interface IDataFeed {
-  start(symbols: string[], timeframes: Timeframe[]): Promise<void>;
+  start(symbols: Symbol[], timeframes: Timeframe[]): Promise<void>;
   stop(): Promise<void>;
-  getOrderBook(symbol: string): OrderBookSnapshot | null;
+  getOrderBook(symbol: Symbol): OrderBookSnapshot | null;
 }

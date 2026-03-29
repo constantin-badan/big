@@ -1,12 +1,15 @@
 import { describe, test, expect, spyOn } from 'bun:test';
 
 import type { Tick } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import { EventBus } from '../event-bus';
 import type { TradingEventMap } from '../types';
 
+const BTCUSDT = toSymbol('BTCUSDT');
+
 const testTick: Tick = {
-  symbol: 'BTCUSDT',
+  symbol: BTCUSDT,
   price: 50000,
   quantity: 1,
   timestamp: 1000,
@@ -14,7 +17,7 @@ const testTick: Tick = {
 };
 
 const tickPayload: TradingEventMap['tick'] = {
-  symbol: 'BTCUSDT',
+  symbol: BTCUSDT,
   tick: testTick,
 };
 
@@ -192,5 +195,47 @@ describe('EventBus', () => {
   test('emitting without listeners does not throw', () => {
     const bus = new EventBus();
     expect(() => bus.emit('tick', tickPayload)).not.toThrow();
+  });
+
+  describe('re-entrant emit', () => {
+    test('handler that emits same event causes nested execution', () => {
+      const bus = new EventBus();
+      const calls: number[] = [];
+
+      bus.on('tick', () => {
+        calls.push(1);
+        if (calls.length === 1) {
+          bus.emit('tick', tickPayload);
+        }
+      });
+      bus.on('tick', () => {
+        calls.push(2);
+      });
+
+      bus.emit('tick', tickPayload);
+
+      // Outer handler1 pushes 1, re-emits → nested handler1 pushes 1, nested handler2 pushes 2,
+      // then outer handler2 pushes 2
+      expect(calls).toEqual([1, 1, 2, 2]);
+    });
+
+    test('handler added during emit does not fire in current cycle', () => {
+      const bus = new EventBus();
+      let handler2Called = false;
+
+      const handler2 = () => {
+        handler2Called = true;
+      };
+
+      bus.on('tick', () => {
+        bus.on('tick', handler2);
+      });
+
+      bus.emit('tick', tickPayload);
+      expect(handler2Called).toBe(false);
+
+      bus.emit('tick', tickPayload);
+      expect(handler2Called).toBe(true);
+    });
   });
 });

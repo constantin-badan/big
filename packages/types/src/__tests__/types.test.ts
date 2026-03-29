@@ -13,11 +13,12 @@ import type {
   SignalAction,
   Timeframe,
 } from '../index';
-import { KahanSum } from '../index';
+import { KahanSum, toSymbol } from '../index';
 
 describe('types', () => {
   test('Candle type is constructible', () => {
     const candle: Candle = {
+      symbol: toSymbol('BTCUSDT'),
       openTime: 1000,
       closeTime: 2000,
       open: 50000,

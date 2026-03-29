@@ -7,6 +7,7 @@ import { BacktestExecutor } from '@trading-bot/order-executor';
 import type { IStrategy, StrategyFactory } from '@trading-bot/strategy';
 import { fixtures } from '@trading-bot/test-utils';
 import type { Candle, ExchangeConfig, PerformanceMetrics, TradeRecord } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import { Arena } from '../arena';
 import type { ArenaConfig } from '../types';
@@ -38,6 +39,7 @@ const simConfig: ExchangeConfig = {
 function makeClosedCandle(index: number): Candle {
   const open = 50_000 + index * 100;
   return {
+    symbol: toSymbol('BTCUSDT'),
     openTime: BASE_TIME + index * 60_000,
     closeTime: BASE_TIME + (index + 1) * 60_000 - 1,
     open,
@@ -62,7 +64,7 @@ function buildArenaConfig(
       privateKey: 'test-secret',
     },
     simExchangeConfig: simConfig,
-    symbols: ['BTCUSDT'],
+    symbols: [toSymbol('BTCUSDT')],
     timeframes: ['1m'],
     factory,
     paramSets,
@@ -244,7 +246,7 @@ describe('Arena', () => {
           apiKey: 'key',
           privateKey: 'secret',
         },
-        symbols: ['BTCUSDT'],
+        symbols: [toSymbol('BTCUSDT')],
         timeframes: ['1m'],
         factory: () => ({
           name: 'x',
@@ -295,7 +297,7 @@ describe('Arena event forwarding', () => {
     // Simulate 5 candle arrivals on the source bus
     for (let i = 0; i < 5; i++) {
       sourceBus.emit('candle:close', {
-        symbol: 'BTCUSDT',
+        symbol: toSymbol('BTCUSDT'),
         timeframe: '1m',
         candle: makeClosedCandle(i),
       });
@@ -328,7 +330,7 @@ describe('Arena event forwarding', () => {
     // Send 5 candles
     for (let i = 0; i < 5; i++) {
       sourceBus.emit('candle:close', {
-        symbol: 'BTCUSDT',
+        symbol: toSymbol('BTCUSDT'),
         timeframe: '1m',
         candle: makeClosedCandle(i),
       });
@@ -359,7 +361,7 @@ describe('Arena event forwarding', () => {
       receivedTick = true;
     });
 
-    sourceBus.emit('tick', { symbol: 'BTCUSDT', tick: fixtures.tick });
+    sourceBus.emit('tick', { symbol: toSymbol('BTCUSDT'), tick: fixtures.tick });
     expect(receivedTick).toBe(true);
   });
 
@@ -378,7 +380,7 @@ describe('Arena event forwarding', () => {
 
     const updateCandle: Candle = { ...fixtures.candle, isClosed: false };
     sourceBus.emit('candle:update', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       timeframe: '1m',
       candle: updateCandle,
     });
@@ -402,7 +404,7 @@ describe('SimExchange price tracking', () => {
 
     // Before any candle, MARKET order is rejected (no price data)
     const beforeResult = sim.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 0.001,
@@ -412,14 +414,14 @@ describe('SimExchange price tracking', () => {
     // Forward a candle:close to the instance bus
     const candle = makeClosedCandle(0);
     instanceBus.emit('candle:close', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       timeframe: '1m',
       candle,
     });
 
     // Now MARKET order fills at candle's close price
     const afterResult = sim.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 0.001,
@@ -446,18 +448,18 @@ describe('SimExchange price tracking', () => {
     };
 
     instanceBus.emit('candle:close', {
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       timeframe: '1m',
       candle: btcCandle,
     });
     instanceBus.emit('candle:close', {
-      symbol: 'ETHUSDT',
+      symbol: toSymbol('ETHUSDT'),
       timeframe: '1m',
       candle: ethCandle,
     });
 
     const btcFill = sim.simulateFill({
-      symbol: 'BTCUSDT',
+      symbol: toSymbol('BTCUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 0.001,
@@ -465,7 +467,7 @@ describe('SimExchange price tracking', () => {
     expect(btcFill.avgPrice).toBe(btcCandle.close);
 
     const ethFill = sim.simulateFill({
-      symbol: 'ETHUSDT',
+      symbol: toSymbol('ETHUSDT'),
       side: 'BUY',
       type: 'MARKET',
       quantity: 0.01,
@@ -492,7 +494,7 @@ describe('Arena dynamic instances', () => {
     // Send 3 candles
     for (let i = 0; i < 3; i++) {
       sourceBus.emit('candle:close', {
-        symbol: 'BTCUSDT',
+        symbol: toSymbol('BTCUSDT'),
         timeframe: '1m',
         candle: makeClosedCandle(i),
       });
@@ -505,7 +507,7 @@ describe('Arena dynamic instances', () => {
     // Send 2 more candles
     for (let i = 3; i < 5; i++) {
       sourceBus.emit('candle:close', {
-        symbol: 'BTCUSDT',
+        symbol: toSymbol('BTCUSDT'),
         timeframe: '1m',
         candle: makeClosedCandle(i),
       });
@@ -537,7 +539,7 @@ describe('Arena dynamic instances', () => {
     // Send 5 candles — instance A trades, instance B doesn't
     for (let i = 0; i < 5; i++) {
       sourceBus.emit('candle:close', {
-        symbol: 'BTCUSDT',
+        symbol: toSymbol('BTCUSDT'),
         timeframe: '1m',
         candle: makeClosedCandle(i),
       });

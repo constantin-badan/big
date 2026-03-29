@@ -9,7 +9,7 @@ export class Scanner implements IScanner {
 
   private readonly bus: IEventBus;
   private readonly evaluate: ScannerEvaluate;
-  private readonly indicatorInstances: Map<string, Map<string, IIndicator>>;
+  private readonly indicatorInstances: Map<import('@trading-bot/types').Symbol, Map<string, IIndicator>>;
   private readonly handler: (data: TradingEventMap['candle:close']) => void;
 
   constructor(
@@ -68,6 +68,7 @@ export class Scanner implements IScanner {
     this.bus.emit('scanner:signal', {
       signal: {
         ...result,
+        confidence: Math.max(0, Math.min(1, result.confidence)),
         symbol,
         sourceScanner: this.name,
         timestamp: candle.closeTime,
@@ -75,7 +76,7 @@ export class Scanner implements IScanner {
     });
   }
 
-  private getOrCreateIndicators(symbol: string): Map<string, IIndicator> {
+  private getOrCreateIndicators(symbol: import('@trading-bot/types').Symbol): Map<string, IIndicator> {
     const existing = this.indicatorInstances.get(symbol);
     if (existing !== undefined) {
       return existing;

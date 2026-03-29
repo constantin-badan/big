@@ -1,5 +1,6 @@
 import type {
   Candle,
+  ClientOrderId,
   ExchangeStream,
   OrderResult,
   Position,
@@ -7,22 +8,23 @@ import type {
   RiskSeverity,
   Signal,
   SubmissionReceipt,
+  Symbol,
   Tick,
   Timeframe,
   TradeRecord,
 } from '@trading-bot/types';
 
 export interface TradingEventMap {
-  'candle:close': { symbol: string; timeframe: Timeframe; candle: Candle };
-  'candle:update': { symbol: string; timeframe: Timeframe; candle: Candle };
-  tick: { symbol: string; tick: Tick };
+  'candle:close': { symbol: Symbol; timeframe: Timeframe; candle: Candle };
+  'candle:update': { symbol: Symbol; timeframe: Timeframe; candle: Candle };
+  tick: { symbol: Symbol; tick: Tick };
 
   'scanner:signal': { signal: Signal };
   signal: { signal: Signal };
 
   'order:submitted': { receipt: SubmissionReceipt };
   'order:filled': { order: OrderResult };
-  'order:rejected': { clientOrderId: string; reason: string };
+  'order:rejected': { clientOrderId: ClientOrderId; reason: string };
   'order:canceled': { order: OrderResult };
 
   'position:opened': { position: Position };

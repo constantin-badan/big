@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { unlinkSync } from 'node:fs';
 
 import type { Candle, TradeRecord } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import { createStorage } from '../storage';
 import type { ICandleStore, ITradeStore } from '../types';
@@ -12,6 +13,7 @@ const BASE_TIME = 1700000000000;
 function makeCandle(index: number): Candle {
   const open = 50000 + index * 10;
   return {
+    symbol: toSymbol('BTCUSDT'),
     openTime: BASE_TIME + index * 60_000,
     closeTime: BASE_TIME + (index + 1) * 60_000 - 1,
     open,
@@ -28,7 +30,7 @@ function makeCandle(index: number): Candle {
 function makeTrade(id: string, overrides?: Partial<TradeRecord>): TradeRecord {
   return {
     id,
-    symbol: 'BTCUSDT',
+    symbol: toSymbol('BTCUSDT'),
     side: 'LONG',
     entryPrice: 50000,
     exitPrice: 50500,
@@ -65,9 +67,9 @@ afterEach(() => {
 describe('CandleStore', () => {
   test('insert and retrieve candles', () => {
     const data = [makeCandle(0), makeCandle(1), makeCandle(2)];
-    candles.insertCandles('BTCUSDT', '1m', data);
+    candles.insertCandles(toSymbol('BTCUSDT'), '1m', data);
 
-    const result = candles.getCandles('BTCUSDT', '1m', BASE_TIME, BASE_TIME + 300_000);
+    const result = candles.getCandles(toSymbol('BTCUSDT'), '1m', BASE_TIME, BASE_TIME + 300_000);
     expect(result).toHaveLength(3);
     expect(result[0]!.openTime).toBe(data[0]!.openTime);
     expect(result[0]!.close).toBe(data[0]!.close);
@@ -76,62 +78,62 @@ describe('CandleStore', () => {
 
   test('deduplicates by primary key (INSERT OR IGNORE)', () => {
     const candle = makeCandle(0);
-    candles.insertCandles('BTCUSDT', '1m', [candle]);
-    candles.insertCandles('BTCUSDT', '1m', [candle]); // duplicate
+    candles.insertCandles(toSymbol('BTCUSDT'), '1m', [candle]);
+    candles.insertCandles(toSymbol('BTCUSDT'), '1m', [candle]); // duplicate
 
-    const result = candles.getCandles('BTCUSDT', '1m', BASE_TIME, BASE_TIME + 60_000);
+    const result = candles.getCandles(toSymbol('BTCUSDT'), '1m', BASE_TIME, BASE_TIME + 60_000);
     expect(result).toHaveLength(1);
   });
 
   test('filters by symbol and timeframe', () => {
-    candles.insertCandles('BTCUSDT', '1m', [makeCandle(0)]);
-    candles.insertCandles('ETHUSDT', '1m', [makeCandle(0)]);
-    candles.insertCandles('BTCUSDT', '5m', [makeCandle(0)]);
+    candles.insertCandles(toSymbol('BTCUSDT'), '1m', [makeCandle(0)]);
+    candles.insertCandles(toSymbol('ETHUSDT'), '1m', [makeCandle(0)]);
+    candles.insertCandles(toSymbol('BTCUSDT'), '5m', [makeCandle(0)]);
 
-    expect(candles.getCandles('BTCUSDT', '1m', 0, BASE_TIME + 300_000)).toHaveLength(1);
-    expect(candles.getCandles('ETHUSDT', '1m', 0, BASE_TIME + 300_000)).toHaveLength(1);
-    expect(candles.getCandles('BTCUSDT', '5m', 0, BASE_TIME + 300_000)).toHaveLength(1);
-    expect(candles.getCandles('XRPUSDT', '1m', 0, BASE_TIME + 300_000)).toHaveLength(0);
+    expect(candles.getCandles(toSymbol('BTCUSDT'), '1m', 0, BASE_TIME + 300_000)).toHaveLength(1);
+    expect(candles.getCandles(toSymbol('ETHUSDT'), '1m', 0, BASE_TIME + 300_000)).toHaveLength(1);
+    expect(candles.getCandles(toSymbol('BTCUSDT'), '5m', 0, BASE_TIME + 300_000)).toHaveLength(1);
+    expect(candles.getCandles(toSymbol('XRPUSDT'), '1m', 0, BASE_TIME + 300_000)).toHaveLength(0);
   });
 
   test('filters by time range', () => {
     const data = Array.from({ length: 10 }, (_, i) => makeCandle(i));
-    candles.insertCandles('BTCUSDT', '1m', data);
+    candles.insertCandles(toSymbol('BTCUSDT'), '1m', data);
 
     // Get candles 3-6 (indices)
     const start = BASE_TIME + 3 * 60_000;
     const end = BASE_TIME + 6 * 60_000;
-    const result = candles.getCandles('BTCUSDT', '1m', start, end);
+    const result = candles.getCandles(toSymbol('BTCUSDT'), '1m', start, end);
     expect(result).toHaveLength(4); // indices 3,4,5,6
   });
 
   test('returns candles in chronological order', () => {
     // Insert out of order
-    candles.insertCandles('BTCUSDT', '1m', [makeCandle(5), makeCandle(2), makeCandle(8)]);
+    candles.insertCandles(toSymbol('BTCUSDT'), '1m', [makeCandle(5), makeCandle(2), makeCandle(8)]);
 
-    const result = candles.getCandles('BTCUSDT', '1m', 0, BASE_TIME + 600_000);
+    const result = candles.getCandles(toSymbol('BTCUSDT'), '1m', 0, BASE_TIME + 600_000);
     expect(result).toHaveLength(3);
     expect(result[0]!.openTime).toBeLessThan(result[1]!.openTime);
     expect(result[1]!.openTime).toBeLessThan(result[2]!.openTime);
   });
 
   test('getLatestTimestamp returns latest openTime', () => {
-    candles.insertCandles('BTCUSDT', '1m', [makeCandle(0), makeCandle(5), makeCandle(3)]);
+    candles.insertCandles(toSymbol('BTCUSDT'), '1m', [makeCandle(0), makeCandle(5), makeCandle(3)]);
 
-    const latest = candles.getLatestTimestamp('BTCUSDT', '1m');
+    const latest = candles.getLatestTimestamp(toSymbol('BTCUSDT'), '1m');
     expect(latest).toBe(makeCandle(5).openTime);
   });
 
   test('getLatestTimestamp returns null for empty store', () => {
-    expect(candles.getLatestTimestamp('BTCUSDT', '1m')).toBeNull();
+    expect(candles.getLatestTimestamp(toSymbol('BTCUSDT'), '1m')).toBeNull();
   });
 
   test('getGaps detects missing candles', () => {
     // Insert candles 0,1,2, skip 3,4, then 5,6
     const data = [0, 1, 2, 5, 6].map((i) => makeCandle(i));
-    candles.insertCandles('BTCUSDT', '1m', data);
+    candles.insertCandles(toSymbol('BTCUSDT'), '1m', data);
 
-    const gaps = candles.getGaps('BTCUSDT', '1m');
+    const gaps = candles.getGaps(toSymbol('BTCUSDT'), '1m');
     expect(gaps).toHaveLength(1);
     expect(gaps[0]!.from).toBe(makeCandle(2).openTime);
     expect(gaps[0]!.to).toBe(makeCandle(5).openTime);
@@ -139,29 +141,29 @@ describe('CandleStore', () => {
 
   test('getGaps returns empty for contiguous candles', () => {
     const data = Array.from({ length: 5 }, (_, i) => makeCandle(i));
-    candles.insertCandles('BTCUSDT', '1m', data);
+    candles.insertCandles(toSymbol('BTCUSDT'), '1m', data);
 
-    expect(candles.getGaps('BTCUSDT', '1m')).toHaveLength(0);
+    expect(candles.getGaps(toSymbol('BTCUSDT'), '1m')).toHaveLength(0);
   });
 
   test('getGaps returns empty for fewer than 2 candles', () => {
-    candles.insertCandles('BTCUSDT', '1m', [makeCandle(0)]);
-    expect(candles.getGaps('BTCUSDT', '1m')).toHaveLength(0);
+    candles.insertCandles(toSymbol('BTCUSDT'), '1m', [makeCandle(0)]);
+    expect(candles.getGaps(toSymbol('BTCUSDT'), '1m')).toHaveLength(0);
   });
 
   test('handles large batch inserts', () => {
     const data = Array.from({ length: 1000 }, (_, i) => makeCandle(i));
-    candles.insertCandles('BTCUSDT', '1m', data);
+    candles.insertCandles(toSymbol('BTCUSDT'), '1m', data);
 
-    const result = candles.getCandles('BTCUSDT', '1m', 0, BASE_TIME + 1000 * 60_000);
+    const result = candles.getCandles(toSymbol('BTCUSDT'), '1m', 0, BASE_TIME + 1000 * 60_000);
     expect(result).toHaveLength(1000);
   });
 
   test('preserves all candle fields', () => {
     const original = makeCandle(0);
-    candles.insertCandles('BTCUSDT', '1m', [original]);
+    candles.insertCandles(toSymbol('BTCUSDT'), '1m', [original]);
 
-    const result = candles.getCandles('BTCUSDT', '1m', BASE_TIME, BASE_TIME + 60_000);
+    const result = candles.getCandles(toSymbol('BTCUSDT'), '1m', BASE_TIME, BASE_TIME + 60_000);
     expect(result).toHaveLength(1);
     const stored = result[0]!;
     expect(stored.openTime).toBe(original.openTime);
@@ -199,12 +201,12 @@ describe('TradeStore', () => {
   });
 
   test('filters by symbol', () => {
-    trades.insertTrade('s1', makeTrade('t1', { symbol: 'BTCUSDT' }));
-    trades.insertTrade('s1', makeTrade('t2', { symbol: 'ETHUSDT' }));
+    trades.insertTrade('s1', makeTrade('t1', { symbol: toSymbol('BTCUSDT') }));
+    trades.insertTrade('s1', makeTrade('t2', { symbol: toSymbol('ETHUSDT') }));
 
-    const result = trades.getTrades({ symbol: 'ETHUSDT' });
+    const result = trades.getTrades({ symbol: toSymbol('ETHUSDT') });
     expect(result).toHaveLength(1);
-    expect(result[0]!.symbol).toBe('ETHUSDT');
+    expect(result[0]!.symbol).toBe(toSymbol('ETHUSDT'));
   });
 
   test('filters by time range', () => {
@@ -218,9 +220,9 @@ describe('TradeStore', () => {
   });
 
   test('combines multiple filters', () => {
-    trades.insertTrade('s1', makeTrade('t1', { symbol: 'BTCUSDT', exitTime: 1000 }));
-    trades.insertTrade('s1', makeTrade('t2', { symbol: 'ETHUSDT', exitTime: 2000 }));
-    trades.insertTrade('s2', makeTrade('t3', { symbol: 'BTCUSDT', exitTime: 3000 }));
+    trades.insertTrade('s1', makeTrade('t1', { symbol: toSymbol('BTCUSDT'), exitTime: 1000 }));
+    trades.insertTrade('s1', makeTrade('t2', { symbol: toSymbol('ETHUSDT'), exitTime: 2000 }));
+    trades.insertTrade('s2', makeTrade('t3', { symbol: toSymbol('BTCUSDT'), exitTime: 3000 }));
 
     const result = trades.getTrades({ strategyName: 's1', symbol: 'BTCUSDT' });
     expect(result).toHaveLength(1);
@@ -301,13 +303,13 @@ describe('createStorage', () => {
     try {
       // Write
       const s1 = createStorage(path);
-      s1.candles.insertCandles('BTCUSDT', '1m', [makeCandle(0)]);
+      s1.candles.insertCandles(toSymbol('BTCUSDT'), '1m', [makeCandle(0)]);
       s1.trades.insertTrade('test', makeTrade('t1'));
       s1.close();
 
       // Read
       const s2 = createStorage(path);
-      expect(s2.candles.getCandles('BTCUSDT', '1m', 0, BASE_TIME + 60_000)).toHaveLength(1);
+      expect(s2.candles.getCandles(toSymbol('BTCUSDT'), '1m', 0, BASE_TIME + 60_000)).toHaveLength(1);
       expect(s2.trades.getTrades({})).toHaveLength(1);
       s2.close();
     } finally {

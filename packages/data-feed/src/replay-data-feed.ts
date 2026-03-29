@@ -1,5 +1,6 @@
 import type { IEventBus } from '@trading-bot/event-bus';
-import type { Candle, OrderBookSnapshot, Timeframe } from '@trading-bot/types';
+import type { Candle, OrderBookSnapshot, Symbol, Timeframe } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import type { IDataFeed } from './types';
 
@@ -24,15 +25,15 @@ function isTimeframe(value: string): value is Timeframe {
 }
 
 interface IndexedCandle {
-  symbol: string;
+  symbol: Symbol;
   timeframe: Timeframe;
   candle: Candle;
 }
 
-function parseKey(key: string): { symbol: string; timeframe: Timeframe } | null {
+function parseKey(key: string): { symbol: Symbol; timeframe: Timeframe } | null {
   const lastColon = key.lastIndexOf(':');
   if (lastColon === -1) return null;
-  const symbol = key.slice(0, lastColon);
+  const symbol = toSymbol(key.slice(0, lastColon));
   const tf = key.slice(lastColon + 1);
   if (!isTimeframe(tf)) return null;
   return { symbol, timeframe: tf };
@@ -48,7 +49,7 @@ export class ReplayDataFeed implements IDataFeed {
     this.candles = candles;
   }
 
-  start(symbols: string[], timeframes: Timeframe[]): Promise<void> {
+  start(symbols: Symbol[], timeframes: Timeframe[]): Promise<void> {
     const indexed: IndexedCandle[] = [];
 
     for (const [key, arr] of this.candles) {
@@ -123,7 +124,7 @@ export class ReplayDataFeed implements IDataFeed {
     }
   }
 
-  getOrderBook(_symbol: string): OrderBookSnapshot | null {
+  getOrderBook(_symbol: Symbol): OrderBookSnapshot | null {
     return null;
   }
 }

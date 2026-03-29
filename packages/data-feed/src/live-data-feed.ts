@@ -1,11 +1,12 @@
 import type { IEventBus } from '@trading-bot/event-bus';
 import type { IExchange } from '@trading-bot/exchange-client';
-import type { Candle, OrderBookSnapshot, Tick, Timeframe } from '@trading-bot/types';
+import type { Candle, OrderBookSnapshot, Symbol, Tick, Timeframe } from '@trading-bot/types';
+import { toSymbol } from '@trading-bot/types';
 
 import type { IDataFeed } from './types';
 
 /** Key format: "BTCUSDT:1m" */
-function backfillKey(symbol: string, timeframe: Timeframe): string {
+function backfillKey(symbol: Symbol, timeframe: Timeframe): string {
   return `${symbol}:${timeframe}`;
 }
 
@@ -38,8 +39,9 @@ export class LiveDataFeed implements IDataFeed {
     this.exchange = exchange;
   }
 
-  async start(symbols: string[], timeframes: Timeframe[]): Promise<void> {
+  async start(symbols: Symbol[], timeframes: Timeframe[]): Promise<void> {
     if (this.running) return;
+    this.running = true;
 
     // Subscribe to candle streams for each symbol × timeframe
     for (const symbol of symbols) {
@@ -64,8 +66,10 @@ export class LiveDataFeed implements IDataFeed {
       toTimestamp: number;
     }): void => {
       // Backfill for each timeframe on this symbol
+      // exchange:gap symbol is plain string from WS reconnection — cast at trust boundary
+      const sym = toSymbol(data.symbol);
       for (const tf of timeframes) {
-        void this.backfillGap(data.symbol, tf, data.fromTimestamp, data.toTimestamp);
+        void this.backfillGap(sym, tf, data.fromTimestamp, data.toTimestamp);
       }
     };
     this.bus.on('exchange:gap', handleGap);
@@ -78,8 +82,6 @@ export class LiveDataFeed implements IDataFeed {
     ) {
       await this.exchange.startMarketDataStream();
     }
-
-    this.running = true;
   }
 
   async stop(): Promise<void> {
@@ -92,11 +94,11 @@ export class LiveDataFeed implements IDataFeed {
     this.backfillBuffer.clear();
   }
 
-  getOrderBook(_symbol: string): OrderBookSnapshot | null {
+  getOrderBook(_symbol: Symbol): OrderBookSnapshot | null {
     return null;
   }
 
-  private handleCandle(symbol: string, timeframe: Timeframe, candle: Candle): void {
+  private handleCandle(symbol: Symbol, timeframe: Timeframe, candle: Candle): void {
     if (!this.running) return;
 
     const key = backfillKey(symbol, timeframe);
@@ -125,7 +127,7 @@ export class LiveDataFeed implements IDataFeed {
   }
 
   private async backfillGap(
-    symbol: string,
+    symbol: Symbol,
     timeframe: Timeframe,
     fromTimestamp: number,
     toTimestamp: number,
@@ -139,20 +141,30 @@ export class LiveDataFeed implements IDataFeed {
     this.backfilling.add(key);
 
     try {
-      // Fetch missing candles via REST
-      const candles = await this.exchange.getCandles(symbol, timeframe, 1000);
+      // Paginate: fetch candles in batches until the full gap is covered
+      let cursor = fromTimestamp;
+      while (cursor < toTimestamp) {
+        const candles = await this.exchange.getCandles(symbol, timeframe, 1000);
 
-      // Filter to the gap window and only closed candles
-      const gapCandles = candles.filter(
-        (c) => c.openTime >= fromTimestamp && c.openTime < toTimestamp && c.isClosed,
-      );
+        // Filter to the remaining gap window and only closed candles
+        const gapCandles = candles.filter(
+          (c) => c.openTime >= cursor && c.openTime < toTimestamp && c.isClosed,
+        );
 
-      // Emit backfilled candles as candle:close
-      for (const candle of gapCandles) {
-        const lastOt = this.lastOpenTime.get(key);
-        if (lastOt !== undefined && candle.openTime <= lastOt) continue;
-        this.lastOpenTime.set(key, candle.openTime);
-        this.bus.emit('candle:close', { symbol, timeframe, candle });
+        if (gapCandles.length === 0) break; // no more data available
+
+        // Emit backfilled candles as candle:close
+        for (const candle of gapCandles) {
+          const lastOt = this.lastOpenTime.get(key);
+          if (lastOt !== undefined && candle.openTime <= lastOt) continue;
+          this.lastOpenTime.set(key, candle.openTime);
+          this.bus.emit('candle:close', { symbol, timeframe, candle });
+        }
+
+        // Advance cursor past the last candle we received
+        const lastCandle = gapCandles[gapCandles.length - 1];
+        if (!lastCandle || lastCandle.openTime <= cursor) break; // no forward progress
+        cursor = lastCandle.openTime + 1;
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -163,17 +175,26 @@ export class LiveDataFeed implements IDataFeed {
       });
     }
 
-    // Clear backfilling flag
-    this.backfilling.delete(key);
-
-    // Flush buffered live candles, deduplicating against backfilled ones
+    // Flush buffered live candles BEFORE clearing flag so new arrivals are still buffered
     const buffered = this.backfillBuffer.get(key);
     this.backfillBuffer.delete(key);
 
     if (buffered) {
       for (const candle of buffered) {
-        this.handleCandle(symbol, timeframe, candle);
+        // Re-check dedup inline (can't call handleCandle — flag is still set)
+        if (!this.running) continue;
+        if (candle.isClosed) {
+          const lastOt = this.lastOpenTime.get(key);
+          if (lastOt !== undefined && candle.openTime <= lastOt) continue;
+          this.lastOpenTime.set(key, candle.openTime);
+          this.bus.emit('candle:close', { symbol, timeframe, candle });
+        } else {
+          this.bus.emit('candle:update', { symbol, timeframe, candle });
+        }
       }
     }
+
+    // Clear backfilling flag AFTER flush is complete
+    this.backfilling.delete(key);
   }
 }
