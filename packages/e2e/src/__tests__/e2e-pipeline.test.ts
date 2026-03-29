@@ -1,77 +1,23 @@
 import { describe, test, expect, beforeAll } from 'bun:test';
 
-import { createEMA } from '@trading-bot/indicators';
-import { PositionManager } from '@trading-bot/position-manager';
-import { RiskManager } from '@trading-bot/risk-manager';
-import { createScannerFactory } from '@trading-bot/scanner';
-import { Strategy, passthroughMerge } from '@trading-bot/strategy';
 import { fixtures } from '@trading-bot/test-utils';
 import type {
   BacktestConfig,
   BacktestResult,
-  Candle,
   ExchangeConfig,
   PositionManagerConfig,
   RiskConfig,
-  ScannerEvaluate,
-  StrategyFactory,
 } from '@trading-bot/types';
-import { toSymbol } from '@trading-bot/types';
 
 import { createBacktestEngine } from '@trading-bot/backtest-engine';
 
-// ─── Shared Constants ────────────────────────────────────────────────
-
-const BASE_TIME = 1_700_000_000_000;
-const BTCUSDT = toSymbol('BTCUSDT');
-const CANDLE_MS = 60_000; // 1-minute candles
-
-// ─── Deterministic Candle Generator ──────────────────────────────────
-
-/**
- * Builds 50 candles with a predictable price pattern:
- *   0-19 : UP    from 100 to 195  (close = 100 + i * 5)
- *   20-34: DOWN  from 200 to 130  (close = 200 - (i-20) * 5)
- *   35-49: UP    from 130 to 200  (close = 130 + (i-35) * 5)
- *
- * High = close + 2, Low = close - 2 (fixed bracket, no randomness).
- */
-function makeGoldenCandles(): Candle[] {
-  const candles: Candle[] = [];
-  for (let i = 0; i < 50; i++) {
-    let close: number;
-    if (i <= 19) {
-      close = 100 + i * 5;
-    } else if (i <= 34) {
-      close = 200 - (i - 20) * 5;
-    } else {
-      close = 130 + (i - 35) * 5;
-    }
-    const open = close - 1;
-    const high = close + 2;
-    const low = close - 2;
-    candles.push({
-      symbol: BTCUSDT,
-      openTime: BASE_TIME + i * CANDLE_MS,
-      closeTime: BASE_TIME + (i + 1) * CANDLE_MS - 1,
-      open,
-      high,
-      low,
-      close,
-      volume: 1000,
-      quoteVolume: 1000 * close,
-      trades: 100,
-      isClosed: true,
-    });
-  }
-  return candles;
-}
+import { BTCUSDT, BASE_TIME, CANDLE_MS, makeGoldenCandles, makeEmaCrossoverFactory } from '../e2e-helpers';
 
 /**
  * 30 candles of flat/sideways prices (all close at 100).
  * Should produce zero trades — EMA crossover never fires on flat data.
  */
-function makeFlatCandles(): Candle[] {
+function makeFlatCandles() {
   return Array.from({ length: 30 }, (_, i) => ({
     symbol: BTCUSDT,
     openTime: BASE_TIME + i * CANDLE_MS,
@@ -85,80 +31,6 @@ function makeFlatCandles(): Candle[] {
     trades: 50,
     isClosed: true,
   }));
-}
-
-// ─── EMA Crossover Strategy Factory ──────────────────────────────────
-
-function makeEmaCrossoverFactory(
-  riskCfg: RiskConfig,
-  pmCfg: PositionManagerConfig,
-  fastPeriod = 5,
-  slowPeriod = 10,
-): StrategyFactory {
-  return (_params, deps) => {
-    const prevFastMap = new Map<string, number>();
-    const prevSlowMap = new Map<string, number>();
-
-    const evaluate: ScannerEvaluate = (indicators, candle, symbol) => {
-      const fast = indicators.fast;
-      const slow = indicators.slow;
-      if (fast === undefined || slow === undefined) return null;
-
-      const prevFast = prevFastMap.get(symbol) ?? null;
-      const prevSlow = prevSlowMap.get(symbol) ?? null;
-
-      prevFastMap.set(symbol, fast);
-      prevSlowMap.set(symbol, slow);
-
-      if (prevFast === null || prevSlow === null) return null;
-
-      if (prevFast <= prevSlow && fast > slow) {
-        return {
-          action: 'ENTER_LONG',
-          confidence: 0.9,
-          price: candle.close,
-          metadata: { fast, slow, crossover: 'bullish' },
-        };
-      }
-
-      if (prevFast >= prevSlow && fast < slow) {
-        return {
-          action: 'ENTER_SHORT',
-          confidence: 0.9,
-          price: candle.close,
-          metadata: { fast, slow, crossover: 'bearish' },
-        };
-      }
-
-      return null;
-    };
-
-    const scannerFactory = createScannerFactory('ema-cross', evaluate);
-    const scanner = scannerFactory(deps.bus, {
-      symbols: [BTCUSDT],
-      timeframe: '1m',
-      indicators: {
-        fast: () => createEMA({ period: fastPeriod }),
-        slow: () => createEMA({ period: slowPeriod }),
-      },
-    });
-
-    const riskManager = new RiskManager(deps.bus, riskCfg);
-    const positionManager = new PositionManager(deps.bus, deps.executor, riskManager, pmCfg);
-
-    return new Strategy(
-      {
-        name: 'ema-crossover',
-        symbols: [BTCUSDT],
-        scanners: [scanner],
-        signalMerge: passthroughMerge,
-        signalBufferWindowMs: 60_000,
-        positionManager,
-        riskManager,
-      },
-      deps,
-    );
-  };
 }
 
 // ─── Configs ─────────────────────────────────────────────────────────
@@ -205,13 +77,13 @@ describe('E2E Golden Reference Backtest', () => {
   };
 
   const loader = async () => goldenCandles;
-  const factory = makeEmaCrossoverFactory(riskConfig, pmConfig, 5, 10);
+  const factory = makeEmaCrossoverFactory([BTCUSDT], riskConfig, pmConfig);
 
   // Run once, assert many — no need to repeat 8 full backtests
   let result: BacktestResult;
   beforeAll(async () => {
     const engine = createBacktestEngine(loader, exchangeConfig);
-    result = await engine.run(factory, {}, btConfig);
+    result = await engine.run(factory, { fastPeriod: 5, slowPeriod: 10 }, btConfig);
   });
 
   test('produces exactly 2 deterministic trades', () => {
@@ -291,9 +163,9 @@ describe('E2E Negative Paths', () => {
       timeframes: ['1m'],
     };
     const loader = async () => flatCandles;
-    const factory = makeEmaCrossoverFactory(riskConfig, pmConfig, 5, 10);
+    const factory = makeEmaCrossoverFactory([BTCUSDT], riskConfig, pmConfig);
     const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
+    const result = await engine.run(factory, { fastPeriod: 5, slowPeriod: 10 }, btConfig);
 
     expect(result.trades.length).toBe(0);
     expect(result.finalBalance).toBe(10_000);
@@ -318,9 +190,9 @@ describe('E2E Negative Paths', () => {
       defaultStopLossPct: 2,
       defaultTakeProfitPct: 50,
     };
-    const factory = makeEmaCrossoverFactory(riskConfig, slPmConfig, 5, 10);
+    const factory = makeEmaCrossoverFactory([BTCUSDT], riskConfig, slPmConfig);
     const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
+    const result = await engine.run(factory, { fastPeriod: 5, slowPeriod: 10 }, btConfig);
 
     // Pinned: exactly 1 trade, SHORT, hit STOP_LOSS at 173.4
     expect(result.trades.length).toBe(1);
@@ -342,9 +214,9 @@ describe('E2E Negative Paths', () => {
       timeframes: ['1m'],
     };
     const loader = async () => shortCandles;
-    const factory = makeEmaCrossoverFactory(riskConfig, pmConfig, 5, 10);
+    const factory = makeEmaCrossoverFactory([BTCUSDT], riskConfig, pmConfig);
     const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
+    const result = await engine.run(factory, { fastPeriod: 5, slowPeriod: 10 }, btConfig);
 
     expect(result.trades.length).toBe(0);
     expect(result.initialBalance).toBe(10_000);
@@ -367,9 +239,9 @@ describe('E2E Negative Paths', () => {
       timeframes: ['1m'],
     };
     const loader = async () => fixtureCandles;
-    const factory = makeEmaCrossoverFactory(riskConfig, pmConfig, 5, 10);
+    const factory = makeEmaCrossoverFactory([fixtureSymbol], riskConfig, pmConfig);
     const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, {}, btConfig);
+    const result = await engine.run(factory, { fastPeriod: 5, slowPeriod: 10 }, btConfig);
 
     expect(result.trades.length).toBe(0);
     expect(result.initialBalance).toBe(10_000);

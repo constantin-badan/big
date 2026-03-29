@@ -20,11 +20,10 @@ import { toSymbol } from '@trading-bot/types';
 
 import { createBacktestEngine } from '@trading-bot/backtest-engine';
 
-// ─── Shared Constants ────────────────────────────────────────────────
+import { BTCUSDT, BASE_TIME, CANDLE_MS } from '../e2e-helpers';
 
-const BASE_TIME = 1_700_000_000_000;
-const CANDLE_MS = 60_000; // 1-minute candles
-const BTCUSDT = toSymbol('BTCUSDT');
+// ─── Multi-Symbol Constants ─────────────────────────────────────────
+
 const ETHUSDT = toSymbol('ETHUSDT');
 const NUM_CANDLES = 40;
 
@@ -359,6 +358,13 @@ describe('maxConcurrentPositions = 1 (second symbol blocked)', () => {
     result = await engine.run(factory, {}, btConfig);
     btcTrades = result.trades.filter((t) => t.symbol === BTCUSDT);
     ethTrades = result.trades.filter((t) => t.symbol === ETHUSDT);
+  });
+
+  test('BTC position is still open when ETH crossover fires (timing guard)', () => {
+    // If this fails, the timing assumption broke — BTC closed before ETH entered,
+    // making the maxConcurrent=1 test pass for the wrong reason.
+    expect(btcTrades.length).toBeGreaterThanOrEqual(1);
+    expect(btcTrades[0]!.exitReason).toBe('TAKE_PROFIT');
   });
 
   test('BTCUSDT has trades (entered first due to stagger)', () => {
