@@ -1,5 +1,4 @@
-import type { IEventBus } from '@trading-bot/event-bus';
-import type { Candle, OrderBookSnapshot, Symbol, Timeframe } from '@trading-bot/types';
+import type { Candle, IEventBus, OrderBookSnapshot, Symbol, Timeframe } from '@trading-bot/types';
 import { toSymbol } from '@trading-bot/types';
 
 import type { IDataFeed } from './types';

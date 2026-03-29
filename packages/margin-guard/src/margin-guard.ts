@@ -1,5 +1,4 @@
-import type { IEventBus, TradingEventMap } from '@trading-bot/event-bus';
-import type { PositionSide, Symbol } from '@trading-bot/types';
+import type { IEventBus, TradingEventMap, PositionSide, Symbol } from '@trading-bot/types';
 
 import type { IMarginGuard, MarginGuardConfig } from './types';
 

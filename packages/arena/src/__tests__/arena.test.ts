@@ -2,11 +2,10 @@ import { describe, test, expect } from 'bun:test';
 
 import { BacktestSimExchange } from '@trading-bot/backtest-engine';
 import { EventBus } from '@trading-bot/event-bus';
-import type { IEventBus, TradingEventMap } from '@trading-bot/event-bus';
 import { BacktestExecutor } from '@trading-bot/order-executor';
 import type { IStrategy, StrategyFactory } from '@trading-bot/strategy';
 import { fixtures } from '@trading-bot/test-utils';
-import type { Candle, ExchangeConfig, PerformanceMetrics, TradeRecord } from '@trading-bot/types';
+import type { Candle, ExchangeConfig, IEventBus, PerformanceMetrics, TradingEventMap, TradeRecord } from '@trading-bot/types';
 import { toSymbol } from '@trading-bot/types';
 
 import { Arena } from '../arena';

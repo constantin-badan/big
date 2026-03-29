@@ -1,5 +1,4 @@
-import type { IEventBus } from '@trading-bot/event-bus';
-import type { IOrderExecutor, OrderRequest, SubmissionReceipt, Symbol } from '@trading-bot/types';
+import type { IEventBus, IOrderExecutor, OrderRequest, SubmissionReceipt, Symbol } from '@trading-bot/types';
 import { toClientOrderId, toOrderId } from '@trading-bot/types';
 
 export interface MockExecutorConfig {

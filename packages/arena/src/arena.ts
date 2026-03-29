@@ -1,7 +1,6 @@
 import { BacktestSimExchange } from '@trading-bot/backtest-engine';
 import { LiveDataFeed } from '@trading-bot/data-feed';
 import { EventBus } from '@trading-bot/event-bus';
-import type { IEventBus, TradingEventMap } from '@trading-bot/event-bus';
 import { createExchange } from '@trading-bot/exchange-client';
 import type { IExchange } from '@trading-bot/exchange-client';
 import { BacktestExecutor } from '@trading-bot/order-executor';
@@ -10,10 +9,12 @@ import { computeMetrics } from '@trading-bot/reporting';
 import type { IStrategy } from '@trading-bot/strategy';
 import type {
   ExchangeConfig,
+  IEventBus,
   OrderRequest,
   SlippageModel,
   SubmissionReceipt,
   Symbol,
+  TradingEventMap,
   TradeRecord,
 } from '@trading-bot/types';
 import { toClientOrderId } from '@trading-bot/types';

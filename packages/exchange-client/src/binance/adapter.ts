@@ -1,9 +1,9 @@
-import type { IEventBus } from '@trading-bot/event-bus';
 import type {
   AccountBalance,
   Candle,
   ExchangeConfig,
   FeeStructure,
+  IEventBus,
   OrderBookDiff,
   OrderBookSnapshot,
   OrderId,

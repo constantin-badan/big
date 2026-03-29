@@ -1,4 +1,4 @@
-import type { IEventBus, TradingEventMap } from '@trading-bot/event-bus';
+import type { IEventBus, TradingEventMap } from '@trading-bot/types';
 
 /**
  * Minimal IEventBus implementation for unit tests.

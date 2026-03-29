@@ -1,11 +1,11 @@
 import { describe, test, expect } from 'bun:test';
 
-import { EventBus } from '@trading-bot/event-bus';
 import type { IPositionManager, PositionState } from '@trading-bot/position-manager';
 import type { IRiskManager } from '@trading-bot/risk-manager';
 import type { IScanner, IScannerConfig } from '@trading-bot/scanner';
 import {
   EventCapture,
+  MockEventBus,
   createMockExchange,
   createMockExecutor,
   fixtures,
@@ -80,12 +80,12 @@ function makeRiskManager(): IRiskManager & { disposeCount: number } {
 }
 
 function createTestBus() {
-  const bus = new EventBus();
+  const bus = new MockEventBus();
   const capture = new EventCapture(bus);
   return { bus, capture };
 }
 
-function makeDeps(bus: EventBus): StrategyDeps {
+function makeDeps(bus: MockEventBus): StrategyDeps {
   return { bus, exchange: createMockExchange(), executor: createMockExecutor(bus) };
 }
 

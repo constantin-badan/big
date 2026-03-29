@@ -1,8 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 
-import type { IEventBus } from '@trading-bot/event-bus';
 import { createTestBus, EventCapture } from '@trading-bot/test-utils';
-import type { OrderRequest, OrderResult, OrderStatus } from '@trading-bot/types';
+import type { IEventBus, OrderRequest, OrderResult, OrderStatus } from '@trading-bot/types';
 import { toSymbol, toOrderId, toClientOrderId } from '@trading-bot/types';
 
 import { BacktestExecutor } from '../backtest-executor';

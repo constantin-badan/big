@@ -1,4 +1,4 @@
-import type { IEventBus, TradingEventMap } from '@trading-bot/event-bus';
+import type { IEventBus, TradingEventMap } from '@trading-bot/types';
 
 function isArray<T>(value: unknown): value is T[] {
   return Array.isArray(value);

@@ -1,5 +1,5 @@
-import type { IEventBus, TradingEventMap } from '@trading-bot/event-bus';
 import type { IIndicator } from '@trading-bot/indicators';
+import type { IEventBus, TradingEventMap } from '@trading-bot/types';
 
 import type { IScannerConfig, IScanner, ScannerEvaluate } from './types';
 

@@ -1,5 +1,4 @@
-import type { IEventBus } from '@trading-bot/event-bus';
-import type { OrderRequest, SubmissionReceipt, Symbol } from '@trading-bot/types';
+import type { IEventBus, OrderRequest, SubmissionReceipt, Symbol } from '@trading-bot/types';
 import { toClientOrderId } from '@trading-bot/types';
 
 import type { IFillSimulator, IOrderExecutor } from './types';

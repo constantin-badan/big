@@ -1,6 +1,5 @@
-import type { IEventBus, TradingEventMap } from '@trading-bot/event-bus';
 import { KahanSum } from '@trading-bot/types';
-import type { RiskCheckResult, Signal, TradeRecord } from '@trading-bot/types';
+import type { IEventBus, TradingEventMap, RiskCheckResult, Signal, TradeRecord } from '@trading-bot/types';
 
 import type { IRiskManager, RiskConfig } from './types';
 

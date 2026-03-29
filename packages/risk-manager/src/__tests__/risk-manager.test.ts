@@ -1,8 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 
-import type { IEventBus } from '@trading-bot/event-bus';
 import { createTestBus, fixtures } from '@trading-bot/test-utils';
-import type { RiskCheckResult, Signal, TradeRecord } from '@trading-bot/types';
+import type { IEventBus, RiskCheckResult, Signal, TradeRecord } from '@trading-bot/types';
 import { toSymbol } from '@trading-bot/types';
 
 import { RiskManager } from '../risk-manager';

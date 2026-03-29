@@ -1,10 +1,9 @@
 import { describe, test, expect } from 'bun:test';
 
-import type { IEventBus } from '@trading-bot/event-bus';
 import type { IExchange } from '@trading-bot/exchange-client';
 import { createTestBus, fixtures } from '@trading-bot/test-utils';
 import type { EventCapture } from '@trading-bot/test-utils';
-import type { Candle, Symbol, Tick, Timeframe, OrderBookDiff } from '@trading-bot/types';
+import type { Candle, IEventBus, Symbol, Tick, Timeframe, OrderBookDiff } from '@trading-bot/types';
 import { toSymbol } from '@trading-bot/types';
 
 import { LiveDataFeed } from '../live-data-feed';
