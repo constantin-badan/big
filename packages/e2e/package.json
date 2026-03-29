@@ -1,0 +1,28 @@
+{
+  "name": "@trading-bot/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsgo --noEmit -p tsconfig.json",
+    "lint": "oxlint ./src --config ../../.oxlintrc.json"
+  },
+  "devDependencies": {
+    "@trading-bot/types": "workspace:*",
+    "@trading-bot/event-bus": "workspace:*",
+    "@trading-bot/exchange-client": "workspace:*",
+    "@trading-bot/indicators": "workspace:*",
+    "@trading-bot/scanner": "workspace:*",
+    "@trading-bot/risk-manager": "workspace:*",
+    "@trading-bot/position-manager": "workspace:*",
+    "@trading-bot/margin-guard": "workspace:*",
+    "@trading-bot/order-executor": "workspace:*",
+    "@trading-bot/data-feed": "workspace:*",
+    "@trading-bot/strategy": "workspace:*",
+    "@trading-bot/reporting": "workspace:*",
+    "@trading-bot/backtest-engine": "workspace:*",
+    "@trading-bot/arena": "workspace:*",
+    "@trading-bot/storage": "workspace:*",
+    "@trading-bot/test-utils": "workspace:*"
+  }
+}

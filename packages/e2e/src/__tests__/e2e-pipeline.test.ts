@@ -17,7 +17,7 @@ import type {
 } from '@trading-bot/types';
 import { toSymbol } from '@trading-bot/types';
 
-import { createBacktestEngine } from '../backtest-engine';
+import { createBacktestEngine } from '@trading-bot/backtest-engine';
 
 // ─── Shared Constants ────────────────────────────────────────────────
 

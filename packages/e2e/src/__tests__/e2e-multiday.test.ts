@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 
-import { BacktestSimExchange } from '../backtest-sim-exchange';
+import { BacktestSimExchange } from '@trading-bot/backtest-engine';
 import { createEMA } from '@trading-bot/indicators';
 import { EventBus } from '@trading-bot/event-bus';
 import type { IEventBus, TradingEventMap } from '@trading-bot/event-bus';
