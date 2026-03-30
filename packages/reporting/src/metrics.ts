@@ -37,6 +37,7 @@ export function computeMetrics(
   initialBalance: number,
   startTime: number,
   endTime: number,
+  equityCurve?: Array<{ time: number; equity: number }>,
 ): PerformanceMetrics {
   const zero: PerformanceMetrics = {
     totalTrades: 0,
@@ -120,16 +121,20 @@ export function computeMetrics(
     equityPoints.push({ time: trade.exitTime, balance: runningBalance });
   }
 
-  // Max drawdown
+  // Max drawdown — use candle-level equity curve if provided (includes unrealized PnL),
+  // otherwise fall back to trade-based equity points (realized PnL only).
+  const ddSource = equityCurve && equityCurve.length > 0
+    ? [{ time: startTime, balance: initialBalance }, ...equityCurve.map((p) => ({ time: p.time, balance: p.equity }))]
+    : equityPoints;
+
   let maxDrawdown = 0;
   let peakBalance = initialBalance;
   let peakTime = startTime;
   let maxDrawdownDuration = 0;
   let inDrawdown = false;
 
-  for (const point of equityPoints) {
+  for (const point of ddSource) {
     if (point.balance >= peakBalance) {
-      // New peak — check duration of previous drawdown period
       if (inDrawdown) {
         const duration = point.time - peakTime;
         if (duration > maxDrawdownDuration) {
@@ -148,7 +153,6 @@ export function computeMetrics(
     }
   }
 
-  // Check if we're still in a drawdown at end of backtest
   if (inDrawdown) {
     const duration = endTime - peakTime;
     if (duration > maxDrawdownDuration) {
