@@ -475,6 +475,8 @@ export interface TournamentConfig {
   dataRange: { startTime: number; endTime: number };
   /** Progressive elimination stages. */
   stages: TournamentStageConfig[];
+  /** RNG seed for deterministic tournaments. Same seed + same data = same results. */
+  seed?: number;
 }
 
 /** Snapshot of tournament state — persisted for resume and audit. */

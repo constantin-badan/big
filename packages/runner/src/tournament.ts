@@ -32,10 +32,11 @@ import { createBacktestEngine } from '@trading-bot/backtest-engine';
 
 import { classifyWeeks, selectStratifiedWeeks } from './regime-detection';
 import { fetchTopSymbols } from './fetch-top-symbols';
+import { createPrng } from './prng';
 
 // ─── Param Generation ───────────────────────────────────────────────
 
-function sampleFromBounds(bounds: ParamBounds, count: number): Array<Record<string, number>> {
+function sampleFromBounds(bounds: ParamBounds, count: number, random: () => number): Array<Record<string, number>> {
   const keys = Object.keys(bounds);
   const samples: Array<Record<string, number>> = [];
 
@@ -44,7 +45,7 @@ function sampleFromBounds(bounds: ParamBounds, count: number): Array<Record<stri
     for (const key of keys) {
       const spec = bounds[key]!;
       const range = spec.max - spec.min;
-      let value = spec.min + Math.random() * range;
+      let value = spec.min + random() * range;
       if (spec.step !== undefined && spec.step > 0) {
         value = spec.min + Math.round((value - spec.min) / spec.step) * spec.step;
         value = Math.max(spec.min, Math.min(spec.max, value));
@@ -61,13 +62,14 @@ function generateCandidates(
   candidatesPerTemplate: number,
   pmBounds: ParamBounds,
   pmSamples: number,
+  random: () => number,
 ): TournamentCandidate[] {
   const candidates: TournamentCandidate[] = [];
   let idCounter = 0;
 
   for (const template of templates) {
-    const scannerParamSets = sampleFromBounds(template.params, candidatesPerTemplate);
-    const pmParamSets = sampleFromBounds(pmBounds, pmSamples);
+    const scannerParamSets = sampleFromBounds(template.params, candidatesPerTemplate, random);
+    const pmParamSets = sampleFromBounds(pmBounds, pmSamples, random);
 
     for (const scannerParams of scannerParamSets) {
       // Skip invalid combinations via template constraint
@@ -90,11 +92,11 @@ function generateCandidates(
 
 // ─── Random Selection ──────────────────────────────────────────────
 
-function selectRandomSymbols(pool: Symbol[], count: number): Symbol[] {
+function selectRandomSymbols(pool: Symbol[], count: number, random: () => number): Symbol[] {
   const shuffled = [...pool];
   // Fisher-Yates shuffle
   for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     const temp = shuffled[i]!;
     shuffled[i] = shuffled[j]!;
     shuffled[j] = temp;
@@ -216,7 +218,11 @@ export async function runTournament(
       ? config.symbolPool
       : await fetchTopSymbols(50);
 
+  const seed = config.seed ?? Date.now();
+  const random = createPrng(seed);
+
   console.log(`Symbol pool: ${String(symbolPool.length)} symbols`);
+  console.log(`Seed: ${String(seed)}`);
 
   const templateMap = new Map<string, ScannerTemplate>();
   for (const t of config.templates) {
@@ -229,6 +235,7 @@ export async function runTournament(
     config.candidatesPerTemplate,
     config.pmParams,
     config.pmSamples,
+    random,
   );
 
   console.log(`Generated ${String(candidates.length)} candidates`);
@@ -254,8 +261,8 @@ export async function runTournament(
       break;
     }
 
-    // Select random symbols
-    const symbols = selectRandomSymbols(symbolPool, stageConfig.symbols);
+    // Select random symbols (deterministic via seeded PRNG)
+    const symbols = selectRandomSymbols(symbolPool, stageConfig.symbols, random);
 
     // Select weeks with stratified regime diversity
     const store = createStorage(dbPath).candles;
@@ -266,7 +273,7 @@ export async function runTournament(
       config.dataRange.startTime,
       config.dataRange.endTime,
     );
-    const selectedWeeks = selectStratifiedWeeks(allWeeks, stageConfig.weeks);
+    const selectedWeeks = selectStratifiedWeeks(allWeeks, stageConfig.weeks, random);
     const weeks = selectedWeeks.map((w) => ({ startTime: w.startTime, endTime: w.endTime }));
     const regimes = selectedWeeks.map((w) => w.regime);
 

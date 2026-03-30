@@ -92,6 +92,7 @@ export function classifyWeeks(
 export function selectStratifiedWeeks(
   classifiedWeeks: ClassifiedWeek[],
   count: number,
+  random: () => number = Math.random,
 ): ClassifiedWeek[] {
   if (classifiedWeeks.length <= count) return [...classifiedWeeks];
 
@@ -108,7 +109,7 @@ export function selectStratifiedWeeks(
   // Phase 1: one from each available regime
   for (const [, weeks] of byRegime) {
     if (selected.length >= count) break;
-    const idx = Math.floor(Math.random() * weeks.length);
+    const idx = Math.floor(random() * weeks.length);
     const week = weeks[idx]!;
     selected.push(week);
     used.add(week.startTime);
@@ -117,7 +118,7 @@ export function selectStratifiedWeeks(
   // Phase 2: fill remaining slots randomly
   const remaining = classifiedWeeks.filter((w) => !used.has(w.startTime));
   while (selected.length < count && remaining.length > 0) {
-    const idx = Math.floor(Math.random() * remaining.length);
+    const idx = Math.floor(random() * remaining.length);
     selected.push(remaining.splice(idx, 1)[0]!);
   }
 

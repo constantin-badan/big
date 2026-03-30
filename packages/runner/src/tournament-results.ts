@@ -93,10 +93,15 @@ function formatCandidate(rc: RankedCandidate): string {
   const tpPct = c.pmParams.takeProfitPct?.toFixed(1) ?? '?';
   const holdH = c.pmParams.maxHoldTimeHours?.toFixed(0) ?? '?';
 
+  const avgPF = r.avgProfitFactor != null ? r.avgProfitFactor.toFixed(2) : '?';
+  const avgSharpe = r.avgSharpe != null ? r.avgSharpe.toFixed(2) : '?';
+  const maxDD = r.maxDrawdown != null ? r.maxDrawdown.toFixed(1) : '?';
+  const pnl = r.totalPnl != null ? r.totalPnl.toFixed(2) : '?';
+
   return [
     `  #${String(rc.rank)} ${c.id}`,
-    `     PnL: $${r.totalPnl.toFixed(2)}  |  Trades: ${String(r.totalTrades)}  |  Profitable weeks: ${String(r.profitableWeeks)}/${String(r.totalWeeks)}`,
-    `     Avg PF: ${r.avgProfitFactor.toFixed(2)}  |  Avg Sharpe: ${r.avgSharpe.toFixed(2)}  |  Max DD: ${r.maxDrawdown.toFixed(1)}%`,
+    `     PnL: $${pnl}  |  Trades: ${String(r.totalTrades)}  |  Profitable weeks: ${String(r.profitableWeeks)}/${String(r.totalWeeks)}`,
+    `     Avg PF: ${avgPF}  |  Avg Sharpe: ${avgSharpe}  |  Max DD: ${maxDD}%`,
     `     Scanner: { ${scannerStr} }`,
     `     PM: SL=${slPct}%  TP=${tpPct}%  Hold=${holdH}h`,
   ].join('\n');

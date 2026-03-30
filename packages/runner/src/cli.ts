@@ -79,18 +79,25 @@ async function tournament(): Promise<void> {
     symbolPool: symbols,
     dataRange: { startTime: dataStart, endTime: dataEnd },
     stages: [
-      { weeks: 1, symbols: 1, killRate: 0.25 },
-      { weeks: 2, symbols: 2, killRate: 0.50 },
-      { weeks: 4, symbols: 3, killRate: 0.50 },
-      { weeks: 8, symbols: 4, killRate: 0.50 },
+      { weeks: 1, symbols: 1, killRate: 0.10 },
+      { weeks: 1, symbols: 2, killRate: 0.10 },
+      { weeks: 2, symbols: 2, killRate: 0.15 },
+      { weeks: 2, symbols: 3, killRate: 0.15 },
+      { weeks: 4, symbols: 3, killRate: 0.20 },
+      { weeks: 4, symbols: 4, killRate: 0.20 },
+      { weeks: 8, symbols: 4, killRate: 0.25 },
+      { weeks: 8, symbols: 4, killRate: 0.25 },
     ],
+    seed: 42,
   };
 
   console.log('=== Evolutionary Discovery Tournament ===');
   console.log(`Templates: ${config.templates.map((t) => t.name).join(', ')}`);
   console.log(`Candidates: ${String(config.candidatesPerTemplate)} scanner x ${String(config.pmSamples)} PM = ${String(config.candidatesPerTemplate * config.pmSamples)} per template`);
   console.log(`Total: ${String(config.candidatesPerTemplate * config.pmSamples * config.templates.length)} candidates`);
-  console.log(`Stages: ${config.stages.map((s) => `${String(s.weeks)}w x ${String(s.symbols)}s kill${String(s.killRate * 100)}%`).join(' -> ')}`);
+  console.log(`Stages: ${config.stages.map((s) => `${String(s.weeks)}w/${String(s.symbols)}s kill${String(s.killRate * 100)}%`).join(' -> ')}`);
+  console.log(`Seed: ${String(config.seed ?? 'random')}`);
+
   console.log(`Timeframe: ${config.timeframe}`);
   console.log(`Data: ${new Date(dataStart).toISOString().slice(0, 10)} -> ${new Date(dataEnd).toISOString().slice(0, 10)}`);
 
