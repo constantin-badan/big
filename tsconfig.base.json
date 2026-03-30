@@ -39,7 +39,8 @@
       "@trading-bot/dashboard": ["./packages/dashboard/src/index.ts"],
       "@trading-bot/alerting": ["./packages/alerting/src/index.ts"],
       "@trading-bot/metrics": ["./packages/metrics/src/index.ts"],
-      "@trading-bot/test-utils": ["./packages/test-utils/src/index.ts"]
+      "@trading-bot/test-utils": ["./packages/test-utils/src/index.ts"],
+      "@trading-bot/pine-gen": ["./packages/pine-gen/src/index.ts"]
     }
   }
 }

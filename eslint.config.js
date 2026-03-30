@@ -28,6 +28,7 @@ module.exports = [
             { sourceTag: 'scope:backtest-engine', onlyDependOnLibsWithTags: ['scope:types',  'scope:test-utils', 'scope:event-bus', 'scope:data-feed', 'scope:order-executor', 'scope:strategy', 'scope:reporting'] },
             { sourceTag: 'scope:sweep-engine', onlyDependOnLibsWithTags: ['scope:types',  'scope:test-utils', 'scope:backtest-engine', 'scope:strategy', 'scope:storage'] },
             { sourceTag: 'scope:storage', onlyDependOnLibsWithTags: ['scope:types',  'scope:test-utils'] },
+            { sourceTag: 'scope:pine-gen', onlyDependOnLibsWithTags: ['scope:types'] },
             { sourceTag: 'scope:dashboard', onlyDependOnLibsWithTags: ['scope:types', 'scope:test-utils', 'scope:event-bus'] },
             { sourceTag: 'scope:alerting', onlyDependOnLibsWithTags: ['scope:types', 'scope:test-utils', 'scope:event-bus'] },
             { sourceTag: 'scope:metrics', onlyDependOnLibsWithTags: ['scope:types', 'scope:test-utils', 'scope:event-bus'] },

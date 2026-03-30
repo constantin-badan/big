@@ -1,0 +1,15 @@
+{
+  "name": "@trading-bot/pine-gen",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsgo --noEmit -p tsconfig.json",
+    "lint": "oxlint ./src --config ../../.oxlintrc.json"
+  },
+  "dependencies": {
+    "@trading-bot/types": "workspace:*"
+  }
+}
