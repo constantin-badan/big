@@ -193,6 +193,8 @@ export interface PositionManagerConfig {
   trailingStopActivationPct: number;
   trailingStopDistancePct: number;
   maxHoldTimeMs: number;
+  /** Move SL to breakeven after price moves this % in your favor. 0 = disabled. */
+  breakevenActivationPct?: number;
   evaluationTimeframe?: Timeframe; // if set, only evaluate SL/TP on this timeframe's candle:close
   quantityStepSize?: number; // if set, round order quantity down to nearest step size
   safetyStopEnabled?: boolean;

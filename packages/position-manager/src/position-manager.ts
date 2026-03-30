@@ -33,6 +33,7 @@ type SymbolState = {
   exitReason: TradeRecord['exitReason'] | null;
   safetyStopOrderId: OrderId | null;
   safetyStopPending: Promise<void> | null;
+  breakevenApplied: boolean;
 };
 
 function makeSymbolState(): SymbolState {
@@ -48,6 +49,7 @@ function makeSymbolState(): SymbolState {
     exitReason: null,
     safetyStopOrderId: null,
     safetyStopPending: null,
+    breakevenApplied: false,
   };
 }
 
@@ -159,6 +161,9 @@ export class PositionManager implements IPositionManager {
       this.triggerExit(symbol, 'TIMEOUT', candle.close);
       return;
     }
+
+    // Move SL to breakeven if activation threshold reached
+    this.checkBreakeven(symState, isLong, entryOrder.avgPrice, isLong ? candle.high : candle.low);
 
     // Check trailing stop
     if (this.config.trailingStopEnabled) {
@@ -329,6 +334,23 @@ export class PositionManager implements IPositionManager {
     }
   }
 
+  // === Breakeven SL ===
+
+  private checkBreakeven(symState: SymbolState, isLong: boolean, entryPrice: number, favorablePrice: number): void {
+    if (symState.breakevenApplied) return;
+    const activationPct = this.config.breakevenActivationPct;
+    if (!activationPct || activationPct <= 0) return;
+
+    const moveInFavor = isLong
+      ? (favorablePrice - entryPrice) / entryPrice
+      : (entryPrice - favorablePrice) / entryPrice;
+
+    if (moveInFavor >= activationPct / 100) {
+      symState.stopPrice = entryPrice;
+      symState.breakevenApplied = true;
+    }
+  }
+
   // === Trailing stop extraction ===
 
   /**
@@ -446,6 +468,7 @@ export class PositionManager implements IPositionManager {
     symState.exitReason = null;
     symState.safetyStopOrderId = null;
     symState.safetyStopPending = null;
+    symState.breakevenApplied = false;
   }
 
   private evaluateSLTP(symbol: Symbol, price: number, timestamp: number): void {
@@ -463,6 +486,9 @@ export class PositionManager implements IPositionManager {
       this.triggerExit(symbol, 'TIMEOUT', price);
       return;
     }
+
+    // Move SL to breakeven if activation threshold reached
+    this.checkBreakeven(symState, isLong, entry.avgPrice, price);
 
     // Trailing stop
     if (this.config.trailingStopEnabled) {

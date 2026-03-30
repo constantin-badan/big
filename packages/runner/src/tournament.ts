@@ -136,13 +136,15 @@ async function runStage(
     if (!template) throw new Error(`Unknown template: ${candidate.templateName}`);
 
     // Build PM config from candidate's PM params
+    const trailingActivation = candidate.pmParams.trailingActivationPct ?? 0;
     const pmConfig: PositionManagerConfig = {
       defaultStopLossPct: candidate.pmParams.stopLossPct ?? 2,
       defaultTakeProfitPct: candidate.pmParams.takeProfitPct ?? 4,
-      trailingStopEnabled: false,
-      trailingStopActivationPct: 0,
-      trailingStopDistancePct: 0,
+      trailingStopEnabled: trailingActivation > 0,
+      trailingStopActivationPct: trailingActivation,
+      trailingStopDistancePct: candidate.pmParams.trailingDistancePct ?? 0.5,
       maxHoldTimeMs: (candidate.pmParams.maxHoldTimeHours ?? 4) * 3_600_000,
+      breakevenActivationPct: candidate.pmParams.breakevenPct ?? 0,
     };
 
     const factory = template.createFactory(symbols, timeframe, riskConfig, pmConfig);
@@ -338,7 +340,9 @@ export async function runTournament(
       const scannerStr = Object.entries(c.scannerParams)
         .map(([k, v]) => `${k}=${String(Math.round(v))}`)
         .join(',');
-      const pmStr = `SL=${String(c.pmParams.stopLossPct?.toFixed(1))}% TP=${String(c.pmParams.takeProfitPct?.toFixed(1))}%`;
+      let pmStr = `SL=${String(c.pmParams.stopLossPct?.toFixed(1))}% TP=${String(c.pmParams.takeProfitPct?.toFixed(1))}%`;
+      if (c.pmParams.trailingActivationPct) pmStr += ` trail=${String(c.pmParams.trailingActivationPct.toFixed(1))}%`;
+      if (c.pmParams.breakevenPct) pmStr += ` BE=${String(c.pmParams.breakevenPct.toFixed(1))}%`;
       console.log(
         `    ${c.id}: ${scannerStr} ${pmStr} | PnL=${r.totalPnl.toFixed(2)} trades=${String(r.totalTrades)} weeks=${String(r.profitableWeeks)}/${String(r.totalWeeks)}`,
       );

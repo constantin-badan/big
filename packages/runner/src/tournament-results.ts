@@ -105,7 +105,9 @@ function formatCandidate(rc: RankedCandidate): string {
     `     PnL: $${pnl}  |  Trades: ${String(r.totalTrades)}  |  Profitable weeks: ${String(r.profitableWeeks)}/${String(r.totalWeeks)}`,
     `     Avg PF: ${avgPF}  |  Avg Sharpe: ${avgSharpe}  |  Max DD: ${maxDD}%`,
     `     Scanner: { ${scannerStr} }`,
-    `     PM: SL=${slPct}%  TP=${tpPct}%  Hold=${holdH}h`,
+    `     PM: SL=${slPct}%  TP=${tpPct}%  Hold=${holdH}h` +
+      (c.pmParams.trailingActivationPct ? `  Trail=${String(c.pmParams.trailingActivationPct.toFixed(1))}%/${String(c.pmParams.trailingDistancePct?.toFixed(1) ?? '?')}%` : '') +
+      (c.pmParams.breakevenPct ? `  BE=${String(c.pmParams.breakevenPct.toFixed(1))}%` : ''),
   ].join('\n');
 }
 

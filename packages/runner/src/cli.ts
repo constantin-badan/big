@@ -58,8 +58,11 @@ async function tournament(): Promise<void> {
       stopLossPct: { min: 1, max: 5, step: 0.5 },
       takeProfitPct: { min: 2, max: 10, step: 0.5 },
       maxHoldTimeHours: { min: 1, max: 24, step: 1 },
+      trailingActivationPct: { min: 0, max: 3, step: 0.5 },   // 0 = disabled
+      trailingDistancePct: { min: 0.3, max: 2, step: 0.1 },
+      breakevenPct: { min: 0, max: 2, step: 0.5 },             // 0 = disabled
     },
-    pmSamples: 5,
+    pmSamples: 8,
     riskConfig: {
       maxPositionSizePct: 5,
       maxConcurrentPositions: 2,

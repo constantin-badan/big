@@ -218,13 +218,15 @@ async function runCandidate(
   const template = templateMap.get(candidate.templateName);
   if (!template) throw new Error(`Unknown template: ${candidate.templateName}`);
 
+  const trailingActivation = candidate.pmParams.trailingActivationPct ?? 0;
   const pmConfig: PositionManagerConfig = {
     defaultStopLossPct: candidate.pmParams.stopLossPct ?? 2,
     defaultTakeProfitPct: candidate.pmParams.takeProfitPct ?? 4,
-    trailingStopEnabled: false,
-    trailingStopActivationPct: 0,
-    trailingStopDistancePct: 0,
+    trailingStopEnabled: trailingActivation > 0,
+    trailingStopActivationPct: trailingActivation,
+    trailingStopDistancePct: candidate.pmParams.trailingDistancePct ?? 0.5,
     maxHoldTimeMs: (candidate.pmParams.maxHoldTimeHours ?? 4) * 3_600_000,
+    breakevenActivationPct: candidate.pmParams.breakevenPct ?? 0,
   };
 
   const loader = (sym: Symbol, tf: Timeframe, start: number, end: number) =>
