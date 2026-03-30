@@ -2,8 +2,10 @@ import type {
   Candle,
   ClientOrderId,
   IEventBus,
+  IExchange,
   IOrderExecutor,
   IRiskManager,
+  OrderId,
   OrderRequest,
   OrderResult,
   Position,
@@ -29,6 +31,7 @@ type SymbolState = {
   trailingActive: boolean;
   entryTime: number | null;
   exitReason: TradeRecord['exitReason'] | null;
+  safetyStopOrderId: OrderId | null;
 };
 
 function makeSymbolState(): SymbolState {
@@ -42,6 +45,7 @@ function makeSymbolState(): SymbolState {
     trailingActive: false,
     entryTime: null,
     exitReason: null,
+    safetyStopOrderId: null,
   };
 }
 
@@ -64,17 +68,20 @@ export class PositionManager implements IPositionManager {
   private readonly eventBus: IEventBus;
   private readonly executor: IOrderExecutor;
   private readonly riskManager: IRiskManager;
+  private readonly exchange: IExchange | null;
   private readonly config: PositionManagerConfig;
 
   constructor(
     eventBus: IEventBus,
     executor: IOrderExecutor,
     riskManager: IRiskManager,
+    exchange: IExchange | null,
     config: PositionManagerConfig,
   ) {
     this.eventBus = eventBus;
     this.executor = executor;
     this.riskManager = riskManager;
+    this.exchange = exchange;
     this.config = config;
     if (config.defaultStopLossPct <= 0 || config.defaultStopLossPct >= 100) {
       throw new Error(
@@ -271,6 +278,16 @@ export class PositionManager implements IPositionManager {
         ? fillPrice * (1 + this.config.defaultTakeProfitPct / 100)
         : fillPrice * (1 - this.config.defaultTakeProfitPct / 100);
 
+      // Place exchange-side safety stop (crash net) at multiplier × SL distance
+      if (this.config.safetyStopEnabled && this.exchange) {
+        const mult = this.config.safetyStopMultiplier ?? 2.0;
+        const safetyPrice = isLong
+          ? fillPrice * (1 - mult * this.config.defaultStopLossPct / 100)
+          : fillPrice * (1 + mult * this.config.defaultStopLossPct / 100);
+        const exitSide = isLong ? 'SELL' : 'BUY';
+        void this.placeSafetyStop(symbol, symState, safetyPrice, exitSide, order.filledQuantity);
+      }
+
       const position = this.buildPositionFromEntry(symbol, order);
       this.eventBus.emit('position:opened', { position });
     } else if (symState.state === 'PENDING_EXIT') {
@@ -355,6 +372,49 @@ export class PositionManager implements IPositionManager {
     return null;
   }
 
+  // === Safety stop helpers ===
+
+  private async placeSafetyStop(
+    symbol: Symbol,
+    symState: SymbolState,
+    stopPrice: number,
+    side: 'BUY' | 'SELL',
+    quantity: number,
+  ): Promise<void> {
+    try {
+      const result = await this.exchange!.placeOrder({
+        symbol,
+        side,
+        type: 'STOP_MARKET',
+        stopPrice,
+        quantity,
+        reduceOnly: true,
+      });
+      symState.safetyStopOrderId = result.orderId;
+    } catch (err) {
+      this.eventBus.emit('error', {
+        source: 'position-manager',
+        error: err instanceof Error ? err : new Error(String(err)),
+        context: { action: 'place-safety-stop', symbol },
+      });
+    }
+  }
+
+  private async cancelSafetyStop(symbol: Symbol, symState: SymbolState): Promise<void> {
+    const orderId = symState.safetyStopOrderId;
+    symState.safetyStopOrderId = null;
+    if (orderId === null) return;
+    try {
+      await this.exchange!.cancelOrder(symbol, orderId);
+    } catch (err) {
+      this.eventBus.emit('error', {
+        source: 'position-manager',
+        error: err instanceof Error ? err : new Error(String(err)),
+        context: { action: 'cancel-safety-stop', symbol },
+      });
+    }
+  }
+
   // === Private helpers ===
 
   private getSymbolState(symbol: Symbol): SymbolState {
@@ -376,6 +436,7 @@ export class PositionManager implements IPositionManager {
     symState.trailingActive = false;
     symState.entryTime = null;
     symState.exitReason = null;
+    symState.safetyStopOrderId = null;
   }
 
   private evaluateSLTP(symbol: Symbol, price: number, timestamp: number): void {
@@ -427,6 +488,11 @@ export class PositionManager implements IPositionManager {
 
     const entry = symState.entryOrder;
     if (!entry) return;
+
+    // Cancel exchange-side safety stop before transitioning to PENDING_EXIT
+    if (symState.safetyStopOrderId !== null && this.exchange) {
+      void this.cancelSafetyStop(symbol, symState);
+    }
 
     const exitSide = entry.side === 'BUY' ? 'SELL' : 'BUY';
 

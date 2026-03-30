@@ -120,7 +120,7 @@ function makeThresholdFactory(): StrategyFactory {
     });
 
     const riskManager = new RiskManager(deps.bus, riskConfig);
-    const positionManager = new PositionManager(deps.bus, deps.executor, riskManager, pmConfig);
+    const positionManager = new PositionManager(deps.bus, deps.executor, riskManager, null, pmConfig);
 
     return new Strategy(
       {

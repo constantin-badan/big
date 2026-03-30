@@ -82,7 +82,7 @@ export const rsiReversal: ScannerTemplate = {
       });
 
       const riskManager = new RiskManager(deps.bus, riskConfig);
-      const positionManager = new PositionManager(deps.bus, deps.executor, riskManager, pmConfig);
+      const positionManager = new PositionManager(deps.bus, deps.executor, riskManager, deps.exchange, pmConfig);
 
       return new Strategy(
         {

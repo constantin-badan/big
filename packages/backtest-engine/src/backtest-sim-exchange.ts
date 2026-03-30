@@ -38,6 +38,7 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
     candle: Candle;
   }) => void;
   private orderCounter = 0;
+  private currentTimestamp = 0;
 
   constructor(bus: IEventBus, config: BacktestExchangeConfig) {
     this.bus = bus;
@@ -50,6 +51,7 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
 
     this.handler = (data) => {
       this.currentPrices.set(data.symbol, data.candle.close);
+      this.currentTimestamp = data.candle.closeTime;
     };
     bus.on('candle:close', this.handler);
   }
@@ -159,7 +161,7 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
       filledQuantity: request.quantity,
       commission: fee,
       commissionAsset: 'USDT',
-      timestamp: Date.now(),
+      timestamp: this.currentTimestamp,
       latencyMs: 0,
     };
   }
@@ -179,7 +181,7 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
       filledQuantity: 0,
       commission: 0,
       commissionAsset: 'USDT',
-      timestamp: Date.now(),
+      timestamp: this.currentTimestamp,
       latencyMs: 0,
     };
   }

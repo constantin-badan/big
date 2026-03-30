@@ -1,6 +1,9 @@
+import { AlertManager, type AlertConfig } from '@trading-bot/alerting';
+import { Dashboard } from '@trading-bot/dashboard';
 import { LiveDataFeed, type IDataFeed } from '@trading-bot/data-feed';
 import { EventBus } from '@trading-bot/event-bus';
 import { createExchange, type IExchange } from '@trading-bot/exchange-client';
+import { MetricsCollector } from '@trading-bot/metrics';
 import { LiveExecutor } from '@trading-bot/order-executor';
 import type { IOrderExecutor } from '@trading-bot/order-executor';
 import type { ExchangeConfig, IEventBus, IStrategy, StrategyFactory, Symbol, Timeframe } from '@trading-bot/types';
@@ -19,6 +22,9 @@ export interface LiveRunnerConfig {
   retryDelayMs: number;
   checkOrphanPositions: boolean; // refuse to start if orphaned positions exist
   rateLimitPerMinute: number;
+  alertConfig?: AlertConfig | undefined;
+  metricsPort?: number | undefined;
+  dashboard?: boolean | undefined;
 }
 
 const DEFAULT_CONFIG: Pick<
@@ -58,6 +64,9 @@ export class LiveRunner implements ILiveRunner {
   private dataFeed!: IDataFeed;
   private executor!: IOrderExecutor;
   private _strategy!: IStrategy;
+  private alertManager: AlertManager | null = null;
+  private metricsCollector: MetricsCollector | null = null;
+  private dashboard: Dashboard | null = null;
   private stopPromise: Promise<void> | null = null;
   private readonly logHandlers: Array<() => void> = [];
 
@@ -98,6 +107,24 @@ export class LiveRunner implements ILiveRunner {
 
     // 2. Set up logging
     this.setupLogging();
+
+    // 2b. Start alerting (if configured)
+    if (this.config.alertConfig) {
+      this.alertManager = new AlertManager(this.bus, this.config.alertConfig);
+      this.alertManager.start();
+    }
+
+    // 2c. Start metrics exporter (if configured)
+    if (this.config.metricsPort !== undefined) {
+      this.metricsCollector = new MetricsCollector(this.bus, { port: this.config.metricsPort });
+      this.metricsCollector.start();
+    }
+
+    // 2d. Start terminal dashboard (if configured)
+    if (this.config.dashboard) {
+      this.dashboard = new Dashboard(this.bus);
+      this.dashboard.start();
+    }
 
     // 3. Connect to exchange
     await this.exchange.connect();
@@ -170,6 +197,24 @@ export class LiveRunner implements ILiveRunner {
       unsub();
     }
     this.logHandlers.length = 0;
+
+    // Stop alerting
+    if (this.alertManager) {
+      this.alertManager.stop();
+      this.alertManager = null;
+    }
+
+    // Stop metrics
+    if (this.metricsCollector) {
+      this.metricsCollector.stop();
+      this.metricsCollector = null;
+    }
+
+    // Stop dashboard
+    if (this.dashboard) {
+      this.dashboard.stop();
+      this.dashboard = null;
+    }
 
     // 1. Stop data-feed (no new candle/tick events)
     await this.dataFeed.stop();

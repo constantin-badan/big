@@ -51,6 +51,9 @@ import { signRequest } from './signing';
 import { jsonParse } from './unsafe-cast';
 import { WsConnection } from './ws-connection';
 
+const ROTATION_OFFSET_MS = 23 * 60 * 60 * 1000 + 50 * 60 * 1000; // 23h50m
+const ROTATION_VERIFY_TIMEOUT_MS = 30_000; // 30s to verify new connection
+
 type StreamCallback = (data: unknown) => void;
 
 interface BinanceTradingMessage {
@@ -90,6 +93,10 @@ export class BinanceAdapter implements IExchange {
 
   // Per-stream-key last message timestamp for gap detection
   private readonly lastMessageTimestamp = new Map<string, number>();
+
+  // 24h WebSocket hot-swap rotation
+  private marketDataOpenTime = 0;
+  private rotationTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     config: ExchangeConfig & { type: 'binance-live' | 'binance-testnet' },
@@ -144,6 +151,12 @@ export class BinanceAdapter implements IExchange {
   async disconnect(): Promise<void> {
     this.tradingConnected = false;
     this.marketDataConnected = false;
+
+    // Cancel pending rotation timer
+    if (this.rotationTimer !== null) {
+      clearTimeout(this.rotationTimer);
+      this.rotationTimer = null;
+    }
 
     // Reject all pending WS API requests and clear their timers
     this.requestTracker.rejectAll('Disconnected');
@@ -313,7 +326,7 @@ export class BinanceAdapter implements IExchange {
 
   // === Internal: Market data WS management ===
 
-  private connectMarketDataWs(streams: string[]): Promise<void> {
+  private async connectMarketDataWs(streams: string[]): Promise<void> {
     const url = buildCombinedStreamUrl(this.endpoints.wsStreams, streams);
     // Label as 'kline' since that's the primary market data stream;
     // gap events derive actual stream type from the stream key.
@@ -349,7 +362,109 @@ export class BinanceAdapter implements IExchange {
     };
 
     this.marketDataConn = conn;
-    return conn.open(url);
+    await conn.open(url);
+    this.marketDataOpenTime = Date.now();
+    this.scheduleRotation();
+  }
+
+  private scheduleRotation(): void {
+    if (this.rotationTimer !== null) {
+      clearTimeout(this.rotationTimer);
+    }
+    const rotateAt = this.marketDataOpenTime + ROTATION_OFFSET_MS;
+    const delay = Math.max(0, rotateAt - Date.now());
+    this.rotationTimer = setTimeout(() => {
+      void this.rotateMarketData();
+    }, delay);
+  }
+
+  private async rotateMarketData(): Promise<void> {
+    this.rotationTimer = null;
+
+    const streams = [...this.activeStreams];
+    if (streams.length === 0) return;
+
+    const url = buildCombinedStreamUrl(this.endpoints.wsStreams, streams);
+
+    let verified = false;
+    let swapped = false;
+
+    const newConn = new WsConnection('kline', {
+      onConnected: (p) => {
+        if (swapped) {
+          this.marketDataConnected = true;
+          this.bus?.emit('exchange:connected', p);
+        }
+      },
+      onDisconnected: (p) => {
+        if (swapped) {
+          this.marketDataConnected = false;
+          this.bus?.emit('exchange:disconnected', p);
+        }
+      },
+      onReconnecting: (p) => {
+        if (swapped) this.bus?.emit('exchange:reconnecting', p);
+      },
+      onReconnectExhausted: (p) => {
+        if (swapped) this.bus?.emit('risk:breach', p);
+      },
+      onMessage: (data) => {
+        verified = true;
+        this.handleMarketDataMessage(data);
+      },
+    });
+
+    try {
+      await newConn.open(url);
+
+      // Wait for first verified message
+      const deadline = Date.now() + ROTATION_VERIFY_TIMEOUT_MS;
+      while (!verified && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      if (!verified) {
+        newConn.close();
+        this.marketDataOpenTime = Date.now();
+        this.scheduleRotation();
+        return;
+      }
+
+      // Swap: store old, replace with new, close old
+      const old = this.marketDataConn;
+      swapped = true;
+      this.marketDataConn = newConn;
+      this.marketDataOpenTime = Date.now();
+
+      // Wire up reconnect gap-detection on the new primary connection
+      newConn.onReconnected = async () => {
+        const reconnectTime = Date.now();
+        for (const [streamKey, lastTs] of this.lastMessageTimestamp) {
+          const streamType = streamKey.includes('kline') ? 'kline'
+            : streamKey.includes('aggTrade') ? 'aggTrade'
+            : 'depth';
+          this.bus?.emit('exchange:gap', {
+            stream: streamType,
+            symbol: streamKey.split('@')[0]?.toUpperCase() ?? '*',
+            fromTimestamp: lastTs,
+            toTimestamp: reconnectTime,
+            timestamp: reconnectTime,
+          });
+        }
+      };
+
+      if (old) {
+        old.close();
+      }
+
+      this.scheduleRotation();
+    } catch (err) {
+      // Rotation failed — keep existing connection, reschedule
+      try { newConn.close(); } catch { /* ignore */ }
+      this.marketDataOpenTime = Date.now();
+      this.scheduleRotation();
+      this.logError('ws-rotation', err);
+    }
   }
 
   private handleMarketDataMessage(raw: string): void {

@@ -60,7 +60,7 @@ describe('PositionManager', () => {
   describe('full entry flow', () => {
     test('signal → checkEntry → order:submitted + order:filled → state OPEN, position:opened emitted', () => {
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, makeConfig());
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, makeConfig());
 
       expect(pm.getState(SYMBOL)).toBe('IDLE');
 
@@ -85,7 +85,7 @@ describe('PositionManager', () => {
     test('tick below stop price → exit order submitted and filled → state IDLE, position:closed emitted with TradeRecord', () => {
       const config = makeConfig({ defaultStopLossPct: 2 });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, config);
 
       bus.emit('signal', { signal: LONG_SIGNAL });
       expect(pm.getState(SYMBOL)).toBe('OPEN');
@@ -124,7 +124,7 @@ describe('PositionManager', () => {
     test('candle low <= stopPrice triggers stop loss exit for LONG', () => {
       const config = makeConfig({ defaultStopLossPct: 2 });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, config);
 
       bus.emit('signal', { signal: LONG_SIGNAL });
       expect(pm.getState(SYMBOL)).toBe('OPEN');
@@ -159,7 +159,7 @@ describe('PositionManager', () => {
     test('candle high >= takeProfitPrice triggers take profit exit for LONG', () => {
       const config = makeConfig({ defaultTakeProfitPct: 4 });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, config);
 
       bus.emit('signal', { signal: LONG_SIGNAL });
       expect(pm.getState(SYMBOL)).toBe('OPEN');
@@ -194,7 +194,7 @@ describe('PositionManager', () => {
     test('when both SL and TP hit in same candle, SL wins', () => {
       const config = makeConfig({ defaultStopLossPct: 2, defaultTakeProfitPct: 4 });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, config);
 
       bus.emit('signal', { signal: LONG_SIGNAL });
       expect(pm.getState(SYMBOL)).toBe('OPEN');
@@ -229,7 +229,7 @@ describe('PositionManager', () => {
     test('signal while PENDING_ENTRY is ignored', () => {
       const asyncExecutor: IOrderExecutor = createMockExecutor(bus, { syncFill: false });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, asyncExecutor, riskMgr, makeConfig());
+      const pm = new PositionManager(bus, asyncExecutor, riskMgr, null, makeConfig());
 
       bus.emit('signal', { signal: LONG_SIGNAL });
       expect(pm.getState(SYMBOL)).toBe('PENDING_ENTRY');
@@ -252,7 +252,7 @@ describe('PositionManager', () => {
         rejectAll: true,
       });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, rejectExecutor, riskMgr, makeConfig());
+      const pm = new PositionManager(bus, rejectExecutor, riskMgr, null, makeConfig());
 
       expect(pm.getState(SYMBOL)).toBe('IDLE');
       bus.emit('signal', { signal: LONG_SIGNAL });
@@ -267,7 +267,7 @@ describe('PositionManager', () => {
   describe('risk check rejected', () => {
     test('when risk manager rejects, no order is submitted and state stays IDLE', () => {
       const riskMgr = makeMockRiskManager(false);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, makeConfig());
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, makeConfig());
 
       bus.emit('signal', { signal: LONG_SIGNAL });
 
@@ -292,7 +292,7 @@ describe('PositionManager', () => {
         reset: () => {},
         dispose: () => {},
       };
-      const pm = new PositionManager(bus, syncExecutor, killRiskMgr, makeConfig());
+      const pm = new PositionManager(bus, syncExecutor, killRiskMgr, null, makeConfig());
 
       bus.emit('signal', { signal: LONG_SIGNAL });
 
@@ -310,7 +310,7 @@ describe('PositionManager', () => {
   describe('dispose()', () => {
     test('after dispose, emitted events do not change state', () => {
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, makeConfig());
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, makeConfig());
 
       pm.dispose();
 
@@ -330,7 +330,7 @@ describe('PositionManager', () => {
         defaultTakeProfitPct: 20,
       });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, config);
 
       const trailSignal: Signal = { ...LONG_SIGNAL, price: ENTRY_PRICE };
       bus.emit('signal', { signal: trailSignal });
@@ -375,7 +375,7 @@ describe('PositionManager', () => {
     test('TIMEOUT exit triggered when maxHoldTimeMs exceeded', () => {
       const config = makeConfig({ maxHoldTimeMs: 5000 });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, config);
 
       const entryTimestamp: number = LONG_SIGNAL.timestamp;
       bus.emit('signal', { signal: LONG_SIGNAL });
@@ -453,7 +453,7 @@ describe('PositionManager', () => {
 
       const riskMgr = makeMockRiskManager(true, 0.1);
       const config = makeConfig({ defaultStopLossPct: 2 });
-      const pm = new PositionManager(bus, mockExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, mockExecutor, riskMgr, null, config);
 
       bus.emit('signal', { signal: LONG_SIGNAL });
       expect(pm.getState(SYMBOL)).toBe('OPEN');
@@ -481,7 +481,7 @@ describe('PositionManager', () => {
   describe('SHORT position entry', () => {
     test('ENTER_SHORT signal creates a SHORT position', () => {
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, makeConfig());
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, makeConfig());
 
       bus.emit('signal', { signal: SHORT_SIGNAL });
 
@@ -497,7 +497,7 @@ describe('PositionManager', () => {
   describe('getOpenPositions()', () => {
     test('returns all symbols in OPEN state as Position[]', () => {
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, makeConfig());
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, makeConfig());
 
       expect(pm.getOpenPositions()).toHaveLength(0);
 
@@ -512,7 +512,7 @@ describe('PositionManager', () => {
 
     test('multiple symbols tracked independently', () => {
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, makeConfig());
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, makeConfig());
 
       const ethSignal: Signal = { ...LONG_SIGNAL, symbol: toSymbol('ETHUSDT') };
 
@@ -532,7 +532,7 @@ describe('PositionManager', () => {
     test('returns true when PENDING_ENTRY', () => {
       const asyncExecutor: IOrderExecutor = createMockExecutor(bus, { syncFill: false });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, asyncExecutor, riskMgr, makeConfig());
+      const pm = new PositionManager(bus, asyncExecutor, riskMgr, null, makeConfig());
 
       bus.emit('signal', { signal: LONG_SIGNAL });
 
@@ -548,7 +548,7 @@ describe('PositionManager', () => {
     test('tick at or above stopPrice triggers STOP_LOSS for SHORT', () => {
       const config = makeConfig({ defaultStopLossPct: 2 });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, config);
 
       bus.emit('signal', { signal: SHORT_SIGNAL });
       expect(pm.getState(SYMBOL)).toBe('OPEN');
@@ -583,7 +583,7 @@ describe('PositionManager', () => {
     test('tick at or below takeProfitPrice triggers TAKE_PROFIT for SHORT', () => {
       const config = makeConfig({ defaultTakeProfitPct: 4 });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, config);
 
       bus.emit('signal', { signal: SHORT_SIGNAL });
       expect(pm.getState(SYMBOL)).toBe('OPEN');
@@ -624,7 +624,7 @@ describe('PositionManager', () => {
         defaultTakeProfitPct: 20,
       });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, config);
 
       bus.emit('signal', { signal: SHORT_SIGNAL });
       expect(pm.getState(SYMBOL)).toBe('OPEN');
@@ -670,7 +670,7 @@ describe('PositionManager', () => {
     test('candle high >= stopPrice triggers STOP_LOSS for SHORT', () => {
       const config = makeConfig({ defaultStopLossPct: 2 });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, config);
 
       bus.emit('signal', { signal: SHORT_SIGNAL });
       expect(pm.getState(SYMBOL)).toBe('OPEN');
@@ -706,7 +706,7 @@ describe('PositionManager', () => {
     test('candle low <= takeProfitPrice triggers TAKE_PROFIT for SHORT', () => {
       const config = makeConfig({ defaultTakeProfitPct: 4 });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, config);
 
       bus.emit('signal', { signal: SHORT_SIGNAL });
       expect(pm.getState(SYMBOL)).toBe('OPEN');
@@ -742,7 +742,7 @@ describe('PositionManager', () => {
     test('candle closeTime past maxHoldTimeMs triggers TIMEOUT for SHORT', () => {
       const config = makeConfig({ maxHoldTimeMs: 5000 });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, config);
 
       bus.emit('signal', { signal: SHORT_SIGNAL });
       expect(pm.getState(SYMBOL)).toBe('OPEN');
@@ -776,7 +776,7 @@ describe('PositionManager', () => {
   describe('EXIT signal is ignored', () => {
     test('EXIT signal on an OPEN position does not change state', () => {
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, makeConfig());
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, makeConfig());
 
       bus.emit('signal', { signal: LONG_SIGNAL });
       expect(pm.getState(SYMBOL)).toBe('OPEN');
@@ -801,7 +801,7 @@ describe('PositionManager', () => {
   describe('NO_ACTION signal is ignored', () => {
     test('NO_ACTION signal does not change IDLE state', () => {
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, makeConfig());
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, makeConfig());
 
       const noActionSignal: Signal = {
         ...LONG_SIGNAL,
@@ -820,7 +820,7 @@ describe('PositionManager', () => {
   describe('risk REJECT severity does NOT emit risk:breach', () => {
     test('REJECT severity blocks entry but does not emit risk:breach', () => {
       const riskMgr = makeMockRiskManager(false); // returns severity 'REJECT'
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, makeConfig());
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, makeConfig());
 
       bus.emit('signal', { signal: LONG_SIGNAL });
 
@@ -837,7 +837,7 @@ describe('PositionManager', () => {
     test('SL exit submits an order with type STOP_MARKET', () => {
       const config = makeConfig({ defaultStopLossPct: 2 });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, config);
 
       bus.emit('signal', { signal: LONG_SIGNAL });
       expect(pm.getState(SYMBOL)).toBe('OPEN');
@@ -869,7 +869,7 @@ describe('PositionManager', () => {
     test('timeout exit submits an order with type MARKET', () => {
       const config = makeConfig({ maxHoldTimeMs: 5000 });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, config);
 
       const entryTimestamp: number = LONG_SIGNAL.timestamp;
       bus.emit('signal', { signal: LONG_SIGNAL });
@@ -900,7 +900,7 @@ describe('PositionManager', () => {
     test('EventCapture records all expected events during full trade lifecycle', () => {
       const config = makeConfig({ defaultStopLossPct: 2 });
       const riskMgr = makeMockRiskManager(true, 0.1);
-      const pm = new PositionManager(bus, syncExecutor, riskMgr, config);
+      const pm = new PositionManager(bus, syncExecutor, riskMgr, null, config);
 
       bus.emit('signal', { signal: LONG_SIGNAL });
       expect(capture.count('order:submitted')).toBe(1);

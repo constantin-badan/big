@@ -13,8 +13,10 @@ import { TEMPLATES } from '@trading-bot/strategies';
 
 import { runTournament } from './tournament';
 import { createBinanceFetcher } from './fetch-binance';
+import { runTestnet } from './testnet';
+import { runResults } from './tournament-results';
 
-const command = process.argv[2]; // 'tournament' | 'sync'
+const command = process.argv[2]; // 'tournament' | 'sync' | 'testnet'
 
 async function tournament(): Promise<void> {
   const dbPath = './data/candles.db';
@@ -152,9 +154,32 @@ async function main(): Promise<void> {
     await tournament();
   } else if (command === 'sync') {
     await sync();
+  } else if (command === 'testnet') {
+    await runTestnet(process.argv.slice(3));
+  } else if (command === 'results') {
+    await runResults(process.argv.slice(3));
   } else {
     console.error(`Unknown command: ${String(command)}`);
-    console.error('Usage: bun run packages/runner/src/cli.ts <tournament|sync>');
+    console.error('Usage: bun run packages/runner/src/cli.ts <command> [options]');
+    console.error('');
+    console.error('Commands:');
+    console.error('  tournament  Run evolutionary discovery tournament');
+    console.error('  sync        Sync candle data from Binance');
+    console.error('  testnet     Run LiveRunner against Binance futures testnet');
+    console.error('  results     View and export tournament results');
+    console.error('');
+    console.error('Results options:');
+    console.error('  --list                     List all past tournaments');
+    console.error('  --id <tournament-id>       Select tournament (default: most recent)');
+    console.error('  --top <N>                  Show top N winners (default: 10)');
+    console.error('  --by-template              Show best candidate per template');
+    console.error('  --export <path.json>       Export winning configs as JSON');
+    console.error('');
+    console.error('Testnet options:');
+    console.error('  --symbol BTCUSDT           Symbol to trade (default: BTCUSDT)');
+    console.error('  --timeframe 5m             Candle timeframe (default: 5m)');
+    console.error('  --duration 3600000         Run duration in ms (default: 1 hour)');
+    console.error('  --template ema-crossover   Scanner template (default: ema-crossover)');
     process.exit(1);
   }
 }

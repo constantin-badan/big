@@ -24,8 +24,8 @@ export interface RunConfig {
   exchangeConfig: ExchangeConfig;
   /** Candle timeframe. */
   timeframe: Timeframe;
-  /** Coins available for random selection. */
-  symbolPool: Symbol[];
+  /** Coins available for random selection. If empty/omitted, fetched dynamically. */
+  symbolPool?: Symbol[];
   /** Data range in the local candle store. */
   dataRange: { startTime: number; endTime: number };
   /** Progressive elimination stages. */

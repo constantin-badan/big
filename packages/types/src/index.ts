@@ -195,6 +195,8 @@ export interface PositionManagerConfig {
   maxHoldTimeMs: number;
   evaluationTimeframe?: Timeframe; // if set, only evaluate SL/TP on this timeframe's candle:close
   quantityStepSize?: number; // if set, round order quantity down to nearest step size
+  safetyStopEnabled?: boolean;
+  safetyStopMultiplier?: number; // default 2.0 — places safety stop at multiplier × SL distance
 }
 
 export type PositionState = 'IDLE' | 'PENDING_ENTRY' | 'OPEN' | 'PENDING_EXIT';
@@ -393,6 +395,8 @@ export interface ScannerTemplate {
   name: string;
   description: string;
   params: ParamBounds;
+  /** Additional timeframes this template needs beyond the primary entry timeframe. */
+  requiredTimeframes?: Timeframe[];
   /** Optional constraint: returns false for invalid param combinations (e.g., fast >= slow). */
   isValid?: (params: Record<string, number>) => boolean;
   createFactory: (symbols: Symbol[], timeframe: Timeframe, riskConfig: RiskConfig, pmConfig: PositionManagerConfig) => StrategyFactory;
@@ -465,8 +469,8 @@ export interface TournamentConfig {
   exchangeConfig: ExchangeConfig;
   /** Timeframe to test on. */
   timeframe: Timeframe;
-  /** Pool of symbols to select from. */
-  symbolPool: Symbol[];
+  /** Pool of symbols to select from. If empty/omitted, fetched dynamically. */
+  symbolPool?: Symbol[];
   /** Available data range. */
   dataRange: { startTime: number; endTime: number };
   /** Progressive elimination stages. */

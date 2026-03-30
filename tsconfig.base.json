@@ -36,6 +36,9 @@
       "@trading-bot/storage": ["./packages/storage/src/index.ts"],
       "@trading-bot/strategies": ["./packages/strategies/src/index.ts"],
       "@trading-bot/runner": ["./packages/runner/src/index.ts"],
+      "@trading-bot/dashboard": ["./packages/dashboard/src/index.ts"],
+      "@trading-bot/alerting": ["./packages/alerting/src/index.ts"],
+      "@trading-bot/metrics": ["./packages/metrics/src/index.ts"],
       "@trading-bot/test-utils": ["./packages/test-utils/src/index.ts"]
     }
   }

@@ -142,6 +142,7 @@ function makeEmaCrossoverFactory(
       deps.bus,
       deps.executor,
       riskManager,
+      null,
       pmConfig,
     );
 

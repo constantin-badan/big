@@ -31,6 +31,7 @@ import type { ICandleStore, ITournamentStore } from '@trading-bot/storage';
 import { createBacktestEngine } from '@trading-bot/backtest-engine';
 
 import { classifyWeeks, selectStratifiedWeeks } from './regime-detection';
+import { fetchTopSymbols } from './fetch-top-symbols';
 
 // ─── Param Generation ───────────────────────────────────────────────
 
@@ -144,11 +145,15 @@ async function runStage(
       Promise.resolve(store.getCandles(sym, tf, start, end));
 
     for (const week of weeks) {
+      // Include any additional timeframes the template requires (e.g., 4h trend filter)
+      const extraTimeframes = template.requiredTimeframes ?? [];
+      const allTimeframes = [timeframe, ...extraTimeframes.filter((tf) => tf !== timeframe)];
+
       const btConfig: BacktestConfig = {
         startTime: week.startTime,
         endTime: week.endTime,
         symbols,
-        timeframes: [timeframe],
+        timeframes: allTimeframes,
       };
 
       const engine = createBacktestEngine(loader, exchangeConfig);
@@ -205,6 +210,14 @@ export async function runTournament(
   tournamentId: string,
   dbPath = './data/candles.db',
 ): Promise<TournamentState> {
+  // Resolve symbol pool — fetch dynamically if not provided
+  const symbolPool =
+    config.symbolPool && config.symbolPool.length > 0
+      ? config.symbolPool
+      : await fetchTopSymbols(50);
+
+  console.log(`Symbol pool: ${String(symbolPool.length)} symbols`);
+
   const templateMap = new Map<string, ScannerTemplate>();
   for (const t of config.templates) {
     templateMap.set(t.name, t);
@@ -242,7 +255,7 @@ export async function runTournament(
     }
 
     // Select random symbols
-    const symbols = selectRandomSymbols(config.symbolPool, stageConfig.symbols);
+    const symbols = selectRandomSymbols(symbolPool, stageConfig.symbols);
 
     // Select weeks with stratified regime diversity
     const store = createStorage(dbPath).candles;

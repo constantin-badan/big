@@ -131,7 +131,7 @@ export function makeEmaCrossoverFactory(
     });
 
     const riskManager = new RiskManager(deps.bus, riskCfg);
-    const positionManager = new PositionManager(deps.bus, deps.executor, riskManager, pmCfg);
+    const positionManager = new PositionManager(deps.bus, deps.executor, riskManager, null, pmCfg);
 
     return new Strategy(
       {
