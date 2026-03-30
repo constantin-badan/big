@@ -38,7 +38,7 @@ const TIMEFRAME_MS: Record<Timeframe, number> = {
 
 function computeWarmupMs(timeframes: Timeframe[]): number {
   const maxTfMs = Math.max(...timeframes.map((tf) => TIMEFRAME_MS[tf]));
-  return 150 * maxTfMs;
+  return 500 * maxTfMs;
 }
 
 // ─── Types ─────────────────────────────────────────────────────────

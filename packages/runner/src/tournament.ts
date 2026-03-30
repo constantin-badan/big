@@ -40,7 +40,7 @@ const TIMEFRAME_MS: Record<Timeframe, number> = {
 /** 150 candles of the largest timeframe — covers most indicator warmup periods. */
 function computeWarmupMs(timeframes: Timeframe[]): number {
   const maxTfMs = Math.max(...timeframes.map((tf) => TIMEFRAME_MS[tf]));
-  return 150 * maxTfMs;
+  return 500 * maxTfMs;
 }
 import { fetchTopSymbols } from './fetch-top-symbols';
 import { createPrng } from './prng';

@@ -33,7 +33,9 @@ const PARITY_END_DATE = new Date(Date.UTC(TODAY.getUTCFullYear(), TODAY.getUTCMo
 const PARITY_START_DATE = new Date(PARITY_END_DATE.getTime() - 4 * 24 * 60 * 60 * 1000); // 4 days back
 const PARITY_START = PARITY_START_DATE.getTime();
 const PARITY_END = PARITY_END_DATE.getTime();
-const WARMUP_MS = 150 * 300_000; // 150 candles × 5m = 750 min
+// RSI/EMA use Wilder's smoothing which needs many candles to converge to
+// the same values as TV (which has weeks of prior data). 2000 candles ≈ 7 days.
+const WARMUP_MS = 2000 * 300_000;
 
 const INITIAL_BALANCE = 10_000;
 const FEE_MAKER = 0.0002;
