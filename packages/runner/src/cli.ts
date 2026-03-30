@@ -24,43 +24,26 @@ async function tournament(): Promise<void> {
   const { candles: store, tournaments: tournamentStore } = createStorage(dbPath);
   const timeframe: Timeframe = '5m';
 
-  // Fetch top 30 symbols by volume for diverse tournament pool
+  // Fetch top 150 symbols by volume — pool for random selection per stage.
+  // Data is synced lazily per stage, not upfront for all 150.
   console.log('Fetching top symbols by volume...');
   const { fetchTopSymbols } = await import('./fetch-top-symbols');
   const symbols = await fetchTopSymbols(150);
   console.log(`Pool: ${String(symbols.length)} symbols`);
 
-  // Sync 90 days of 5m data for all pool symbols
+  // Use a reference symbol (BTC) for data range — always has data
+  const refSymbol = toSymbol('BTCUSDT');
   const lookback = 90 * 24 * 60 * 60 * 1000;
   const fetcher = createBinanceFetcher();
-  console.log('Syncing candle data...');
-  const syncRequests = symbols.flatMap((s) => [{
-    symbol: s,
-    timeframe,
-    startTime: Date.now() - lookback,
-    endTime: Date.now(),
+
+  // Ensure reference symbol is synced for data range detection
+  await syncCandles(store, fetcher, [{
+    symbol: refSymbol, timeframe,
+    startTime: Date.now() - lookback, endTime: Date.now(),
   }]);
-  const syncResults = await syncCandles(store, fetcher, syncRequests);
-  const totalFetched = syncResults.reduce((sum, r) => sum + r.fetchedCandles, 0);
-  if (totalFetched > 0) console.log(`Fetched ${String(totalFetched)} candles`);
-  else console.log('All data cached');
 
-  // Filter to symbols with at least 60 days of data
-  const minDataMs = 60 * 24 * 60 * 60 * 1000;
-  const validSymbols = symbols.filter((s) => {
-    const earliest = store.getEarliestTimestamp(s, timeframe);
-    const latest = store.getLatestTimestamp(s, timeframe);
-    if (earliest === null || latest === null) return false;
-    return (latest - earliest) >= minDataMs;
-  });
-  console.log(`Valid symbols (60+ days data): ${String(validSymbols.length)}/${String(symbols.length)}`);
-  if (validSymbols.length < 6) {
-    console.error('Need at least 6 valid symbols. Sync more data.');
-    return;
-  }
-
-  const dataStart = store.getEarliestTimestamp(validSymbols[0]!, timeframe)!;
-  const dataEnd = store.getLatestTimestamp(validSymbols[0]!, timeframe)!;
+  const dataStart = store.getEarliestTimestamp(refSymbol, timeframe)!;
+  const dataEnd = store.getLatestTimestamp(refSymbol, timeframe)!;
 
   const config: TournamentConfig = {
     templates: [...TEMPLATES],
@@ -91,23 +74,31 @@ async function tournament(): Promise<void> {
       initialBalance: 10_000,
     },
     timeframe,
-    symbolPool: validSymbols,
+    symbolPool: symbols,
     dataRange: { startTime: dataStart, endTime: dataEnd },
-    // Each stage: 1 week per coin, new random coins each round.
-    // Forces generalization — overfit configs die early.
+    // 20 stages: new random coins each round, escalating kill rates.
+    // ~6000 candidates → ~50 survivors.
     stages: [
-      { weeks: 1, symbols: 1, killRate: 0.05 },
-      { weeks: 1, symbols: 1, killRate: 0.05 },
-      { weeks: 1, symbols: 2, killRate: 0.05 },
-      { weeks: 1, symbols: 2, killRate: 0.05 },
-      { weeks: 1, symbols: 3, killRate: 0.05 },
-      { weeks: 1, symbols: 3, killRate: 0.05 },
-      { weeks: 1, symbols: 4, killRate: 0.05 },
-      { weeks: 1, symbols: 4, killRate: 0.05 },
-      { weeks: 1, symbols: 5, killRate: 0.10 },
-      { weeks: 1, symbols: 5, killRate: 0.10 },
-      { weeks: 1, symbols: 6, killRate: 0.10 },
-      { weeks: 1, symbols: 6, killRate: 0.10 },
+      { weeks: 1, symbols: 1, killRate: 0.10 },
+      { weeks: 1, symbols: 1, killRate: 0.10 },
+      { weeks: 1, symbols: 2, killRate: 0.10 },
+      { weeks: 1, symbols: 2, killRate: 0.10 },
+      { weeks: 1, symbols: 2, killRate: 0.15 },
+      { weeks: 1, symbols: 3, killRate: 0.15 },
+      { weeks: 1, symbols: 3, killRate: 0.15 },
+      { weeks: 1, symbols: 3, killRate: 0.15 },
+      { weeks: 1, symbols: 4, killRate: 0.20 },
+      { weeks: 1, symbols: 4, killRate: 0.20 },
+      { weeks: 1, symbols: 4, killRate: 0.20 },
+      { weeks: 1, symbols: 5, killRate: 0.20 },
+      { weeks: 1, symbols: 5, killRate: 0.25 },
+      { weeks: 1, symbols: 5, killRate: 0.25 },
+      { weeks: 1, symbols: 6, killRate: 0.25 },
+      { weeks: 1, symbols: 6, killRate: 0.25 },
+      { weeks: 1, symbols: 6, killRate: 0.30 },
+      { weeks: 1, symbols: 6, killRate: 0.30 },
+      { weeks: 1, symbols: 6, killRate: 0.30 },
+      { weeks: 1, symbols: 6, killRate: 0.30 },
     ],
     seed: 42,
   };

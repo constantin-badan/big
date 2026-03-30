@@ -26,11 +26,12 @@ import type {
   TournamentStageConfig,
   TournamentState,
 } from '@trading-bot/types';
-import { createStorage } from '@trading-bot/storage';
+import { createStorage, syncCandles } from '@trading-bot/storage';
 import type { ICandleStore, ITournamentStore } from '@trading-bot/storage';
 import { createBacktestEngine } from '@trading-bot/backtest-engine';
 
 import { classifyWeeks, selectStratifiedWeeks } from './regime-detection';
+import { createBinanceFetcher } from './fetch-binance';
 
 const TIMEFRAME_MS: Record<Timeframe, number> = {
   '1m': 60_000, '3m': 180_000, '5m': 300_000, '15m': 900_000,
@@ -297,6 +298,21 @@ export async function runTournament(
     console.log(`  Symbols: ${symbols.join(', ')}`);
     console.log(`  Weeks: ${weeks.map((w, i) => `${new Date(w.startTime).toISOString().slice(0, 10)}[${String(regimes[i] ?? '?')}]`).join(', ')}`);
     console.log(`  Kill rate: ${String(stageConfig.killRate * 100)}%`);
+
+    // Lazy sync: fetch data for this stage's symbols and weeks
+    const stageStore = createStorage(dbPath);
+    const warmupMs = computeWarmupMs([config.timeframe]);
+    const syncStart = Math.min(...weeks.map((w) => w.startTime)) - warmupMs;
+    const syncEnd = Math.max(...weeks.map((w) => w.endTime));
+    const fetcher = createBinanceFetcher();
+    const syncResults = await syncCandles(stageStore.candles, fetcher,
+      symbols.map((sym) => ({
+        symbol: sym, timeframe: config.timeframe, startTime: syncStart, endTime: syncEnd,
+      })),
+    );
+    const fetched = syncResults.reduce((sum, r) => sum + r.fetchedCandles, 0);
+    if (fetched > 0) console.log(`  Synced ${String(fetched)} candles for ${symbols.join(', ')}`);
+    stageStore.close();
 
     const stageStart = Date.now();
     const results = await runStage(
