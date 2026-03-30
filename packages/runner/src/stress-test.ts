@@ -40,6 +40,7 @@ interface StressArgs {
   symbolCount: number;
   weekCount: number;
   symbolPoolSize: number;
+  exportPath: string | null;
   dbPath: string;
 }
 
@@ -67,6 +68,7 @@ function parseArgs(argv: string[]): StressArgs {
     symbolCount: 10,
     weekCount: 10,
     symbolPoolSize: 150,
+    exportPath: null,
     dbPath: './data/candles.db',
   };
 
@@ -77,6 +79,7 @@ function parseArgs(argv: string[]): StressArgs {
     else if (arg === '--per-template' && argv[i + 1]) args.perTemplate = Number(argv[++i]);
     else if (arg === '--symbols' && argv[i + 1]) args.symbolCount = Number(argv[++i]);
     else if (arg === '--weeks' && argv[i + 1]) args.weekCount = Number(argv[++i]);
+    else if (arg === '--export' && argv[i + 1]) args.exportPath = argv[++i]!;
     else if (arg === '--db' && argv[i + 1]) args.dbPath = argv[++i]!;
   }
 
@@ -449,4 +452,47 @@ export async function runStressTest(argv: string[]): Promise<void> {
 
   storage.close();
   printResults(results);
+
+  if (args.exportPath) {
+    const passed = results
+      .filter((r) => r.stressPnl > 0)
+      .sort((a, b) => b.stressPnl - a.stressPnl);
+
+    const candidateMap = new Map(
+      candidates.map(({ candidate }) => [candidate.id, candidate]),
+    );
+
+    const output = {
+      exportedAt: new Date().toISOString(),
+      tournamentId: args.id,
+      stressSymbols: stressSymbols.map(String),
+      stressWeeks: stressWeeks.map((w) => ({
+        start: new Date(w.startTime).toISOString().slice(0, 10),
+        end: new Date(w.endTime).toISOString().slice(0, 10),
+      })),
+      robust: passed.map((r) => {
+        const c = candidateMap.get(r.candidateId)!;
+        return {
+          candidateId: r.candidateId,
+          templateName: r.templateName,
+          scannerParams: c.scannerParams,
+          pmParams: c.pmParams,
+          tournament: { pnl: r.tournamentPnl },
+          stress: {
+            pnl: r.stressPnl,
+            trades: r.stressTrades,
+            profitableWeeks: r.stressProfitableWeeks,
+            totalWeeks: r.stressTotalWeeks,
+            avgProfitFactor: r.stressAvgPF,
+            avgSharpe: r.stressAvgSharpe,
+            maxDrawdown: r.stressMaxDD,
+            degradation: r.degradation,
+          },
+        };
+      }),
+    };
+
+    await Bun.write(args.exportPath, JSON.stringify(output, null, 2) + '\n');
+    console.log(`\nExported ${String(passed.length)} robust strategies to ${args.exportPath}`);
+  }
 }
