@@ -5,5 +5,6 @@ export { classifyWeeks, selectStratifiedWeeks } from './regime-detection';
 export { runTestnet } from './testnet';
 export { runResults } from './tournament-results';
 export { createPrng } from './prng';
+export { runStressTest } from './stress-test';
 export type { Regime, ClassifiedWeek } from './regime-detection';
 export type { RunConfig } from './types';

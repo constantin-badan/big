@@ -15,6 +15,7 @@ import { runTournament } from './tournament';
 import { createBinanceFetcher } from './fetch-binance';
 import { runTestnet } from './testnet';
 import { runResults } from './tournament-results';
+import { runStressTest } from './stress-test';
 
 const command = process.argv[2]; // 'tournament' | 'sync' | 'testnet'
 
@@ -165,6 +166,8 @@ async function main(): Promise<void> {
     await runTestnet(process.argv.slice(3));
   } else if (command === 'results') {
     await runResults(process.argv.slice(3));
+  } else if (command === 'stress') {
+    await runStressTest(process.argv.slice(3));
   } else {
     console.error(`Unknown command: ${String(command)}`);
     console.error('Usage: bun run packages/runner/src/cli.ts <command> [options]');
@@ -174,6 +177,7 @@ async function main(): Promise<void> {
     console.error('  sync        Sync candle data from Binance');
     console.error('  testnet     Run LiveRunner against Binance futures testnet');
     console.error('  results     View and export tournament results');
+    console.error('  stress      Out-of-sample stress test for tournament winners');
     console.error('');
     console.error('Results options:');
     console.error('  --list                     List all past tournaments');
@@ -181,6 +185,13 @@ async function main(): Promise<void> {
     console.error('  --top <N>                  Show top N winners (default: 10)');
     console.error('  --by-template              Show best candidate per template');
     console.error('  --export <path.json>       Export winning configs as JSON');
+    console.error('');
+    console.error('Stress options:');
+    console.error('  --id <tournament-id>       Tournament to stress test (default: most recent)');
+    console.error('  --top <N>                  Top N overall winners (default: 10)');
+    console.error('  --per-template <K>         Top K per template (default: 3)');
+    console.error('  --symbols <N>              Unseen symbols to test on (default: 10)');
+    console.error('  --weeks <N>                Random weeks from last 90d (default: 10)');
     console.error('');
     console.error('Testnet options:');
     console.error('  --symbol BTCUSDT           Symbol to trade (default: BTCUSDT)');
