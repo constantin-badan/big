@@ -14,3 +14,9 @@ export type { ATRConfig } from './atr';
 
 export { VWAP, createVWAP } from './vwap';
 export type { VWAPConfig } from './vwap';
+
+export { MACD, createMACD } from './macd';
+export type { MACDConfig } from './macd';
+
+export { Bollinger, createBollinger } from './bollinger';
+export type { BollingerConfig } from './bollinger';

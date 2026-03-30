@@ -5,6 +5,10 @@ export { smaCrossover } from './sma-crossover';
 export { rsiEmaCombo } from './rsi-ema-combo';
 export { vwapReversion } from './vwap-reversion';
 export { emaTrendRsiEntry } from './ema-trend-rsi-entry';
+export { atrVolBreakout } from './atr-vol-breakout';
+export { macdMomentum } from './macd-momentum';
+export { bbAtrSqueeze } from './bb-atr-squeeze';
+export { candleMacd } from './candle-macd';
 
 import type { ScannerTemplate } from '@trading-bot/types';
 import { emaCrossover } from './ema-crossover';
@@ -14,6 +18,10 @@ import { smaCrossover } from './sma-crossover';
 import { rsiEmaCombo } from './rsi-ema-combo';
 import { vwapReversion } from './vwap-reversion';
 import { emaTrendRsiEntry } from './ema-trend-rsi-entry';
+import { atrVolBreakout } from './atr-vol-breakout';
+import { macdMomentum } from './macd-momentum';
+import { bbAtrSqueeze } from './bb-atr-squeeze';
+import { candleMacd } from './candle-macd';
 
 /** Registry of all available scanner templates. */
 export const TEMPLATES: readonly ScannerTemplate[] = [
@@ -24,4 +32,8 @@ export const TEMPLATES: readonly ScannerTemplate[] = [
   rsiEmaCombo,
   vwapReversion,
   emaTrendRsiEntry,
+  atrVolBreakout,
+  macdMomentum,
+  bbAtrSqueeze,
+  candleMacd,
 ];
