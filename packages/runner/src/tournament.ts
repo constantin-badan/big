@@ -165,7 +165,7 @@ async function runStage(
       totalPnl += weekPnl;
       totalTrades += result.metrics.totalTrades;
       if (weekPnl > 0) profitableWeeks += 1;
-      pfSum += result.metrics.profitFactor;
+      pfSum += Math.min(result.metrics.profitFactor, 100);
       sharpeSum += result.metrics.sharpeRatio;
       if (result.metrics.maxDrawdown > worstDrawdown) {
         worstDrawdown = result.metrics.maxDrawdown;

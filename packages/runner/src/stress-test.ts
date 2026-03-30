@@ -251,7 +251,7 @@ async function runCandidate(
       totalTrades += result.metrics.totalTrades;
       totalRuns += 1;
       if (runPnl > 0) profitableRuns += 1;
-      pfSum += result.metrics.profitFactor;
+      pfSum += Math.min(result.metrics.profitFactor, 100);
       sharpeSum += result.metrics.sharpeRatio;
       if (result.metrics.maxDrawdown > worstDD) worstDD = result.metrics.maxDrawdown;
     }
