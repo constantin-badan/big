@@ -1,80 +1,24 @@
 {
-  "exportedAt": "2026-03-30T19:45:36.303Z",
-  "tournamentId": "tournament-1774899657063",
+  "exportedAt": "2026-03-30T19:26:01.542Z",
+  "tournamentId": "tournament-1774895620930",
   "stressSymbols": [
-    "AGIXUSDT",
-    "XLMUSDT",
-    "TANSSIUSDT",
-    "ENAUSDT",
     "BASUSDT",
-    "DUSDT",
-    "ENJUSDT",
-    "TRIAUSDT",
-    "XAUUSDT",
-    "LTCUSDT",
-    "A2ZUSDT",
-    "PENGUUSDT",
-    "FARTCOINUSDT",
-    "VVVUSDT",
-    "FILUSDT"
+    "DGBUSDT",
+    "OMNIUSDT",
+    "BEATUSDT",
+    "FTMUSDT",
+    "NEIROETHUSDT",
+    "VIDTUSDT",
+    "NEARUSDT",
+    "STGUSDT",
+    "ZECUSDT",
+    "GALAUSDT",
+    "SIGNUSDT",
+    "SNTUSDT",
+    "ONGUSDT",
+    "COMBOUSDT"
   ],
   "symbolWeeks": {
-    "AGIXUSDT": [
-      {
-        "start": "2026-01-13",
-        "end": "2026-01-20"
-      },
-      {
-        "start": "2026-01-27",
-        "end": "2026-02-03"
-      },
-      {
-        "start": "2026-02-03",
-        "end": "2026-02-10"
-      }
-    ],
-    "XLMUSDT": [
-      {
-        "start": "2026-01-06",
-        "end": "2026-01-13"
-      },
-      {
-        "start": "2026-01-13",
-        "end": "2026-01-20"
-      },
-      {
-        "start": "2026-03-03",
-        "end": "2026-03-10"
-      }
-    ],
-    "TANSSIUSDT": [
-      {
-        "start": "2026-01-06",
-        "end": "2026-01-13"
-      },
-      {
-        "start": "2026-01-27",
-        "end": "2026-02-03"
-      },
-      {
-        "start": "2026-02-24",
-        "end": "2026-03-03"
-      }
-    ],
-    "ENAUSDT": [
-      {
-        "start": "2025-12-30",
-        "end": "2026-01-06"
-      },
-      {
-        "start": "2026-01-27",
-        "end": "2026-02-03"
-      },
-      {
-        "start": "2026-02-03",
-        "end": "2026-02-10"
-      }
-    ],
     "BASUSDT": [
       {
         "start": "2026-01-20",
@@ -85,25 +29,39 @@
         "end": "2026-02-03"
       },
       {
-        "start": "2026-03-10",
-        "end": "2026-03-17"
+        "start": "2026-03-17",
+        "end": "2026-03-24"
       }
     ],
-    "DUSDT": [
+    "DGBUSDT": [
       {
-        "start": "2026-01-13",
-        "end": "2026-01-20"
+        "start": "2025-12-30",
+        "end": "2026-01-06"
       },
+      {
+        "start": "2026-02-24",
+        "end": "2026-03-03"
+      },
+      {
+        "start": "2026-03-03",
+        "end": "2026-03-10"
+      }
+    ],
+    "OMNIUSDT": [
       {
         "start": "2026-01-20",
         "end": "2026-01-27"
       },
       {
-        "start": "2026-02-17",
-        "end": "2026-02-24"
+        "start": "2026-01-27",
+        "end": "2026-02-03"
+      },
+      {
+        "start": "2026-02-03",
+        "end": "2026-02-10"
       }
     ],
-    "ENJUSDT": [
+    "BEATUSDT": [
       {
         "start": "2026-02-03",
         "end": "2026-02-10"
@@ -111,73 +69,13 @@
       {
         "start": "2026-02-17",
         "end": "2026-02-24"
-      },
-      {
-        "start": "2026-03-10",
-        "end": "2026-03-17"
-      }
-    ],
-    "TRIAUSDT": [
-      {
-        "start": "2025-12-30",
-        "end": "2026-01-06"
-      },
-      {
-        "start": "2026-01-06",
-        "end": "2026-01-13"
-      },
-      {
-        "start": "2026-02-24",
-        "end": "2026-03-03"
-      }
-    ],
-    "XAUUSDT": [
-      {
-        "start": "2026-01-20",
-        "end": "2026-01-27"
-      },
-      {
-        "start": "2026-02-17",
-        "end": "2026-02-24"
-      },
-      {
-        "start": "2026-02-24",
-        "end": "2026-03-03"
-      }
-    ],
-    "LTCUSDT": [
-      {
-        "start": "2026-01-06",
-        "end": "2026-01-13"
-      },
-      {
-        "start": "2026-02-17",
-        "end": "2026-02-24"
-      },
-      {
-        "start": "2026-02-24",
-        "end": "2026-03-03"
-      }
-    ],
-    "A2ZUSDT": [
-      {
-        "start": "2026-01-20",
-        "end": "2026-01-27"
-      },
-      {
-        "start": "2026-02-10",
-        "end": "2026-02-17"
       },
       {
         "start": "2026-03-17",
         "end": "2026-03-24"
       }
     ],
-    "PENGUUSDT": [
-      {
-        "start": "2026-01-06",
-        "end": "2026-01-13"
-      },
+    "FTMUSDT": [
       {
         "start": "2026-01-20",
         "end": "2026-01-27"
@@ -185,41 +83,83 @@
       {
         "start": "2026-02-03",
         "end": "2026-02-10"
-      }
-    ],
-    "FARTCOINUSDT": [
-      {
-        "start": "2025-12-30",
-        "end": "2026-01-06"
       },
       {
-        "start": "2026-01-27",
-        "end": "2026-02-03"
+        "start": "2026-03-17",
+        "end": "2026-03-24"
+      }
+    ],
+    "NEIROETHUSDT": [
+      {
+        "start": "2026-02-03",
+        "end": "2026-02-10"
+      },
+      {
+        "start": "2026-02-17",
+        "end": "2026-02-24"
       },
       {
         "start": "2026-02-24",
         "end": "2026-03-03"
       }
     ],
-    "VVVUSDT": [
-      {
-        "start": "2025-12-30",
-        "end": "2026-01-06"
-      },
+    "VIDTUSDT": [
       {
         "start": "2026-01-06",
         "end": "2026-01-13"
       },
       {
-        "start": "2026-02-03",
-        "end": "2026-02-10"
+        "start": "2026-02-17",
+        "end": "2026-02-24"
+      },
+      {
+        "start": "2026-02-24",
+        "end": "2026-03-03"
       }
     ],
-    "FILUSDT": [
+    "NEARUSDT": [
       {
-        "start": "2026-01-27",
-        "end": "2026-02-03"
+        "start": "2026-01-20",
+        "end": "2026-01-27"
       },
+      {
+        "start": "2026-02-03",
+        "end": "2026-02-10"
+      },
+      {
+        "start": "2026-02-24",
+        "end": "2026-03-03"
+      }
+    ],
+    "STGUSDT": [
+      {
+        "start": "2026-02-10",
+        "end": "2026-02-17"
+      },
+      {
+        "start": "2026-02-17",
+        "end": "2026-02-24"
+      },
+      {
+        "start": "2026-03-03",
+        "end": "2026-03-10"
+      }
+    ],
+    "ZECUSDT": [
+      {
+        "start": "2026-01-13",
+        "end": "2026-01-20"
+      },
+      {
+        "start": "2026-02-24",
+        "end": "2026-03-03"
+      },
+      {
+        "start": "2026-03-03",
+        "end": "2026-03-10"
+      }
+    ],
+    "GALAUSDT": [
       {
         "start": "2026-02-03",
         "end": "2026-02-10"
@@ -227,68 +167,70 @@
       {
         "start": "2026-03-03",
         "end": "2026-03-10"
+      },
+      {
+        "start": "2026-03-10",
+        "end": "2026-03-17"
+      }
+    ],
+    "SIGNUSDT": [
+      {
+        "start": "2026-01-06",
+        "end": "2026-01-13"
+      },
+      {
+        "start": "2026-02-24",
+        "end": "2026-03-03"
+      },
+      {
+        "start": "2026-03-10",
+        "end": "2026-03-17"
+      }
+    ],
+    "SNTUSDT": [
+      {
+        "start": "2026-01-06",
+        "end": "2026-01-13"
+      },
+      {
+        "start": "2026-01-13",
+        "end": "2026-01-20"
+      },
+      {
+        "start": "2026-03-17",
+        "end": "2026-03-24"
+      }
+    ],
+    "ONGUSDT": [
+      {
+        "start": "2026-01-27",
+        "end": "2026-02-03"
+      },
+      {
+        "start": "2026-02-10",
+        "end": "2026-02-17"
+      },
+      {
+        "start": "2026-03-03",
+        "end": "2026-03-10"
+      }
+    ],
+    "COMBOUSDT": [
+      {
+        "start": "2026-01-06",
+        "end": "2026-01-13"
+      },
+      {
+        "start": "2026-01-20",
+        "end": "2026-01-27"
+      },
+      {
+        "start": "2026-02-24",
+        "end": "2026-03-03"
       }
     ]
   },
   "robust": [
-    {
-      "candidateId": "rsi-reversal-407",
-      "templateName": "rsi-reversal",
-      "scannerParams": {
-        "rsiPeriod": 8,
-        "oversold": 15,
-        "overbought": 68
-      },
-      "pmParams": {
-        "stopLossPct": 3.5,
-        "takeProfitPct": 8.5,
-        "maxHoldTimeHours": 14
-      },
-      "tournament": {
-        "pnl": 7560.3460948281245
-      },
-      "stress": {
-        "pnl": 11191.588826541798,
-        "trades": 514,
-        "avgTradesPerDay": 1.6317460317460317,
-        "avgTradePnl": 21.7735191177856,
-        "profitableRuns": 31,
-        "totalRuns": 45,
-        "avgProfitFactor": 1.106118076826201,
-        "avgSharpe": -0.73044004562467,
-        "maxDrawdown": 2.2532232763690807,
-        "degradation": 48.03011246003316
-      }
-    },
-    {
-      "candidateId": "rsi-reversal-350",
-      "templateName": "rsi-reversal",
-      "scannerParams": {
-        "rsiPeriod": 9,
-        "oversold": 22,
-        "overbought": 65
-      },
-      "pmParams": {
-        "stopLossPct": 2,
-        "takeProfitPct": 7.5,
-        "maxHoldTimeHours": 16
-      },
-      "tournament": {
-        "pnl": 6890.570618024165
-      },
-      "stress": {
-        "pnl": 6866.536185009192,
-        "trades": 668,
-        "avgTradesPerDay": 2.1206349206349207,
-        "avgTradePnl": 10.279245785941905,
-        "profitableRuns": 28,
-        "totalRuns": 45,
-        "avgProfitFactor": 0.9250682075027484,
-        "avgSharpe": -2.4082170292123073,
-        "maxDrawdown": 2.6385986649444204,
-        "degradation": -0.3488017806842326
-      }
-    },
     {
       "candidateId": "rsi-reversal-391",
       "templateName": "rsi-reversal",
@@ -303,19 +245,106 @@
         "maxHoldTimeHours": 18
       },
       "tournament": {
-        "pnl": 7207.182309894071
+        "pnl": 7405.8544895902
       },
       "stress": {
-        "pnl": 4836.472308894961,
-        "trades": 583,
-        "avgTradesPerDay": 1.8507936507936509,
-        "avgTradePnl": 8.295835864313828,
-        "profitableRuns": 25,
+        "pnl": 5890.826141445887,
+        "trades": 430,
+        "avgTradesPerDay": 1.3650793650793651,
+        "avgTradePnl": 13.699595677781131,
+        "profitableRuns": 19,
         "totalRuns": 45,
-        "avgProfitFactor": 1.1417729902117628,
-        "avgSharpe": -0.8610426936240653,
-        "maxDrawdown": 2.1145997879412244,
-        "degradation": -32.89371489527305
+        "avgProfitFactor": 0.845705623827284,
+        "avgSharpe": -1.2290604206860978,
+        "maxDrawdown": 1.540926452945223,
+        "degradation": -20.457171421256838
+      }
+    },
+    {
+      "candidateId": "rsi-reversal-202",
+      "templateName": "rsi-reversal",
+      "scannerParams": {
+        "rsiPeriod": 17,
+        "oversold": 19,
+        "overbought": 66
+      },
+      "pmParams": {
+        "stopLossPct": 3.5,
+        "takeProfitPct": 8.5,
+        "maxHoldTimeHours": 14
+      },
+      "tournament": {
+        "pnl": 7031.655283152182
+      },
+      "stress": {
+        "pnl": 5873.620922474447,
+        "trades": 270,
+        "avgTradesPerDay": 0.8571428571428571,
+        "avgTradePnl": 21.754151564720175,
+        "profitableRuns": 16,
+        "totalRuns": 45,
+        "avgProfitFactor": 0.6742614955565732,
+        "avgSharpe": -0.7862760760946508,
+        "maxDrawdown": 2.2979477699418793,
+        "degradation": -16.46887274824721
+      }
+    },
+    {
+      "candidateId": "rsi-reversal-407",
+      "templateName": "rsi-reversal",
+      "scannerParams": {
+        "rsiPeriod": 8,
+        "oversold": 15,
+        "overbought": 68
+      },
+      "pmParams": {
+        "stopLossPct": 3.5,
+        "takeProfitPct": 8.5,
+        "maxHoldTimeHours": 14
+      },
+      "tournament": {
+        "pnl": 7712.280644221013
+      },
+      "stress": {
+        "pnl": 5090.958268859276,
+        "trades": 351,
+        "avgTradesPerDay": 1.1142857142857143,
+        "avgTradePnl": 14.504154612134691,
+        "profitableRuns": 18,
+        "totalRuns": 45,
+        "avgProfitFactor": 0.800527766171264,
+        "avgSharpe": -0.4998285759238916,
+        "maxDrawdown": 2.0123847591444988,
+        "degradation": -33.988939151558924
+      }
+    },
+    {
+      "candidateId": "rsi-reversal-201",
+      "templateName": "rsi-reversal",
+      "scannerParams": {
+        "rsiPeriod": 17,
+        "oversold": 19,
+        "overbought": 66
+      },
+      "pmParams": {
+        "stopLossPct": 1.5,
+        "takeProfitPct": 9.5,
+        "maxHoldTimeHours": 18
+      },
+      "tournament": {
+        "pnl": 7035.569501880655
+      },
+      "stress": {
+        "pnl": 4966.132160222916,
+        "trades": 370,
+        "avgTradesPerDay": 1.1746031746031746,
+        "avgTradePnl": 13.421978811413288,
+        "profitableRuns": 18,
+        "totalRuns": 45,
+        "avgProfitFactor": 2.89458715358199,
+        "avgSharpe": -0.980839171914874,
+        "maxDrawdown": 1.8079388993360836,
+        "degradation": -29.413927914500228
       }
     },
     {
@@ -332,28 +361,28 @@
         "maxHoldTimeHours": 5
       },
       "tournament": {
-        "pnl": 7155.770225228469
+        "pnl": 7112.704050344519
       },
       "stress": {
-        "pnl": 4485.063190178613,
-        "trades": 1036,
-        "avgTradesPerDay": 3.2888888888888888,
-        "avgTradePnl": 4.329211573531479,
-        "profitableRuns": 24,
+        "pnl": 4587.17685882942,
+        "trades": 671,
+        "avgTradesPerDay": 2.13015873015873,
+        "avgTradePnl": 6.836329148777079,
+        "profitableRuns": 18,
         "totalRuns": 45,
-        "avgProfitFactor": 0.745776747983053,
-        "avgSharpe": -3.0950682083558143,
-        "maxDrawdown": 2.495431328850371,
-        "degradation": -37.322425832427925
+        "avgProfitFactor": 0.487405786831696,
+        "avgSharpe": -1.7137912587883737,
+        "maxDrawdown": 2.7831976578916175,
+        "degradation": -35.50727225031625
       }
     },
     {
-      "candidateId": "rsi-reversal-312",
+      "candidateId": "rsi-reversal-367",
       "templateName": "rsi-reversal",
       "scannerParams": {
-        "rsiPeriod": 6,
+        "rsiPeriod": 8,
         "oversold": 16,
-        "overbought": 68
+        "overbought": 71
       },
       "pmParams": {
         "stopLossPct": 3.5,
@@ -361,19 +390,106 @@
         "maxHoldTimeHours": 14
       },
       "tournament": {
-        "pnl": 6914.556328516121
+        "pnl": 7309.506870404659
       },
       "stress": {
-        "pnl": 3798.1385491355304,
-        "trades": 567,
-        "avgTradesPerDay": 1.8,
-        "avgTradePnl": 6.698657053149083,
-        "profitableRuns": 23,
+        "pnl": 4494.719631006747,
+        "trades": 341,
+        "avgTradesPerDay": 1.0825396825396825,
+        "avgTradePnl": 13.180995985357027,
+        "profitableRuns": 17,
         "totalRuns": 45,
-        "avgProfitFactor": 0.9789298994151056,
-        "avgSharpe": -1.6306972798421826,
-        "maxDrawdown": 2.657926308519895,
-        "degradation": -45.070393982159956
+        "avgProfitFactor": 0.5759179727111208,
+        "avgSharpe": -0.5409191178028733,
+        "maxDrawdown": 2.0123847591444988,
+        "degradation": -38.50857916003414
+      }
+    },
+    {
+      "candidateId": "rsi-reversal-205",
+      "templateName": "rsi-reversal",
+      "scannerParams": {
+        "rsiPeriod": 17,
+        "oversold": 19,
+        "overbought": 66
+      },
+      "pmParams": {
+        "stopLossPct": 2,
+        "takeProfitPct": 7.5,
+        "maxHoldTimeHours": 16
+      },
+      "tournament": {
+        "pnl": 7044.750043036458
+      },
+      "stress": {
+        "pnl": 3807.2415896083367,
+        "trades": 334,
+        "avgTradesPerDay": 1.0603174603174603,
+        "avgTradePnl": 11.39892691499502,
+        "profitableRuns": 14,
+        "totalRuns": 45,
+        "avgProfitFactor": 1.564291792263465,
+        "avgSharpe": -1.1539162674725778,
+        "maxDrawdown": 1.86475897336918,
+        "degradation": -45.95632823947117
+      }
+    },
+    {
+      "candidateId": "rsi-reversal-190",
+      "templateName": "rsi-reversal",
+      "scannerParams": {
+        "rsiPeriod": 27,
+        "oversold": 22,
+        "overbought": 65
+      },
+      "pmParams": {
+        "stopLossPct": 2,
+        "takeProfitPct": 7.5,
+        "maxHoldTimeHours": 16
+      },
+      "tournament": {
+        "pnl": 7492.7372426396305
+      },
+      "stress": {
+        "pnl": 2886.028905373263,
+        "trades": 224,
+        "avgTradesPerDay": 0.7111111111111111,
+        "avgTradePnl": 12.884057613273496,
+        "profitableRuns": 14,
+        "totalRuns": 45,
+        "avgProfitFactor": 2.8453772266738775,
+        "avgSharpe": -0.6437718794311852,
+        "maxDrawdown": 1.3335266565533677,
+        "degradation": -61.48231531529673
+      }
+    },
+    {
+      "candidateId": "rsi-reversal-256",
+      "templateName": "rsi-reversal",
+      "scannerParams": {
+        "rsiPeriod": 22,
+        "oversold": 19,
+        "overbought": 68
+      },
+      "pmParams": {
+        "stopLossPct": 1.5,
+        "takeProfitPct": 9.5,
+        "maxHoldTimeHours": 18
+      },
+      "tournament": {
+        "pnl": 6987.613276839667
+      },
+      "stress": {
+        "pnl": 2396.4052570840977,
+        "trades": 222,
+        "avgTradesPerDay": 0.7047619047619048,
+        "avgTradePnl": 10.794618275153594,
+        "profitableRuns": 15,
+        "totalRuns": 45,
+        "avgProfitFactor": 0.6053610025727304,
+        "avgSharpe": -1.794464757234335,
+        "maxDrawdown": 0.9118754140985584,
+        "degradation": -65.70495300552844
       }
     },
     {
@@ -390,53 +506,134 @@
         "maxHoldTimeHours": 16
       },
       "tournament": {
-        "pnl": 7278.8647981197355
+        "pnl": 8025.878811319702
       },
       "stress": {
-        "pnl": 3467.5317812140584,
-        "trades": 325,
-        "avgTradesPerDay": 1.0317460317460319,
-        "avgTradePnl": 10.669328557581718,
-        "profitableRuns": 23,
+        "pnl": 2242.018170930365,
+        "trades": 207,
+        "avgTradesPerDay": 0.6571428571428571,
+        "avgTradePnl": 10.831005656668431,
+        "profitableRuns": 13,
         "totalRuns": 45,
-        "avgProfitFactor": 3.0608212434800817,
-        "avgSharpe": -2.870340934864508,
-        "maxDrawdown": 1.8543950073879205,
-        "degradation": -52.361640483969616
+        "avgProfitFactor": 2.74334041940263,
+        "avgSharpe": -1.8129829990728572,
+        "maxDrawdown": 1.2279046845614539,
+        "degradation": -72.06513799126618
       }
     },
     {
-      "candidateId": "candle-macd-2416",
-      "templateName": "candle-macd",
+      "candidateId": "rsi-ema-combo-1067",
+      "templateName": "rsi-ema-combo",
       "scannerParams": {
-        "consecutiveCount": 6,
-        "fastPeriod": 15,
-        "slowPeriod": 36,
-        "signalPeriod": 10
+        "emaPeriod": 12,
+        "rsiPeriod": 12,
+        "oversold": 30,
+        "overbought": 67
+      },
+      "pmParams": {
+        "stopLossPct": 1.5,
+        "takeProfitPct": 4,
+        "maxHoldTimeHours": 22
+      },
+      "tournament": {
+        "pnl": 3504.8142244803657
+      },
+      "stress": {
+        "pnl": 1360.7488846605193,
+        "trades": 150,
+        "avgTradesPerDay": 0.47619047619047616,
+        "avgTradePnl": 9.071659231070129,
+        "profitableRuns": 12,
+        "totalRuns": 45,
+        "avgProfitFactor": 0.49100476319685976,
+        "avgSharpe": -1.5505894329623904,
+        "maxDrawdown": 0.5685203886796808,
+        "degradation": -61.174864129574004
+      }
+    },
+    {
+      "candidateId": "vwap-reversion-1135",
+      "templateName": "vwap-reversion",
+      "scannerParams": {
+        "deviationPct": 1.7000000000000002
       },
       "pmParams": {
         "stopLossPct": 2,
-        "takeProfitPct": 6.5,
-        "maxHoldTimeHours": 17
+        "takeProfitPct": 7.5,
+        "maxHoldTimeHours": 13
       },
       "tournament": {
-        "pnl": 242.4571592854627
+        "pnl": 6416.183534338254
       },
       "stress": {
-        "pnl": 2753.306229621976,
-        "trades": 337,
-        "avgTradesPerDay": 1.0698412698412698,
-        "avgTradePnl": 8.170048159115655,
-        "profitableRuns": 24,
+        "pnl": 1172.1325140651152,
+        "trades": 298,
+        "avgTradesPerDay": 0.946031746031746,
+        "avgTradePnl": 3.9333305841111246,
+        "profitableRuns": 13,
         "totalRuns": 45,
-        "avgProfitFactor": 2.8562784076559664,
-        "avgSharpe": -0.039696827447486406,
-        "maxDrawdown": 1.3746792834698316,
-        "degradation": 1035.5846277074893
+        "avgProfitFactor": 0.615178031400254,
+        "avgSharpe": -1.3128012264089919,
+        "maxDrawdown": 1.218971423932635,
+        "degradation": -81.73162429359955
       }
     },
     {
-      "candidateId": "rsi-ema-combo-951",
+      "candidateId": "vwap-reversion-1365",
+      "templateName": "vwap-reversion",
+      "scannerParams": {
+        "deviationPct": 1.7000000000000002
+      },
+      "pmParams": {
+        "stopLossPct": 2,
+        "takeProfitPct": 7.5,
+        "maxHoldTimeHours": 13
+      },
+      "tournament": {
+        "pnl": 6416.183534338254
+      },
+      "stress": {
+        "pnl": 1172.1325140651152,
+        "trades": 298,
+        "avgTradesPerDay": 0.946031746031746,
+        "avgTradePnl": 3.9333305841111246,
+        "profitableRuns": 13,
+        "totalRuns": 45,
+        "avgProfitFactor": 0.615178031400254,
+        "avgSharpe": -1.3128012264089919,
+        "maxDrawdown": 1.218971423932635,
+        "degradation": -81.73162429359955
+      }
+    },
+    {
+      "candidateId": "vwap-reversion-1140",
+      "templateName": "vwap-reversion",
+      "scannerParams": {
+        "deviationPct": 1.8
+      },
+      "pmParams": {
+        "stopLossPct": 2,
+        "takeProfitPct": 7.5,
+        "maxHoldTimeHours": 13
+      },
+      "tournament": {
+        "pnl": 6404.061503447458
+      },
+      "stress": {
+        "pnl": 1021.2409404683767,
+        "trades": 302,
+        "avgTradesPerDay": 0.9587301587301588,
+        "avgTradePnl": 3.3815925181072077,
+        "profitableRuns": 12,
+        "totalRuns": 45,
+        "avgProfitFactor": 0.5384374698915299,
+        "avgSharpe": -1.4169992023363558,
+        "maxDrawdown": 1.218971423932635,
+        "degradation": -84.05323028333474
+      }
+    },
+    {
+      "candidateId": "rsi-ema-combo-952",
       "templateName": "rsi-ema-combo",
       "scannerParams": {
         "emaPeriod": 12,
@@ -445,112 +642,52 @@
         "overbought": 65
       },
       "pmParams": {
-        "stopLossPct": 3,
-        "takeProfitPct": 9,
-        "maxHoldTimeHours": 21
-      },
-      "tournament": {
-        "pnl": 2557.33249167595
-      },
-      "stress": {
-        "pnl": 2308.420259911065,
-        "trades": 332,
-        "avgTradesPerDay": 1.053968253968254,
-        "avgTradePnl": 6.95307307202128,
-        "profitableRuns": 21,
-        "totalRuns": 45,
-        "avgProfitFactor": 0.7446055516056949,
-        "avgSharpe": -3.251029174670389,
-        "maxDrawdown": 1.8638494853576593,
-        "degradation": -9.733276082601227
-      }
-    },
-    {
-      "candidateId": "ema-crossover-95",
-      "templateName": "ema-crossover",
-      "scannerParams": {
-        "fastPeriod": 16,
-        "slowPeriod": 33
-      },
-      "pmParams": {
-        "stopLossPct": 3.5,
-        "takeProfitPct": 9,
-        "maxHoldTimeHours": 9
-      },
-      "tournament": {
-        "pnl": 4987.8033051754155
-      },
-      "stress": {
-        "pnl": 1530.3519804308398,
-        "trades": 534,
-        "avgTradesPerDay": 1.6952380952380952,
-        "avgTradePnl": 2.865827678709438,
-        "profitableRuns": 17,
-        "totalRuns": 45,
-        "avgProfitFactor": 1.006586042293086,
-        "avgSharpe": -0.9795279360334459,
-        "maxDrawdown": 1.1059819618782056,
-        "degradation": -69.31811687836758
-      }
-    },
-    {
-      "candidateId": "rsi-ema-combo-1062",
-      "templateName": "rsi-ema-combo",
-      "scannerParams": {
-        "emaPeriod": 11,
-        "rsiPeriod": 7,
-        "oversold": 30,
-        "overbought": 69
-      },
-      "pmParams": {
         "stopLossPct": 1.5,
         "takeProfitPct": 4,
         "maxHoldTimeHours": 22
       },
       "tournament": {
-        "pnl": 3080.1498480879163
+        "pnl": 4471.512050734316
       },
       "stress": {
-        "pnl": 973.5508502261964,
-        "trades": 332,
-        "avgTradesPerDay": 1.053968253968254,
-        "avgTradePnl": 2.9323820789945674,
-        "profitableRuns": 21,
+        "pnl": 965.0990823247594,
+        "trades": 390,
+        "avgTradesPerDay": 1.2380952380952381,
+        "avgTradePnl": 2.474613031601947,
+        "profitableRuns": 12,
         "totalRuns": 45,
-        "avgProfitFactor": 0.9015238563007176,
-        "avgSharpe": -1.9539642229758603,
-        "maxDrawdown": 0.9736827782869295,
-        "degradation": -68.39274391697036
+        "avgProfitFactor": 0.6120528906093119,
+        "avgSharpe": -2.0027011329992166,
+        "maxDrawdown": 1.376530313955609,
+        "degradation": -78.41671740175072
       }
     },
     {
-      "candidateId": "atr-vol-breakout-1726",
-      "templateName": "atr-vol-breakout",
+      "candidateId": "sma-crossover-830",
+      "templateName": "sma-crossover",
       "scannerParams": {
-        "atrPeriod": 10,
-        "atrMultiplier": 2.9000000000000004,
-        "volSmaPeriod": 50,
-        "volMultiplier": 1.8
+        "fastPeriod": 39,
+        "slowPeriod": 69
       },
       "pmParams": {
-        "stopLossPct": 1,
-        "takeProfitPct": 5.5,
-        "maxHoldTimeHours": 20
+        "stopLossPct": 3.5,
+        "takeProfitPct": 9,
+        "maxHoldTimeHours": 16
       },
       "tournament": {
-        "pnl": -36.615162074280306
+        "pnl": 4980.639059512874
       },
       "stress": {
-        "pnl": 513.0992204327868,
-        "trades": 82,
-        "avgTradesPerDay": 0.26031746031746034,
-        "avgTradePnl": 6.257307566253497,
-        "profitableRuns": 11,
+        "pnl": 705.2936492339213,
+        "trades": 236,
+        "avgTradesPerDay": 0.7492063492063492,
+        "avgTradePnl": 2.988532412008141,
+        "profitableRuns": 15,
         "totalRuns": 45,
-        "avgProfitFactor": 2.8621578624326713,
-        "avgSharpe": -2.9352871623408663,
-        "maxDrawdown": 0.2821277607096454,
-        "degradation": 1501.329917349197
+        "avgProfitFactor": 0.6822961098895837,
+        "avgSharpe": -0.6747546489013737,
+        "maxDrawdown": 2.4300402021612744,
+        "degradation": -85.83929409847858
       }
     }
   ]

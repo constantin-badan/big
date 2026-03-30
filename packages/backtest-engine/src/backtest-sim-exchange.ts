@@ -186,16 +186,6 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
     };
   }
 
-  /** Get current market price for a symbol (from last candle:close). */
-  getCurrentPrice(symbol: string): number | undefined {
-    return this.currentPrices.get(symbol);
-  }
-
-  /** Synchronous balance access for equity curve computation. */
-  getBalanceSync(): number {
-    return this.balance;
-  }
-
   dispose(): void {
     this.bus.off('candle:close', this.handler);
   }

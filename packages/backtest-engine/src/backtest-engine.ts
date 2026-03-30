@@ -2,7 +2,7 @@ import { ReplayDataFeed } from '@trading-bot/data-feed';
 import { EventBus } from '@trading-bot/event-bus';
 import { BacktestExecutor } from '@trading-bot/order-executor';
 import { computeMetrics } from '@trading-bot/reporting';
-import type { BacktestResult, ExchangeConfig, TradeRecord, Candle, Position, Symbol } from '@trading-bot/types';
+import type { BacktestResult, ExchangeConfig, TradeRecord, Candle } from '@trading-bot/types';
 
 import { BacktestSimExchange } from './backtest-sim-exchange';
 import type { CandleLoader, IBacktestEngine } from './types';
@@ -74,42 +74,6 @@ export function createBacktestEngine(
       };
       bus.on('position:closed', tradeHandler);
 
-      // 6b. Track equity on every candle:close for accurate drawdown
-      //     equity = exchange balance + mark-to-market value of open positions
-      const openPositions = new Map<Symbol, { side: 'BUY' | 'SELL'; quantity: number; entryPrice: number }>();
-      const equityCurve: Array<{ time: number; equity: number }> = [];
-
-      const posOpenHandler = (data: { position: Position }) => {
-        openPositions.set(data.position.symbol, {
-          side: data.position.side === 'LONG' ? 'BUY' : 'SELL',
-          quantity: data.position.quantity,
-          entryPrice: data.position.entryPrice,
-        });
-      };
-      const posCloseHandler = (data: { position: Position }) => {
-        openPositions.delete(data.position.symbol);
-      };
-      const equityHandler = (data: { candle: Candle }) => {
-        // Only track equity after warmup period
-        if (data.candle.closeTime < config.startTime) return;
-
-        let unrealizedPnl = 0;
-        for (const [sym, pos] of openPositions) {
-          const price = exchange.getCurrentPrice(sym);
-          if (price === undefined) continue;
-          const direction = pos.side === 'BUY' ? 1 : -1;
-          unrealizedPnl += (price - pos.entryPrice) * direction * pos.quantity;
-        }
-        equityCurve.push({
-          time: data.candle.closeTime,
-          equity: exchange.getBalanceSync() + unrealizedPnl,
-        });
-      };
-
-      bus.on('position:opened', posOpenHandler);
-      bus.on('position:closed', posCloseHandler);
-      bus.on('candle:close', equityHandler);
-
       // 7. Create strategy via factory
       const strategy = factory(params, { bus, exchange, executor });
 
@@ -128,9 +92,6 @@ export function createBacktestEngine(
           }
         }
         bus.off('position:closed', tradeHandler);
-        bus.off('position:opened', posOpenHandler);
-        bus.off('position:closed', posCloseHandler);
-        bus.off('candle:close', equityHandler);
         exchange.dispose();
       }
 
@@ -139,14 +100,13 @@ export function createBacktestEngine(
         ? trades.filter((t) => t.entryTime >= config.startTime)
         : trades;
 
-      // 12. Compute metrics and return result (equity curve enables accurate intra-trade drawdown)
+      // 12. Compute metrics and return result
       const metrics = computeMetrics(
         validTrades,
         config.timeframes,
         initialBalance,
         config.startTime,
         config.endTime,
-        equityCurve,
       );
 
       // Use the exchange's internal balance as authoritative source of truth.
