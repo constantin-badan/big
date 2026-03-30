@@ -338,7 +338,7 @@ export function generatePineScript(config: StrategyConfig): string {
     : '';
 
   return `//@version=6
-strategy("${label}", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=5, commission_type=strategy.commission.percent, commission_value=0.04, slippage=1, initial_capital=10000)
+strategy("${label}", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=5, commission_type=strategy.commission.percent, commission_value=0.04, slippage=1, initial_capital=10000, close_entries_rule="FIFO")
 
 // ─── Indicators ────────────────────────────────────────────────
 ${entry.indicators}
@@ -348,9 +348,10 @@ longCond = ${entry.longCondition}
 shortCond = ${entry.shortCondition}
 
 // ─── Execute Entries ───────────────────────────────────────────
-if ${entryGuard}longCond
+isFlat = strategy.position_size == 0
+if isFlat and ${entryGuard}longCond
     strategy.entry("Long", strategy.long)
-if ${entryGuard}shortCond
+if isFlat and ${entryGuard}shortCond
     strategy.entry("Short", strategy.short)
 
 // ─── Exit Logic (SL=${sl}% TP=${tp}%) ──────────────────────────

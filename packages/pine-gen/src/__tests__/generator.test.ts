@@ -111,9 +111,9 @@ describe('generatePineScript', () => {
     // Date range filter present
     expect(pine).toContain('inDateRange = time >= timestamp(2026, 1, 1, 0, 0) and time < timestamp(2026, 2, 1, 0, 0)');
 
-    // Entries guarded by date range
-    expect(pine).toContain('if inDateRange and longCond');
-    expect(pine).toContain('if inDateRange and shortCond');
+    // Entries guarded by flat check + date range
+    expect(pine).toContain('if isFlat and inDateRange and longCond');
+    expect(pine).toContain('if isFlat and inDateRange and shortCond');
 
     // Close positions at end of date range
     expect(pine).toContain('strategy.close_all("Date Range End")');
