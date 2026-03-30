@@ -14,6 +14,11 @@ export { keltnerReversion } from './keltner-reversion';
 export { stochrsiReversal } from './stochrsi-reversal';
 export { vwapRsi } from './vwap-rsi';
 export { donchianVolBreakout } from './donchian-vol-breakout';
+export { macdRsi } from './macd-rsi';
+export { bbBounce } from './bb-bounce';
+export { kbSqueeze } from './kb-squeeze';
+export { rsiStochrsi } from './rsi-stochrsi';
+export { volSpikeReversal } from './vol-spike-reversal';
 
 import type { ScannerTemplate } from '@trading-bot/types';
 import { emaCrossover } from './ema-crossover';
@@ -32,6 +37,11 @@ import { keltnerReversion } from './keltner-reversion';
 import { stochrsiReversal } from './stochrsi-reversal';
 import { vwapRsi } from './vwap-rsi';
 import { donchianVolBreakout } from './donchian-vol-breakout';
+import { macdRsi } from './macd-rsi';
+import { bbBounce } from './bb-bounce';
+import { kbSqueeze } from './kb-squeeze';
+import { rsiStochrsi } from './rsi-stochrsi';
+import { volSpikeReversal } from './vol-spike-reversal';
 
 /** Registry of all available scanner templates. */
 export const TEMPLATES: readonly ScannerTemplate[] = [
@@ -51,4 +61,9 @@ export const TEMPLATES: readonly ScannerTemplate[] = [
   stochrsiReversal,
   vwapRsi,
   donchianVolBreakout,
+  macdRsi,
+  bbBounce,
+  kbSqueeze,
+  rsiStochrsi,
+  volSpikeReversal,
 ];

@@ -3,11 +3,12 @@ import {
   emaCrossover, rsiReversal, atrBreakout, smaCrossover, rsiEmaCombo, vwapReversion,
   emaTrendRsiEntry, atrVolBreakout, macdMomentum, bbAtrSqueeze, candleMacd,
   zscoreReversion, keltnerReversion, stochrsiReversal, vwapRsi, donchianVolBreakout,
+  macdRsi, bbBounce, kbSqueeze, rsiStochrsi, volSpikeReversal,
   TEMPLATES,
 } from '../index';
 
 describe('strategies', () => {
-  it('exports all 16 templates', () => {
+  it('exports all 21 templates', () => {
     expect(emaCrossover.name).toBe('ema-crossover');
     expect(rsiReversal.name).toBe('rsi-reversal');
     expect(atrBreakout.name).toBe('atr-breakout');
@@ -24,6 +25,11 @@ describe('strategies', () => {
     expect(stochrsiReversal.name).toBe('stochrsi-reversal');
     expect(vwapRsi.name).toBe('vwap-rsi');
     expect(donchianVolBreakout.name).toBe('donchian-vol-breakout');
+    expect(macdRsi.name).toBe('macd-rsi');
+    expect(bbBounce.name).toBe('bb-bounce');
+    expect(kbSqueeze.name).toBe('kb-squeeze');
+    expect(rsiStochrsi.name).toBe('rsi-stochrsi');
+    expect(volSpikeReversal.name).toBe('vol-spike-reversal');
   });
 
   it('every template has params and createFactory', () => {
@@ -33,8 +39,8 @@ describe('strategies', () => {
     }
   });
 
-  it('TEMPLATES registry contains all 16 templates', () => {
-    expect(TEMPLATES).toHaveLength(16);
+  it('TEMPLATES registry contains all 21 templates', () => {
+    expect(TEMPLATES).toHaveLength(21);
     expect(TEMPLATES.map((t) => t.name)).toEqual([
       'ema-crossover', 'rsi-reversal', 'atr-breakout',
       'sma-crossover', 'rsi-ema-combo', 'vwap-reversion',
@@ -42,6 +48,8 @@ describe('strategies', () => {
       'bb-atr-squeeze', 'candle-macd',
       'zscore-reversion', 'keltner-reversion', 'stochrsi-reversal',
       'vwap-rsi', 'donchian-vol-breakout',
+      'macd-rsi', 'bb-bounce', 'kb-squeeze',
+      'rsi-stochrsi', 'vol-spike-reversal',
     ]);
   });
 
@@ -88,6 +96,17 @@ describe('strategies', () => {
   it('vwapRsi.isValid rejects oversold >= overbought', () => {
     expect(vwapRsi.isValid!({ oversold: 70, overbought: 30 })).toBe(false);
     expect(vwapRsi.isValid!({ oversold: 30, overbought: 70 })).toBe(true);
+  });
+
+  it('macdRsi.isValid rejects fast >= slow and oversold >= overbought', () => {
+    expect(macdRsi.isValid!({ fastPeriod: 20, slowPeriod: 10 })).toBe(false);
+    expect(macdRsi.isValid!({ oversold: 70, overbought: 30 })).toBe(false);
+    expect(macdRsi.isValid!({ fastPeriod: 10, slowPeriod: 26, oversold: 30, overbought: 70 })).toBe(true);
+  });
+
+  it('rsiStochrsi.isValid rejects oversold >= overbought', () => {
+    expect(rsiStochrsi.isValid!({ oversold: 80, overbought: 20 })).toBe(false);
+    expect(rsiStochrsi.isValid!({ oversold: 20, overbought: 80 })).toBe(true);
   });
 
   it('emaTrendRsiEntry declares requiredTimeframes', () => {

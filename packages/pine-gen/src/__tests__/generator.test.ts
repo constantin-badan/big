@@ -107,6 +107,7 @@ describe('generatePineScript', () => {
       'rsi-ema-combo', 'vwap-reversion', 'macd-momentum', 'bb-atr-squeeze',
       'candle-macd', 'atr-vol-breakout', 'zscore-reversion', 'keltner-reversion',
       'stochrsi-reversal', 'vwap-rsi', 'donchian-vol-breakout', 'ema-trend-rsi-entry',
+      'macd-rsi', 'bb-bounce', 'kb-squeeze', 'rsi-stochrsi', 'vol-spike-reversal',
     ];
 
     for (const name of templates) {

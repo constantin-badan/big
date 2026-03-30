@@ -247,6 +247,83 @@ const entryGenerators: Record<string, EntryGenerator> = {
       shortCondition: `trendBearish and prevRsi >= ${overbought} and rsiVal < ${overbought}`,
     };
   },
+
+  'macd-rsi': (p) => {
+    const fast = num(p.fastPeriod, 12);
+    const slow = num(p.slowPeriod, 26);
+    const signal = num(p.signalPeriod, 9);
+    const rsiPeriod = num(p.rsiPeriod, 14);
+    const oversold = num(p.oversold, 30);
+    const overbought = num(p.overbought, 70);
+    return {
+      indicators: `[macdLine, signalLine, histogram] = ta.macd(close, ${fast}, ${slow}, ${signal})\nrsiVal = ta.rsi(close, ${rsiPeriod})`,
+      longCondition: `histogram > 0 and rsiVal <= ${oversold}`,
+      shortCondition: `histogram < 0 and rsiVal >= ${overbought}`,
+    };
+  },
+
+  'bb-bounce': (p) => {
+    const period = num(p.bbPeriod, 20);
+    const stdDev = flt(num(p.bbStdDev, 2));
+    return {
+      indicators: `[bbMid, bbUp, bbLow] = ta.bb(close, ${period}, ${stdDev})\nbbPctB = bbUp != bbLow ? (close - bbLow) / (bbUp - bbLow) : 0.5`,
+      longCondition: `bbPctB < 0`,
+      shortCondition: `bbPctB > 1`,
+    };
+  },
+
+  'kb-squeeze': (p) => {
+    const bbPeriod = num(p.bbPeriod, 20);
+    const bbStdDev = flt(num(p.bbStdDev, 2));
+    return {
+      indicators: [
+        `[bbMid, bbUp, bbLow] = ta.bb(close, ${bbPeriod}, ${bbStdDev})`,
+        `bbPctB = bbUp != bbLow ? (close - bbLow) / (bbUp - bbLow) : 0.5`,
+        `var int sqBars = 0`,
+        `if bbPctB >= 0.3 and bbPctB <= 0.7`,
+        `    sqBars += 1`,
+        `else`,
+        `    sqBars := 0`,
+      ].join('\n'),
+      longCondition: `sqBars[1] >= 3 and bbPctB > 0.8`,
+      shortCondition: `sqBars[1] >= 3 and bbPctB < 0.2`,
+    };
+  },
+
+  'rsi-stochrsi': (p) => {
+    const rsiPeriod = num(p.rsiPeriod, 14);
+    const stochPeriod = num(p.stochPeriod, 14);
+    const oversold = num(p.oversold, 25);
+    const overbought = num(p.overbought, 75);
+    return {
+      indicators: [
+        `rsiVal = ta.rsi(close, ${rsiPeriod})`,
+        `prevRsi = rsiVal[1]`,
+        `stochRsiK = ta.stoch(rsiVal, rsiVal, rsiVal, ${stochPeriod})`,
+      ].join('\n'),
+      longCondition: `prevRsi <= ${oversold} and rsiVal > ${oversold} and stochRsiK < 50`,
+      shortCondition: `prevRsi >= ${overbought} and rsiVal < ${overbought} and stochRsiK > 50`,
+    };
+  },
+
+  'vol-spike-reversal': (p) => {
+    const volPeriod = num(p.volSmaPeriod, 20);
+    const volMult = flt(num(p.volMultiplier, 2));
+    const bodyRatio = flt(num(p.bodyRatio, 0.5));
+    return {
+      indicators: [
+        `volSma = ta.sma(volume, ${volPeriod})`,
+        `volSpike = volume > volSma * ${volMult}`,
+        `bodySize = math.abs(close - open)`,
+        `candleRange = high - low`,
+        `ratio = candleRange > 0 ? bodySize / candleRange : 0`,
+        `bullReversal = close > open and close[1] < open[1] and ratio >= ${bodyRatio}`,
+        `bearReversal = close < open and close[1] > open[1] and ratio >= ${bodyRatio}`,
+      ].join('\n'),
+      longCondition: `volSpike and bullReversal`,
+      shortCondition: `volSpike and bearReversal`,
+    };
+  },
 };
 
 // ─── PM / Exit Logic ───────────────────────────────────────────────
