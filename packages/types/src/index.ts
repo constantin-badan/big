@@ -413,6 +413,78 @@ export const DEFAULT_PM_PARAMS: PMParamBounds = {
   maxHoldTimeHours: { min: 1, max: 48, step: 1 },
 };
 
+// === Tournament / Evolutionary Discovery ===
+
+/** A candidate strategy: scanner template + concrete param values + PM config values. */
+export interface TournamentCandidate {
+  id: string;
+  templateName: string;
+  scannerParams: Record<string, number>;
+  pmParams: Record<string, number>;
+}
+
+/** Result of a candidate's performance in one stage. */
+export interface CandidateStageResult {
+  candidateId: string;
+  stageIndex: number;
+  totalPnl: number;
+  totalTrades: number;
+  profitableWeeks: number;
+  totalWeeks: number;
+  avgProfitFactor: number;
+  avgSharpe: number;
+  maxDrawdown: number;
+  survived: boolean;
+}
+
+/** Configuration for a single tournament stage. */
+export interface TournamentStageConfig {
+  /** Number of random weeks to test. */
+  weeks: number;
+  /** Number of random symbols to test. */
+  symbols: number;
+  /** Fraction to eliminate (0.25 = kill bottom 25%). */
+  killRate: number;
+}
+
+/** Full tournament configuration. */
+export interface TournamentConfig {
+  /** Scanner templates to evolve. */
+  templates: ScannerTemplate[];
+  /** How many candidates to generate per template. */
+  candidatesPerTemplate: number;
+  /** PM param bounds to sweep (or fixed values). */
+  pmParams: PMParamBounds;
+  /** Number of PM param samples to combine with each scanner param set. */
+  pmSamples: number;
+  /** Risk config — fixed for all candidates in this tournament. */
+  riskConfig: RiskConfig;
+  /** Exchange config for backtesting. */
+  exchangeConfig: ExchangeConfig;
+  /** Timeframe to test on. */
+  timeframe: Timeframe;
+  /** Pool of symbols to select from. */
+  symbolPool: Symbol[];
+  /** Available data range. */
+  dataRange: { startTime: number; endTime: number };
+  /** Progressive elimination stages. */
+  stages: TournamentStageConfig[];
+}
+
+/** Snapshot of tournament state — persisted for resume and audit. */
+export interface TournamentState {
+  config: TournamentConfig;
+  currentStage: number;
+  candidates: TournamentCandidate[];
+  stageResults: CandidateStageResult[];
+  /** Symbols selected for each stage (for reproducibility). */
+  stageSymbols: Symbol[][];
+  /** Week ranges selected for each stage (for reproducibility). */
+  stageWeeks: Array<Array<{ startTime: number; endTime: number }>>;
+  startedAt: number;
+  completedStages: number;
+}
+
 // === Utilities ===
 
 // KahanSum — compensated summation to eliminate floating-point drift
