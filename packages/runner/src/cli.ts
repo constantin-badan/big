@@ -22,31 +22,28 @@ const command = process.argv[2]; // 'tournament' | 'sync' | 'testnet'
 async function tournament(): Promise<void> {
   const dbPath = './data/candles.db';
   const { candles: store, tournaments: tournamentStore } = createStorage(dbPath);
-  const symbols = [
-    toSymbol('BTCUSDT'),
-    toSymbol('ETHUSDT'),
-    toSymbol('SOLUSDT'),
-    toSymbol('BNBUSDT'),
-  ];
   const timeframe: Timeframe = '5m';
 
-  // Check data availability
-  const earliest = store.getEarliestTimestamp(symbols[0]!, timeframe);
-  const latest = store.getLatestTimestamp(symbols[0]!, timeframe);
-  if (earliest === null || latest === null) {
-    console.log('No data found. Syncing 90 days...');
-    const fetcher = createBinanceFetcher();
-    const lookback = 90 * 24 * 60 * 60 * 1000;
-    const requests = symbols.flatMap((s) =>
-      [timeframe].map((tf) => ({
-        symbol: s,
-        timeframe: tf,
-        startTime: Date.now() - lookback,
-        endTime: Date.now(),
-      })),
-    );
-    await syncCandles(store, fetcher, requests);
-  }
+  // Fetch top 30 symbols by volume for diverse tournament pool
+  console.log('Fetching top symbols by volume...');
+  const { fetchTopSymbols } = await import('./fetch-top-symbols');
+  const symbols = await fetchTopSymbols(30);
+  console.log(`Pool: ${String(symbols.length)} symbols`);
+
+  // Sync 90 days of 5m data for all pool symbols
+  const lookback = 90 * 24 * 60 * 60 * 1000;
+  const fetcher = createBinanceFetcher();
+  console.log('Syncing candle data...');
+  const syncRequests = symbols.flatMap((s) => [{
+    symbol: s,
+    timeframe,
+    startTime: Date.now() - lookback,
+    endTime: Date.now(),
+  }]);
+  const syncResults = await syncCandles(store, fetcher, syncRequests);
+  const totalFetched = syncResults.reduce((sum, r) => sum + r.fetchedCandles, 0);
+  if (totalFetched > 0) console.log(`Fetched ${String(totalFetched)} candles`);
+  else console.log('All data cached');
 
   const dataStart = store.getEarliestTimestamp(symbols[0]!, timeframe)!;
   const dataEnd = store.getLatestTimestamp(symbols[0]!, timeframe)!;
@@ -82,15 +79,21 @@ async function tournament(): Promise<void> {
     timeframe,
     symbolPool: symbols,
     dataRange: { startTime: dataStart, endTime: dataEnd },
+    // Each stage: 1 week per coin, new random coins each round.
+    // Forces generalization — overfit configs die early.
     stages: [
-      { weeks: 1, symbols: 1, killRate: 0.10 },
-      { weeks: 1, symbols: 2, killRate: 0.10 },
-      { weeks: 2, symbols: 2, killRate: 0.15 },
-      { weeks: 2, symbols: 3, killRate: 0.15 },
-      { weeks: 4, symbols: 3, killRate: 0.20 },
-      { weeks: 4, symbols: 4, killRate: 0.20 },
-      { weeks: 8, symbols: 4, killRate: 0.25 },
-      { weeks: 8, symbols: 4, killRate: 0.25 },
+      { weeks: 1, symbols: 1, killRate: 0.05 },
+      { weeks: 1, symbols: 1, killRate: 0.05 },
+      { weeks: 1, symbols: 2, killRate: 0.05 },
+      { weeks: 1, symbols: 2, killRate: 0.05 },
+      { weeks: 1, symbols: 3, killRate: 0.05 },
+      { weeks: 1, symbols: 3, killRate: 0.05 },
+      { weeks: 1, symbols: 4, killRate: 0.05 },
+      { weeks: 1, symbols: 4, killRate: 0.05 },
+      { weeks: 1, symbols: 5, killRate: 0.10 },
+      { weeks: 1, symbols: 5, killRate: 0.10 },
+      { weeks: 1, symbols: 6, killRate: 0.10 },
+      { weeks: 1, symbols: 6, killRate: 0.10 },
     ],
     seed: 42,
   };

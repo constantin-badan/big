@@ -75,8 +75,8 @@ function parseArgs(argv: string[]): StressArgs {
     id: null,
     topN: 10,
     perTemplate: 3,
-    symbolCount: 15,
-    weekCount: 3,
+    symbolCount: 10,
+    weekCount: 4, // 4 weeks = ~1 month per coin
     symbolPoolSize: 150,
     exportPath: null,
     dbPath: './data/candles.db',
