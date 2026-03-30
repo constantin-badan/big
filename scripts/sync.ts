@@ -28,8 +28,8 @@ const SYMBOLS: Symbol[] = [
 
 const TIMEFRAMES: Timeframe[] = ['1m', '5m', '15m', '1h'];
 
-// How far back to fetch (7 days for initial testing)
-const LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
+// How far back to fetch (90 days — covers 10+ random weeks for validation)
+const LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000;
 
 // ─── Main ───────────────────────────────────────────────────────────
 

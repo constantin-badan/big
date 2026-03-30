@@ -368,6 +368,51 @@ export interface PerformanceMetrics {
   totalSlippage: number;
 }
 
+// === Sweep / Evolution ===
+
+/** Defines bounds for a single sweepable parameter. */
+export interface ParamSpec {
+  min: number;
+  max: number;
+  step?: number; // 1 for integers, 0.001 for percentages, undefined for continuous
+}
+
+/** Map of param names to their sweep bounds. */
+export type ParamBounds = Record<string, ParamSpec>;
+
+/**
+ * Declares a scanner's identity and sweepable parameter space.
+ * The evolutionary pipeline reads `params` to know what to vary.
+ * `createFactory` builds a StrategyFactory that reads param values from the sweep grid.
+ *
+ * Scanner templates own signal params only (indicator periods, thresholds).
+ * Position management params (SL/TP) are declared separately via PMParamBounds.
+ * Risk config (max drawdown, daily loss) is fixed per tournament by the operator.
+ */
+export interface ScannerTemplate {
+  name: string;
+  description: string;
+  params: ParamBounds;
+  createFactory: (symbols: Symbol[], timeframe: Timeframe, riskConfig: RiskConfig, pmConfig: PositionManagerConfig) => StrategyFactory;
+}
+
+/**
+ * Declares sweepable position management parameters.
+ * Separate from scanner params — the sweep engine takes the cartesian product
+ * of both grids, or they can be swept independently in different stages.
+ */
+export type PMParamBounds = ParamBounds;
+
+/**
+ * Default PM param bounds — covers common exit strategy params.
+ * Individual scanners can narrow these if they have opinions about exits.
+ */
+export const DEFAULT_PM_PARAMS: PMParamBounds = {
+  stopLossPct: { min: 1, max: 10, step: 0.5 },
+  takeProfitPct: { min: 2, max: 20, step: 0.5 },
+  maxHoldTimeHours: { min: 1, max: 48, step: 1 },
+};
+
 // === Utilities ===
 
 // KahanSum — compensated summation to eliminate floating-point drift

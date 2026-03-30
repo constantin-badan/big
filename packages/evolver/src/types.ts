@@ -1,13 +1,7 @@
 import type { ArenaRanking } from '@trading-bot/arena';
-import type { PerformanceMetrics } from '@trading-bot/types';
+import type { ParamBounds, PerformanceMetrics } from '@trading-bot/types';
 
-export interface ParamSpec {
-  min: number;
-  max: number;
-  step?: number; // 1 for integers, 0.001 for percentages, undefined for continuous
-}
-
-export type ParamBounds = Record<string, ParamSpec>;
+export type { ParamSpec, ParamBounds } from '@trading-bot/types';
 
 // Scoring function for ranking arena instances. Higher score = better.
 // Takes an ArenaRanking (params + metrics + trades) and returns a numeric score.
