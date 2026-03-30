@@ -20,3 +20,12 @@ export type { MACDConfig } from './macd';
 
 export { Bollinger, createBollinger } from './bollinger';
 export type { BollingerConfig } from './bollinger';
+
+export { StochRSI, createStochRSI } from './stoch-rsi';
+export type { StochRSIConfig } from './stoch-rsi';
+
+export { Keltner, createKeltner } from './keltner';
+export type { KeltnerConfig } from './keltner';
+
+export { Donchian, createDonchian } from './donchian';
+export type { DonchianConfig } from './donchian';

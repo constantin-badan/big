@@ -1,0 +1,247 @@
+{
+  "exportedAt": "2026-03-30T19:02:28.068Z",
+  "tournamentStartedAt": "2026-03-30T18:33:40.933Z",
+  "completedStages": 8,
+  "totalSurvivors": 293,
+  "topN": [
+    {
+      "rank": 1,
+      "candidateId": "rsi-reversal-260",
+      "templateName": "rsi-reversal",
+      "scannerParams": {
+        "rsiPeriod": 22,
+        "oversold": 19,
+        "overbought": 68
+      },
+      "pmParams": {
+        "stopLossPct": 2,
+        "takeProfitPct": 7.5,
+        "maxHoldTimeHours": 16
+      },
+      "performance": {
+        "totalPnl": 8025.878811319702,
+        "totalTrades": 104,
+        "profitableWeeks": 8,
+        "totalWeeks": 8,
+        "avgProfitFactor": 1.5454023374672792,
+        "avgSharpe": -1.4269207003417461,
+        "maxDrawdown": 0.8497055957019873
+      }
+    },
+    {
+      "rank": 2,
+      "candidateId": "rsi-reversal-407",
+      "templateName": "rsi-reversal",
+      "scannerParams": {
+        "rsiPeriod": 8,
+        "oversold": 15,
+        "overbought": 68
+      },
+      "pmParams": {
+        "stopLossPct": 3.5,
+        "takeProfitPct": 8.5,
+        "maxHoldTimeHours": 14
+      },
+      "performance": {
+        "totalPnl": 7712.280644221013,
+        "totalTrades": 178,
+        "profitableWeeks": 8,
+        "totalWeeks": 8,
+        "avgProfitFactor": 0.8420364732513651,
+        "avgSharpe": -4.520544564560361,
+        "maxDrawdown": 1.6244207890235258
+      }
+    },
+    {
+      "rank": 3,
+      "candidateId": "rsi-reversal-190",
+      "templateName": "rsi-reversal",
+      "scannerParams": {
+        "rsiPeriod": 27,
+        "oversold": 22,
+        "overbought": 65
+      },
+      "pmParams": {
+        "stopLossPct": 2,
+        "takeProfitPct": 7.5,
+        "maxHoldTimeHours": 16
+      },
+      "performance": {
+        "totalPnl": 7492.7372426396305,
+        "totalTrades": 113,
+        "profitableWeeks": 8,
+        "totalWeeks": 8,
+        "avgProfitFactor": 1.3940049123445095,
+        "avgSharpe": -2.1332453440187327,
+        "maxDrawdown": 0.6600469152312056
+      }
+    },
+    {
+      "rank": 4,
+      "candidateId": "rsi-reversal-391",
+      "templateName": "rsi-reversal",
+      "scannerParams": {
+        "rsiPeriod": 13,
+        "oversold": 21,
+        "overbought": 68
+      },
+      "pmParams": {
+        "stopLossPct": 1.5,
+        "takeProfitPct": 9.5,
+        "maxHoldTimeHours": 18
+      },
+      "performance": {
+        "totalPnl": 7405.8544895902,
+        "totalTrades": 165,
+        "profitableWeeks": 8,
+        "totalWeeks": 8,
+        "avgProfitFactor": 1.2815859936774978,
+        "avgSharpe": -3.879197702252039,
+        "maxDrawdown": 0.9637812538555045
+      }
+    },
+    {
+      "rank": 5,
+      "candidateId": "rsi-reversal-367",
+      "templateName": "rsi-reversal",
+      "scannerParams": {
+        "rsiPeriod": 8,
+        "oversold": 16,
+        "overbought": 71
+      },
+      "pmParams": {
+        "stopLossPct": 3.5,
+        "takeProfitPct": 8.5,
+        "maxHoldTimeHours": 14
+      },
+      "performance": {
+        "totalPnl": 7309.506870404659,
+        "totalTrades": 173,
+        "profitableWeeks": 8,
+        "totalWeeks": 8,
+        "avgProfitFactor": 0.8147870273040716,
+        "avgSharpe": -3.7162954051278607,
+        "maxDrawdown": 0.9784897624694302
+      }
+    }
+  ],
+  "bestPerTemplate": {
+    "rsi-reversal": {
+      "rank": 1,
+      "candidateId": "rsi-reversal-260",
+      "templateName": "rsi-reversal",
+      "scannerParams": {
+        "rsiPeriod": 22,
+        "oversold": 19,
+        "overbought": 68
+      },
+      "pmParams": {
+        "stopLossPct": 2,
+        "takeProfitPct": 7.5,
+        "maxHoldTimeHours": 16
+      },
+      "performance": {
+        "totalPnl": 8025.878811319702,
+        "totalTrades": 104,
+        "profitableWeeks": 8,
+        "totalWeeks": 8,
+        "avgProfitFactor": 1.5454023374672792,
+        "avgSharpe": -1.4269207003417461,
+        "maxDrawdown": 0.8497055957019873
+      }
+    },
+    "vwap-reversion": {
+      "rank": 16,
+      "candidateId": "vwap-reversion-1135",
+      "templateName": "vwap-reversion",
+      "scannerParams": {
+        "deviationPct": 1.7000000000000002
+      },
+      "pmParams": {
+        "stopLossPct": 2,
+        "takeProfitPct": 7.5,
+        "maxHoldTimeHours": 13
+      },
+      "performance": {
+        "totalPnl": 6416.183534338254,
+        "totalTrades": 103,
+        "profitableWeeks": 7,
+        "totalWeeks": 8,
+        "avgProfitFactor": 0.8835811503565132,
+        "avgSharpe": -2.9017739744739677,
+        "maxDrawdown": 0.701702891114467
+      }
+    },
+    "sma-crossover": {
+      "rank": 38,
+      "candidateId": "sma-crossover-818",
+      "templateName": "sma-crossover",
+      "scannerParams": {
+        "fastPeriod": 5,
+        "slowPeriod": 70
+      },
+      "pmParams": {
+        "stopLossPct": 4.5,
+        "takeProfitPct": 2.5,
+        "maxHoldTimeHours": 13
+      },
+      "performance": {
+        "totalPnl": 5765.208327317538,
+        "totalTrades": 177,
+        "profitableWeeks": 6,
+        "totalWeeks": 8,
+        "avgProfitFactor": 0.8948223687930352,
+        "avgSharpe": -3.3628212390233228,
+        "maxDrawdown": 1.2638487093513089
+      }
+    },
+    "ema-crossover": {
+      "rank": 46,
+      "candidateId": "ema-crossover-43",
+      "templateName": "ema-crossover",
+      "scannerParams": {
+        "fastPeriod": 3,
+        "slowPeriod": 50
+      },
+      "pmParams": {
+        "stopLossPct": 2,
+        "takeProfitPct": 5.5,
+        "maxHoldTimeHours": 5
+      },
+      "performance": {
+        "totalPnl": 5637.0714971484285,
+        "totalTrades": 406,
+        "profitableWeeks": 7,
+        "totalWeeks": 8,
+        "avgProfitFactor": 0.7070527230092204,
+        "avgSharpe": -7.514354761344947,
+        "maxDrawdown": 1.192086317370995
+      }
+    },
+    "rsi-ema-combo": {
+      "rank": 101,
+      "candidateId": "rsi-ema-combo-952",
+      "templateName": "rsi-ema-combo",
+      "scannerParams": {
+        "emaPeriod": 12,
+        "rsiPeriod": 6,
+        "oversold": 34,
+        "overbought": 65
+      },
+      "pmParams": {
+        "stopLossPct": 1.5,
+        "takeProfitPct": 4,
+        "maxHoldTimeHours": 22
+      },
+      "performance": {
+        "totalPnl": 4471.512050734316,
+        "totalTrades": 161,
+        "profitableWeeks": 6,
+        "totalWeeks": 8,
+        "avgProfitFactor": 0.925165404291995,
+        "avgSharpe": -2.286469456288825,
+        "maxDrawdown": 0.5842209585718956
+      }
+    }
+  }
+}
