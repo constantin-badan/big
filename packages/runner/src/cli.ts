@@ -66,12 +66,12 @@ async function tournament(): Promise<void> {
     templates: [...TEMPLATES],
     candidatesPerTemplate: 50,
     pmParams: {
-      stopLossPct: { min: 1, max: 5, step: 0.5 },
-      takeProfitPct: { min: 2, max: 10, step: 0.5 },
+      stopLossPct: { min: 2, max: 8, step: 0.5 },       // wider SL for volatile crypto
+      takeProfitPct: { min: 1, max: 6, step: 0.5 },      // tighter TP, more realistic
       maxHoldTimeHours: { min: 1, max: 24, step: 1 },
-      trailingActivationPct: { min: 0, max: 3, step: 0.5 },   // 0 = disabled
+      trailingActivationPct: { min: 0, max: 3, step: 0.5 },
       trailingDistancePct: { min: 0.3, max: 2, step: 0.1 },
-      breakevenPct: { min: 0, max: 2, step: 0.5 },             // 0 = disabled
+      breakevenPct: { min: 0, max: 2, step: 0.5 },
     },
     pmSamples: 8,
     riskConfig: {
