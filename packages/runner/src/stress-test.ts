@@ -354,19 +354,12 @@ export async function runStressTest(argv: string[]): Promise<void> {
   console.log(`Selected ${String(candidates.length)} candidates for stress testing`);
   console.log(`  Top ${String(args.topN)} overall + top ${String(args.perTemplate)} per template (deduplicated)`);
 
-  // Fetch unseen symbols (truly random — NOT seeded, we want different data each run)
+  // Fetch symbols by volume and pick random ones
   console.log(`\nFetching top ${String(args.symbolPoolSize)} symbols by volume...`);
   const allSymbols = await fetchTopSymbols(args.symbolPoolSize);
 
-  // Exclude symbols used in tournament
-  const tournamentSymbols = new Set(
-    state.stageSymbols.flat().map((s) => String(s)),
-  );
-  const unseenSymbols = allSymbols.filter((s) => !tournamentSymbols.has(String(s)));
-
-  // Pick random unseen symbols using Math.random (intentionally non-deterministic)
   const random = createPrng(Date.now());
-  const shuffled = [...unseenSymbols];
+  const shuffled = [...allSymbols];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
     const temp = shuffled[i]!;
