@@ -347,7 +347,7 @@ export function generatePineScript(config: StrategyConfig): string {
   const dr = config.dateRange;
 
   const dateFilter = dr
-    ? `\n// ─── Date Range Filter ─────────────────────────────────────────\ninDateRange = time >= timestamp(${String(dr.startYear)}, ${String(dr.startMonth)}, ${String(dr.startDay)}, 0, 0) and time < timestamp(${String(dr.endYear)}, ${String(dr.endMonth)}, ${String(dr.endDay)}, 0, 0)\n`
+    ? `\n// ─── Date Range Filter (explicit UTC to match our engine) ──────\ninDateRange = time >= timestamp("UTC", ${String(dr.startYear)}, ${String(dr.startMonth)}, ${String(dr.startDay)}, 0, 0) and time < timestamp("UTC", ${String(dr.endYear)}, ${String(dr.endMonth)}, ${String(dr.endDay)}, 0, 0)\n`
     : '';
 
   const entryGuard = dr ? 'inDateRange and ' : '';

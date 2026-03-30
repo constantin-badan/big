@@ -112,8 +112,8 @@ describe('generatePineScript', () => {
       dateRange: { startYear: 2026, startMonth: 1, startDay: 1, endYear: 2026, endMonth: 2, endDay: 1 },
     });
 
-    // Date range filter present
-    expect(pine).toContain('inDateRange = time >= timestamp(2026, 1, 1, 0, 0) and time < timestamp(2026, 2, 1, 0, 0)');
+    // Date range filter present with explicit UTC
+    expect(pine).toContain('timestamp("UTC", 2026, 1, 1, 0, 0)');
 
     // Entries guarded by flat check + date range
     expect(pine).toContain('if isFlat and inDateRange and longCond');
