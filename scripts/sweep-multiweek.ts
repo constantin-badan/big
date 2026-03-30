@@ -1,21 +1,14 @@
 #!/usr/bin/env bun
 /**
- * Run the same parameter sweep across 10 random non-overlapping weeks.
- * Tests whether the best params generalize or are overfit to one period.
- *
- * Usage:
- *   bun run scripts/sweep-multiweek.ts
+ * Thin wrapper — multi-week EMA crossover sweep.
+ * Usage: bun run scripts/sweep-multiweek.ts
  */
 import { toSymbol } from '@trading-bot/types';
 import type { Symbol, Timeframe, ExchangeConfig, BacktestConfig, PositionManagerConfig, RiskConfig, SweepParamGrid } from '@trading-bot/types';
 import { createStorage } from '@trading-bot/storage';
 import { createBacktestEngine } from '@trading-bot/backtest-engine';
 import { createSweepEngine } from '@trading-bot/sweep-engine';
-import type { SweepResult } from '@trading-bot/sweep-engine';
-
-import { createEmaCrossoverFactory } from '../strategies/ema-crossover';
-
-// ─── Configuration ──────────────────────────────────────────────────
+import { createEmaCrossoverFactory } from '@trading-bot/strategies';
 
 const DB_PATH = './data/candles.db';
 
@@ -68,22 +61,18 @@ const pmConfig: PositionManagerConfig = {
   maxHoldTimeMs: 4 * 60 * 60 * 1000,
 };
 
-// ─── Week Selection ─────────────────────────────────────────────────
-
 function selectRandomWeeks(dataStart: number, dataEnd: number, count: number): Array<{ start: number; end: number }> {
   const totalRange = dataEnd - dataStart;
   if (totalRange < count * WEEK_MS) {
     throw new Error(`Not enough data for ${String(count)} non-overlapping weeks. Have ${String(Math.floor(totalRange / WEEK_MS))} weeks of data.`);
   }
 
-  // Divide the data range into count equal slices, pick one week from each
   const sliceSize = Math.floor(totalRange / count);
   const weeks: Array<{ start: number; end: number }> = [];
 
   for (let i = 0; i < count; i++) {
     const sliceStart = dataStart + i * sliceSize;
     const maxWeekStart = sliceStart + sliceSize - WEEK_MS;
-    // Deterministic "random" offset within each slice (seeded by index)
     const offset = Math.floor((sliceSize - WEEK_MS) * ((i * 7 + 3) % 11) / 11);
     const weekStart = Math.min(sliceStart + offset, maxWeekStart);
     const weekEnd = weekStart + WEEK_MS;
@@ -93,15 +82,12 @@ function selectRandomWeeks(dataStart: number, dataEnd: number, count: number): A
   return weeks;
 }
 
-// ─── Main ───────────────────────────────────────────────────────────
-
 async function main(): Promise<void> {
   const tfMs = TIMEFRAME_MS[TIMEFRAME];
   if (!tfMs) throw new Error(`Unknown timeframe: ${TIMEFRAME}`);
 
   const { candles: store } = createStorage(DB_PATH);
 
-  // Find data range from storage
   const earliest = store.getEarliestTimestamp(SYMBOLS[0]!, TIMEFRAME);
   const latest = store.getLatestTimestamp(SYMBOLS[0]!, TIMEFRAME);
   if (earliest === null || latest === null) {
@@ -119,7 +105,7 @@ async function main(): Promise<void> {
   console.log(`Testing across ${String(NUM_WEEKS)} weeks:`);
   for (let i = 0; i < weeks.length; i++) {
     const w = weeks[i]!;
-    console.log(`  Week ${String(i + 1)}: ${new Date(w.start).toISOString().slice(0, 10)} → ${new Date(w.end).toISOString().slice(0, 10)}`);
+    console.log(`  Week ${String(i + 1)}: ${new Date(w.start).toISOString().slice(0, 10)} -> ${new Date(w.end).toISOString().slice(0, 10)}`);
   }
   console.log('');
 
@@ -128,7 +114,6 @@ async function main(): Promise<void> {
 
   const factory = createEmaCrossoverFactory(SYMBOLS, TIMEFRAME, riskConfig, pmConfig);
 
-  // Track per-param performance across all weeks
   const paramKey = (params: Record<string, number>): string =>
     `${String(params.fastPeriod ?? 0)},${String(params.slowPeriod ?? 0)}`;
 
@@ -180,16 +165,14 @@ async function main(): Promise<void> {
   const elapsed = Date.now() - startMs;
   console.log(`\nCompleted in ${String(elapsed)}ms\n`);
 
-  // Sort by total PnL across all weeks
   const sorted = [...aggregated.values()].sort((a, b) => b.totalPnl - a.totalPnl);
 
-  // Print results
   console.log('=== Aggregated Results (sorted by total PnL across all weeks) ===\n');
   console.log(
-    'Rank  Fast  Slow  TotalPnL  Trades  ProfWeeks  AvgPnL/Wk  Consistency',
+    'Rank  Fast  Slow  TotalPnl  Trades  ProfWeeks  AvgPnL/Wk  Consistency',
   );
   console.log(
-    '────  ────  ────  ────────  ──────  ─────────  ─────────  ───────────',
+    '----  ----  ----  --------  ------  ---------  ---------  -----------',
   );
 
   for (let i = 0; i < sorted.length; i++) {
@@ -208,7 +191,6 @@ async function main(): Promise<void> {
     );
   }
 
-  // Top 3 detail
   console.log('\n=== Top 3 — Per-Week Breakdown ===\n');
   for (let i = 0; i < Math.min(3, sorted.length); i++) {
     const s = sorted[i]!;

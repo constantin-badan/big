@@ -1,22 +1,14 @@
 #!/usr/bin/env bun
 /**
- * Run a parameter sweep across multiple coins using stored candle data.
- *
- * Usage:
- *   bun run scripts/sweep.ts
- *
- * Reads candles from SQLite (run sync.ts first), sweeps EMA crossover
- * params across all configured symbols, and prints ranked results.
+ * Thin wrapper — single-period EMA crossover sweep.
+ * Usage: bun run scripts/sweep.ts
  */
 import { toSymbol } from '@trading-bot/types';
 import type { Symbol, Timeframe, ExchangeConfig, BacktestConfig, PositionManagerConfig, RiskConfig, SweepParamGrid } from '@trading-bot/types';
 import { createStorage } from '@trading-bot/storage';
 import { createBacktestEngine } from '@trading-bot/backtest-engine';
 import { createSweepEngine } from '@trading-bot/sweep-engine';
-
-import { createEmaCrossoverFactory } from '../strategies/ema-crossover';
-
-// ─── Configuration ──────────────────────────────────────────────────
+import { createEmaCrossoverFactory } from '@trading-bot/strategies';
 
 const DB_PATH = './data/candles.db';
 
@@ -28,24 +20,18 @@ const SYMBOLS: Symbol[] = [
 ];
 
 const TIMEFRAME: Timeframe = '5m';
-
-// Backtest period: last 5 days (leaving 2 days for out-of-sample validation)
 const LOOKBACK_DAYS = 5;
-const WARMUP_CANDLES = 50; // max EMA period we'll test
-
-// ─── Sweep Grid ─────────────────────────────────────────────────────
+const WARMUP_CANDLES = 50;
 
 const grid: SweepParamGrid = {
   fastPeriod: [3, 5, 8, 12, 20],
   slowPeriod: [10, 15, 20, 30, 50],
 };
 
-// ─── Exchange / Risk / PM Config ────────────────────────────────────
-
 const exchangeConfig: ExchangeConfig = {
   type: 'backtest-sim',
   feeStructure: { maker: 0.0002, taker: 0.0004 },
-  slippageModel: { type: 'fixed', fixedBps: 5 }, // 0.5 bps slippage
+  slippageModel: { type: 'fixed', fixedBps: 5 },
   initialBalance: 10_000,
 };
 
@@ -55,7 +41,7 @@ const riskConfig: RiskConfig = {
   maxDailyLossPct: 3,
   maxDrawdownPct: 15,
   maxDailyTrades: 50,
-  cooldownAfterLossMs: 300_000, // 5 min after loss
+  cooldownAfterLossMs: 300_000,
   leverage: 1,
   initialBalance: 10_000,
 };
@@ -66,22 +52,13 @@ const pmConfig: PositionManagerConfig = {
   trailingStopEnabled: false,
   trailingStopActivationPct: 0,
   trailingStopDistancePct: 0,
-  maxHoldTimeMs: 4 * 60 * 60 * 1000, // 4 hours max hold
+  maxHoldTimeMs: 4 * 60 * 60 * 1000,
 };
-
-// ─── Timeframe duration ─────────────────────────────────────────────
 
 const TIMEFRAME_MS: Record<string, number> = {
-  '1m': 60_000,
-  '3m': 180_000,
-  '5m': 300_000,
-  '15m': 900_000,
-  '1h': 3_600_000,
-  '4h': 14_400_000,
-  '1d': 86_400_000,
+  '1m': 60_000, '3m': 180_000, '5m': 300_000, '15m': 900_000,
+  '1h': 3_600_000, '4h': 14_400_000, '1d': 86_400_000,
 };
-
-// ─── Main ───────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
   const tfMs = TIMEFRAME_MS[TIMEFRAME];
@@ -90,12 +67,12 @@ async function main(): Promise<void> {
   const endTime = Date.now();
   const backtestStart = endTime - LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
   const warmupMs = WARMUP_CANDLES * tfMs;
-  const dataStart = backtestStart - warmupMs; // fetch extra for indicator warmup
+  const dataStart = backtestStart - warmupMs;
 
   console.log('=== EMA Crossover Sweep ===');
   console.log(`Symbols: ${SYMBOLS.join(', ')}`);
   console.log(`Timeframe: ${TIMEFRAME}`);
-  console.log(`Backtest: ${new Date(backtestStart).toISOString()} → ${new Date(endTime).toISOString()}`);
+  console.log(`Backtest: ${new Date(backtestStart).toISOString()} -> ${new Date(endTime).toISOString()}`);
   console.log(`Warmup: ${String(WARMUP_CANDLES)} candles (data from ${new Date(dataStart).toISOString()})`);
   console.log(`Grid: fastPeriod=${JSON.stringify(grid.fastPeriod)} slowPeriod=${JSON.stringify(grid.slowPeriod)}`);
 
@@ -104,14 +81,11 @@ async function main(): Promise<void> {
   console.log(`Combinations: ${String(fastCount * slowCount)}`);
   console.log('');
 
-  // Load candles from SQLite
   const { candles: store } = createStorage(DB_PATH);
 
-  // CandleLoader reads from SQLite — includes warmup period
   const loader = (symbol: Symbol, tf: Timeframe, start: number, end: number) =>
     Promise.resolve(store.getCandles(symbol, tf, start, end));
 
-  // Verify data exists
   for (const symbol of SYMBOLS) {
     const earliest = store.getEarliestTimestamp(symbol, TIMEFRAME);
     const latest = store.getLatestTimestamp(symbol, TIMEFRAME);
@@ -120,14 +94,12 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     const candleCount = store.getCandles(symbol, TIMEFRAME, dataStart, endTime).length;
-    console.log(`  ${String(symbol)}: ${String(candleCount)} candles (${new Date(earliest).toISOString()} → ${new Date(latest).toISOString()})`);
+    console.log(`  ${String(symbol)}: ${String(candleCount)} candles (${new Date(earliest).toISOString()} -> ${new Date(latest).toISOString()})`);
   }
   console.log('');
 
-  // Create strategy factory
   const factory = createEmaCrossoverFactory(SYMBOLS, TIMEFRAME, riskConfig, pmConfig);
 
-  // Create engine and sweep
   const btConfig: BacktestConfig = {
     startTime: backtestStart,
     endTime,
@@ -146,14 +118,13 @@ async function main(): Promise<void> {
   console.log(`Completed in ${String(elapsed)}ms`);
   console.log('');
 
-  // Print results
   console.log('=== Results (sorted by profit factor) ===');
   console.log('');
   console.log(
     'Rank  Fast  Slow  Trades  WinRate  PF      Sharpe  MaxDD    Expectancy  FinalBal',
   );
   console.log(
-    '────  ────  ────  ──────  ───────  ──────  ──────  ───────  ──────────  ────────',
+    '----  ----  ----  ------  -------  ------  ------  -------  ----------  --------',
   );
 
   for (let i = 0; i < results.length; i++) {
@@ -175,7 +146,6 @@ async function main(): Promise<void> {
     );
   }
 
-  // Summary
   console.log('');
   const profitable = results.filter((r) => r.result.finalBalance > r.result.initialBalance);
   console.log(`${String(profitable.length)}/${String(results.length)} combinations profitable`);

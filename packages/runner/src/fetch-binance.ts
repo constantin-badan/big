@@ -9,6 +9,12 @@ import type { CandleFetcher } from '@trading-bot/storage';
 
 const BINANCE_BASE = 'https://fapi.binance.com';
 
+/** Reinterpret unknown JSON as typed value without `as` assertion. */
+function unsafeCast<T>(value: unknown): T;
+function unsafeCast(value: unknown) {
+  return value;
+}
+
 const TIMEFRAME_MAP: Record<Timeframe, string> = {
   '1m': '1m',
   '3m': '3m',
@@ -58,7 +64,7 @@ export function createBinanceFetcher(): CandleFetcher {
       throw new Error(`Binance API error ${String(response.status)}: ${body}`);
     }
 
-    const rows = (await response.json()) as BinanceKlineRow[];
+    const rows = unsafeCast<BinanceKlineRow[]>(await response.json());
 
     return rows.map((row): Candle => ({
       symbol: toSymbol(String(symbol)),

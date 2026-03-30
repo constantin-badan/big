@@ -34,6 +34,8 @@ module.exports = [
             { sourceTag: 'scope:parity-checker', onlyDependOnLibsWithTags: ['scope:types',  'scope:test-utils', 'scope:backtest-engine', 'scope:storage', 'scope:strategy'] },
             { sourceTag: 'scope:reporting', onlyDependOnLibsWithTags: ['scope:types',  'scope:test-utils'] },
             { sourceTag: 'scope:test-utils', onlyDependOnLibsWithTags: ['scope:types'] },
+            { sourceTag: 'scope:strategies', onlyDependOnLibsWithTags: ['scope:types', 'scope:indicators', 'scope:position-manager', 'scope:risk-manager', 'scope:scanner', 'scope:strategy'] },
+            { sourceTag: 'scope:runner', onlyDependOnLibsWithTags: ['scope:types', 'scope:strategies', 'scope:storage', 'scope:backtest-engine', 'scope:sweep-engine', 'scope:exchange-client'] },
             { sourceTag: 'scope:e2e', onlyDependOnLibsWithTags: ['scope:types', 'scope:test-utils', 'scope:event-bus', 'scope:exchange-client', 'scope:indicators', 'scope:scanner', 'scope:risk-manager', 'scope:position-manager', 'scope:margin-guard', 'scope:order-executor', 'scope:data-feed', 'scope:strategy', 'scope:reporting', 'scope:backtest-engine', 'scope:arena', 'scope:evolver', 'scope:parity-checker', 'scope:storage', 'scope:live-runner', 'scope:sweep-engine'] },
           ],
         },

@@ -1,0 +1,19 @@
+{
+  "name": "@trading-bot/strategies",
+  "version": "0.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsgo --noEmit -p tsconfig.json",
+    "lint": "oxlint ./src --config ../../.oxlintrc.json"
+  },
+  "dependencies": {
+    "@trading-bot/indicators": "workspace:*",
+    "@trading-bot/position-manager": "workspace:*",
+    "@trading-bot/risk-manager": "workspace:*",
+    "@trading-bot/scanner": "workspace:*",
+    "@trading-bot/strategy": "workspace:*",
+    "@trading-bot/types": "workspace:*"
+  }
+}

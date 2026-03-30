@@ -21,7 +21,7 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 /**
  * Classifies a period based on candle data:
  * - TRENDING: |return| > 3% and low intra-period reversal
- * - VOLATILE: high standard deviation of returns (> 1.5× median)
+ * - VOLATILE: high standard deviation of returns (> 1.5x median)
  * - RANGING: everything else
  */
 function classifyPeriod(candles: Candle[]): { regime: Regime; returnPct: number; volatility: number } {
