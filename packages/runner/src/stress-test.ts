@@ -50,8 +50,8 @@ interface StressResult {
   tournamentPnl: number;
   stressPnl: number;
   stressTrades: number;
-  stressProfitableWeeks: number;
-  stressTotalWeeks: number;
+  stressProfitableRuns: number;
+  stressTotalRuns: number;
   stressAvgPF: number;
   stressAvgSharpe: number;
   stressMaxDD: number;
@@ -65,8 +65,8 @@ function parseArgs(argv: string[]): StressArgs {
     id: null,
     topN: 10,
     perTemplate: 3,
-    symbolCount: 10,
-    weekCount: 10,
+    symbolCount: 15,
+    weekCount: 3,
     symbolPoolSize: 150,
     exportPath: null,
     dbPath: './data/candles.db',
@@ -190,8 +190,7 @@ function generateRandomWeeks(
 
 async function runCandidate(
   candidate: TournamentCandidate,
-  symbols: Symbol[],
-  weeks: Array<{ startTime: number; endTime: number }>,
+  symbolWeeks: Map<Symbol, Array<{ startTime: number; endTime: number }>>,
   timeframe: Timeframe,
   riskConfig: RiskConfig,
   exchangeConfig: ExchangeConfig,
@@ -199,7 +198,8 @@ async function runCandidate(
 ): Promise<{
   totalPnl: number;
   totalTrades: number;
-  profitableWeeks: number;
+  profitableRuns: number;
+  totalRuns: number;
   avgPF: number;
   avgSharpe: number;
   maxDD: number;
@@ -217,46 +217,53 @@ async function runCandidate(
     maxHoldTimeMs: (candidate.pmParams.maxHoldTimeHours ?? 4) * 3_600_000,
   };
 
-  const factory = template.createFactory(symbols, timeframe, riskConfig, pmConfig);
   const loader = (sym: Symbol, tf: Timeframe, start: number, end: number) =>
     Promise.resolve(store.getCandles(sym, tf, start, end));
 
   let totalPnl = 0;
   let totalTrades = 0;
-  let profitableWeeks = 0;
+  let profitableRuns = 0;
+  let totalRuns = 0;
   let pfSum = 0;
   let sharpeSum = 0;
   let worstDD = 0;
 
-  for (const week of weeks) {
-    const extraTimeframes = template.requiredTimeframes ?? [];
-    const allTimeframes = [timeframe, ...extraTimeframes.filter((tf) => tf !== timeframe)];
+  const extraTimeframes = template.requiredTimeframes ?? [];
+  const allTimeframes = [timeframe, ...extraTimeframes.filter((tf) => tf !== timeframe)];
 
-    const btConfig: BacktestConfig = {
-      startTime: week.startTime,
-      endTime: week.endTime,
-      symbols,
-      timeframes: allTimeframes,
-    };
+  // Each symbol gets its own random weeks — run 1 symbol × 1 week per backtest
+  for (const [symbol, weeks] of symbolWeeks) {
+    const factory = template.createFactory([symbol], timeframe, riskConfig, pmConfig);
 
-    const engine = createBacktestEngine(loader, exchangeConfig);
-    const result = await engine.run(factory, candidate.scannerParams, btConfig);
+    for (const week of weeks) {
+      const btConfig: BacktestConfig = {
+        startTime: week.startTime,
+        endTime: week.endTime,
+        symbols: [symbol],
+        timeframes: allTimeframes,
+      };
 
-    const weekPnl = result.finalBalance - result.initialBalance;
-    totalPnl += weekPnl;
-    totalTrades += result.metrics.totalTrades;
-    if (weekPnl > 0) profitableWeeks += 1;
-    pfSum += result.metrics.profitFactor;
-    sharpeSum += result.metrics.sharpeRatio;
-    if (result.metrics.maxDrawdown > worstDD) worstDD = result.metrics.maxDrawdown;
+      const engine = createBacktestEngine(loader, exchangeConfig);
+      const result = await engine.run(factory, candidate.scannerParams, btConfig);
+
+      const runPnl = result.finalBalance - result.initialBalance;
+      totalPnl += runPnl;
+      totalTrades += result.metrics.totalTrades;
+      totalRuns += 1;
+      if (runPnl > 0) profitableRuns += 1;
+      pfSum += result.metrics.profitFactor;
+      sharpeSum += result.metrics.sharpeRatio;
+      if (result.metrics.maxDrawdown > worstDD) worstDD = result.metrics.maxDrawdown;
+    }
   }
 
   return {
     totalPnl,
     totalTrades,
-    profitableWeeks,
-    avgPF: pfSum / weeks.length,
-    avgSharpe: sharpeSum / weeks.length,
+    profitableRuns,
+    totalRuns,
+    avgPF: totalRuns > 0 ? pfSum / totalRuns : 0,
+    avgSharpe: totalRuns > 0 ? sharpeSum / totalRuns : 0,
     maxDD: worstDD,
   };
 }
@@ -282,7 +289,7 @@ function printResults(results: StressResult[]): void {
       console.log(`  ${r.candidateId} [${r.templateName}]`);
       console.log(`    Tournament: $${r.tournamentPnl.toFixed(2)}`);
       console.log(`    Stress:     $${r.stressPnl.toFixed(2)}  (${r.degradation > 0 ? '+' : ''}${r.degradation.toFixed(0)}%)${arrow}`);
-      console.log(`    Trades: ${String(r.stressTrades)}  ProfWeeks: ${String(r.stressProfitableWeeks)}/${String(r.stressTotalWeeks)}  AvgPF: ${r.stressAvgPF.toFixed(2)}  MaxDD: ${r.stressMaxDD.toFixed(1)}%`);
+      console.log(`    Trades: ${String(r.stressTrades)}  Profitable: ${String(r.stressProfitableRuns)}/${String(r.stressTotalRuns)} runs  AvgPF: ${r.stressAvgPF.toFixed(2)}  MaxDD: ${r.stressMaxDD.toFixed(1)}%`);
       console.log('');
     }
   }
@@ -293,7 +300,7 @@ function printResults(results: StressResult[]): void {
       console.log(`  ${r.candidateId} [${r.templateName}]`);
       console.log(`    Tournament: $${r.tournamentPnl.toFixed(2)}`);
       console.log(`    Stress:     $${r.stressPnl.toFixed(2)}  (${r.degradation.toFixed(0)}%)`);
-      console.log(`    Trades: ${String(r.stressTrades)}  ProfWeeks: ${String(r.stressProfitableWeeks)}/${String(r.stressTotalWeeks)}`);
+      console.log(`    Trades: ${String(r.stressTrades)}  Profitable: ${String(r.stressProfitableRuns)}/${String(r.stressTotalRuns)} runs`);
       console.log('');
     }
   }
@@ -369,19 +376,25 @@ export async function runStressTest(argv: string[]): Promise<void> {
   const stressSymbols = shuffled.slice(0, args.symbolCount);
   console.log(`Stress symbols (${String(stressSymbols.length)} unseen): ${stressSymbols.join(', ')}`);
 
-  // Generate random weeks from last 90 days
+  // Generate random weeks per symbol (each coin gets its own random weeks)
   const lookback90d = 90 * 24 * 60 * 60 * 1000;
-  const stressWeeks = generateRandomWeeks(args.weekCount, lookback90d, random);
-  console.log(`Stress weeks (${String(stressWeeks.length)}):`);
-  for (const w of stressWeeks) {
-    console.log(`  ${new Date(w.startTime).toISOString().slice(0, 10)} -> ${new Date(w.endTime).toISOString().slice(0, 10)}`);
+  const symbolWeeks = new Map<Symbol, Array<{ startTime: number; endTime: number }>>();
+  console.log(`\nStress weeks (${String(args.weekCount)} per symbol):`);
+  for (const symbol of stressSymbols) {
+    const weeks = generateRandomWeeks(args.weekCount, lookback90d, random);
+    symbolWeeks.set(symbol, weeks);
+    const weekStrs = weeks.map((w) => new Date(w.startTime).toISOString().slice(5, 10)).join(', ');
+    console.log(`  ${String(symbol)}: ${weekStrs}`);
   }
 
-  // Sync candle data for stress symbols
+  const totalRuns = stressSymbols.length * args.weekCount;
+  console.log(`Total: ${String(totalRuns)} runs (${String(stressSymbols.length)} symbols x ${String(args.weekCount)} weeks each)`);
+
+  // Sync candle data for stress symbols — need full 90d range since each symbol has different weeks
   console.log('\nSyncing candle data for stress test symbols...');
   const fetcher = createBinanceFetcher();
-  const syncStart = stressWeeks[0]!.startTime;
-  const syncEnd = stressWeeks[stressWeeks.length - 1]!.endTime;
+  const syncStart = Date.now() - lookback90d;
+  const syncEnd = Date.now();
 
   // Collect all timeframes needed (base + any requiredTimeframes from templates)
   const templateMap = new Map(TEMPLATES.map((t) => [t.name, t]));
@@ -411,7 +424,7 @@ export async function runStressTest(argv: string[]): Promise<void> {
   const riskConfig = state.config.riskConfig;
 
   // Run stress tests
-  console.log(`\nRunning ${String(candidates.length)} candidates x ${String(stressWeeks.length)} weeks x ${String(stressSymbols.length)} symbols...`);
+  console.log(`\nRunning ${String(candidates.length)} candidates x ${String(totalRuns)} runs each...`);
   const results: StressResult[] = [];
 
   for (let i = 0; i < candidates.length; i++) {
@@ -421,8 +434,7 @@ export async function runStressTest(argv: string[]): Promise<void> {
 
     const r = await runCandidate(
       candidate,
-      stressSymbols,
-      stressWeeks,
+      symbolWeeks,
       timeframe,
       riskConfig,
       exchangeConfig,
@@ -439,8 +451,8 @@ export async function runStressTest(argv: string[]): Promise<void> {
       tournamentPnl,
       stressPnl: r.totalPnl,
       stressTrades: r.totalTrades,
-      stressProfitableWeeks: r.profitableWeeks,
-      stressTotalWeeks: stressWeeks.length,
+      stressProfitableRuns: r.profitableRuns,
+      stressTotalRuns: r.totalRuns,
       stressAvgPF: r.avgPF,
       stressAvgSharpe: r.avgSharpe,
       stressMaxDD: r.maxDD,
@@ -462,14 +474,19 @@ export async function runStressTest(argv: string[]): Promise<void> {
       candidates.map(({ candidate }) => [candidate.id, candidate]),
     );
 
+    const symbolWeeksJson: Record<string, Array<{ start: string; end: string }>> = {};
+    for (const [sym, weeks] of symbolWeeks) {
+      symbolWeeksJson[String(sym)] = weeks.map((w) => ({
+        start: new Date(w.startTime).toISOString().slice(0, 10),
+        end: new Date(w.endTime).toISOString().slice(0, 10),
+      }));
+    }
+
     const output = {
       exportedAt: new Date().toISOString(),
       tournamentId: args.id,
       stressSymbols: stressSymbols.map(String),
-      stressWeeks: stressWeeks.map((w) => ({
-        start: new Date(w.startTime).toISOString().slice(0, 10),
-        end: new Date(w.endTime).toISOString().slice(0, 10),
-      })),
+      symbolWeeks: symbolWeeksJson,
       robust: passed.map((r) => {
         const c = candidateMap.get(r.candidateId)!;
         return {
@@ -481,8 +498,8 @@ export async function runStressTest(argv: string[]): Promise<void> {
           stress: {
             pnl: r.stressPnl,
             trades: r.stressTrades,
-            profitableWeeks: r.stressProfitableWeeks,
-            totalWeeks: r.stressTotalWeeks,
+            profitableRuns: r.stressProfitableRuns,
+            totalRuns: r.stressTotalRuns,
             avgProfitFactor: r.stressAvgPF,
             avgSharpe: r.stressAvgSharpe,
             maxDrawdown: r.stressMaxDD,
