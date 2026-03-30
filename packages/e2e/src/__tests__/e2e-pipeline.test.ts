@@ -251,3 +251,123 @@ describe('E2E Negative Paths', () => {
     expect(Number.isNaN(result.metrics.profitFactor)).toBe(false);
   });
 });
+
+// =====================================================================
+// Test Suite 3: Fee and Slippage Impact
+// =====================================================================
+
+describe('E2E Fee and Slippage Impact', () => {
+  const goldenCandles = makeGoldenCandles();
+
+  const btConfig: BacktestConfig = {
+    startTime: goldenCandles[0]!.openTime,
+    endTime: goldenCandles[goldenCandles.length - 1]!.closeTime + 1,
+    symbols: [BTCUSDT],
+    timeframes: ['1m'],
+  };
+
+  const loader = async () => goldenCandles;
+
+  // Zero slippage config (baseline — same as golden reference)
+  const zeroSlippageConfig: ExchangeConfig = {
+    type: 'backtest-sim',
+    feeStructure: { maker: 0.0002, taker: 0.0004 },
+    slippageModel: { type: 'fixed', fixedBps: 0 },
+    initialBalance: 10_000,
+  };
+
+  // 10bps slippage config (realistic)
+  const withSlippageConfig: ExchangeConfig = {
+    type: 'backtest-sim',
+    feeStructure: { maker: 0.0002, taker: 0.0004 },
+    slippageModel: { type: 'fixed', fixedBps: 10 },
+    initialBalance: 10_000,
+  };
+
+  // Zero fees config
+  const zeroFeesConfig: ExchangeConfig = {
+    type: 'backtest-sim',
+    feeStructure: { maker: 0, taker: 0 },
+    slippageModel: { type: 'fixed', fixedBps: 0 },
+    initialBalance: 10_000,
+  };
+
+  const factory = makeEmaCrossoverFactory([BTCUSDT], riskConfig, pmConfig);
+  const params = { fastPeriod: 5, slowPeriod: 10 };
+
+  let zeroSlippageResult: BacktestResult;
+  let withSlippageResult: BacktestResult;
+  let zeroFeesResult: BacktestResult;
+
+  beforeAll(async () => {
+    const [r1, r2, r3] = await Promise.all([
+      createBacktestEngine(loader, zeroSlippageConfig).run(factory, params, btConfig),
+      createBacktestEngine(loader, withSlippageConfig).run(factory, params, btConfig),
+      createBacktestEngine(loader, zeroFeesConfig).run(factory, params, btConfig),
+    ]);
+    zeroSlippageResult = r1;
+    withSlippageResult = r2;
+    zeroFeesResult = r3;
+  });
+
+  test('slippage worsens fill prices (entry higher for BUY, lower for SELL)', () => {
+    // Both runs should produce the same number of trades (same crossover signals)
+    expect(withSlippageResult.trades.length).toBe(zeroSlippageResult.trades.length);
+
+    for (let i = 0; i < zeroSlippageResult.trades.length; i++) {
+      const clean = zeroSlippageResult.trades[i]!;
+      const slipped = withSlippageResult.trades[i]!;
+
+      expect(clean.side).toBe(slipped.side);
+      expect(clean.exitReason).toBe(slipped.exitReason);
+
+      // Slippage moves entry price against the trader
+      if (clean.side === 'LONG') {
+        // BUY entry: slippage makes you pay more
+        expect(slipped.entryPrice).toBeGreaterThan(clean.entryPrice);
+      } else {
+        // SELL entry (SHORT): slippage makes you receive less
+        expect(slipped.entryPrice).toBeLessThan(clean.entryPrice);
+      }
+    }
+  });
+
+  test('slippage reduces final balance', () => {
+    expect(withSlippageResult.finalBalance).toBeLessThan(zeroSlippageResult.finalBalance);
+  });
+
+  test('slippage is recorded in trade.slippage field', () => {
+    for (const trade of withSlippageResult.trades) {
+      expect(trade.slippage).toBeGreaterThan(0);
+    }
+    // Zero slippage run should have zero slippage on trades
+    for (const trade of zeroSlippageResult.trades) {
+      expect(trade.slippage).toBe(0);
+    }
+  });
+
+  test('fees reduce final balance vs zero-fee baseline', () => {
+    // Zero-fee result should be better than the fee-paying result
+    expect(zeroFeesResult.finalBalance).toBeGreaterThan(zeroSlippageResult.finalBalance);
+  });
+
+  test('fees are recorded in trade.fees field', () => {
+    for (const trade of zeroSlippageResult.trades) {
+      expect(trade.fees).toBeGreaterThan(0);
+    }
+    for (const trade of zeroFeesResult.trades) {
+      expect(trade.fees).toBe(0);
+    }
+  });
+
+  test('metrics reflect fee/slippage impact', () => {
+    // totalSlippage should be higher with slippage
+    expect(withSlippageResult.metrics.totalSlippage).toBeGreaterThan(
+      zeroSlippageResult.metrics.totalSlippage,
+    );
+
+    // totalFees should be zero when fees are zero
+    expect(zeroFeesResult.metrics.totalFees).toBe(0);
+    expect(zeroSlippageResult.metrics.totalFees).toBeGreaterThan(0);
+  });
+});
