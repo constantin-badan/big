@@ -50,10 +50,13 @@ export function createBacktestEngine(
       const executor = new BacktestExecutor(bus, exchange);
 
       // 4. Load candles for each symbol × timeframe (parallelised)
+      //    Load extra candles before startTime so indicators can warm up.
+      const warmupMs = config.warmupMs ?? 0;
+      const loadStart = config.startTime - warmupMs;
       const candleMap = new Map<string, Candle[]>();
       const loadJobs = config.symbols.flatMap((symbol) =>
         config.timeframes.map(async (tf) => {
-          const candles = await loader(symbol, tf, config.startTime, config.endTime);
+          const candles = await loader(symbol, tf, loadStart, config.endTime);
           return { key: `${symbol}:${tf}`, candles };
         }),
       );
@@ -92,9 +95,14 @@ export function createBacktestEngine(
         exchange.dispose();
       }
 
-      // 11. Compute metrics and return result
+      // 11. Discard trades that entered during the warmup period
+      const validTrades = warmupMs > 0
+        ? trades.filter((t) => t.entryTime >= config.startTime)
+        : trades;
+
+      // 12. Compute metrics and return result
       const metrics = computeMetrics(
-        trades,
+        validTrades,
         config.timeframes,
         initialBalance,
         config.startTime,
@@ -107,7 +115,7 @@ export function createBacktestEngine(
       const finalBalance = balances[0]?.total ?? initialBalance;
 
       const result: BacktestResult = {
-        trades,
+        trades: validTrades,
         startTime: config.startTime,
         endTime: config.endTime,
         initialBalance,

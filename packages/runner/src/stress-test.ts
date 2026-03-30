@@ -31,6 +31,16 @@ import { fetchTopSymbols } from './fetch-top-symbols';
 import { createBinanceFetcher } from './fetch-binance';
 import { createPrng } from './prng';
 
+const TIMEFRAME_MS: Record<Timeframe, number> = {
+  '1m': 60_000, '3m': 180_000, '5m': 300_000, '15m': 900_000,
+  '1h': 3_600_000, '4h': 14_400_000, '1d': 86_400_000,
+};
+
+function computeWarmupMs(timeframes: Timeframe[]): number {
+  const maxTfMs = Math.max(...timeframes.map((tf) => TIMEFRAME_MS[tf]));
+  return 150 * maxTfMs;
+}
+
 // ─── Types ─────────────────────────────────────────────────────────
 
 interface StressArgs {
@@ -236,11 +246,13 @@ async function runCandidate(
     const factory = template.createFactory([symbol], timeframe, riskConfig, pmConfig);
 
     for (const week of weeks) {
+      const warmupMs = computeWarmupMs(allTimeframes);
       const btConfig: BacktestConfig = {
         startTime: week.startTime,
         endTime: week.endTime,
         symbols: [symbol],
         timeframes: allTimeframes,
+        warmupMs,
       };
 
       const engine = createBacktestEngine(loader, exchangeConfig);
@@ -385,12 +397,6 @@ export async function runStressTest(argv: string[]): Promise<void> {
   const totalRuns = stressSymbols.length * args.weekCount;
   console.log(`Total: ${String(totalRuns)} runs (${String(stressSymbols.length)} symbols x ${String(args.weekCount)} weeks each)`);
 
-  // Sync candle data for stress symbols — need full 90d range since each symbol has different weeks
-  console.log('\nSyncing candle data for stress test symbols...');
-  const fetcher = createBinanceFetcher();
-  const syncStart = Date.now() - lookback90d;
-  const syncEnd = Date.now();
-
   // Collect all timeframes needed (base + any requiredTimeframes from templates)
   const templateMap = new Map(TEMPLATES.map((t) => [t.name, t]));
   const allTimeframes = new Set<Timeframe>([timeframe]);
@@ -400,6 +406,13 @@ export async function runStressTest(argv: string[]): Promise<void> {
       for (const tf of tmpl.requiredTimeframes) allTimeframes.add(tf);
     }
   }
+
+  // Sync candle data for stress symbols — full 90d + warmup buffer
+  console.log('\nSyncing candle data for stress test symbols...');
+  const fetcher = createBinanceFetcher();
+  const maxWarmup = computeWarmupMs([...allTimeframes]);
+  const syncStart = Date.now() - lookback90d - maxWarmup;
+  const syncEnd = Date.now();
 
   const syncRequests = stressSymbols.flatMap((symbol) =>
     [...allTimeframes].map((tf) => ({

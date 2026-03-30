@@ -560,6 +560,8 @@ export interface BacktestConfig {
   endTime: number;
   symbols: Symbol[];
   timeframes: Timeframe[]; // plural — engine calls loader for every symbol × timeframe combination
+  /** Extra candles loaded before startTime so indicators can warm up. Trades before startTime are discarded. */
+  warmupMs?: number;
 }
 
 // === Strategy ===

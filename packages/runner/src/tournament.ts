@@ -31,6 +31,17 @@ import type { ICandleStore, ITournamentStore } from '@trading-bot/storage';
 import { createBacktestEngine } from '@trading-bot/backtest-engine';
 
 import { classifyWeeks, selectStratifiedWeeks } from './regime-detection';
+
+const TIMEFRAME_MS: Record<Timeframe, number> = {
+  '1m': 60_000, '3m': 180_000, '5m': 300_000, '15m': 900_000,
+  '1h': 3_600_000, '4h': 14_400_000, '1d': 86_400_000,
+};
+
+/** 150 candles of the largest timeframe — covers most indicator warmup periods. */
+function computeWarmupMs(timeframes: Timeframe[]): number {
+  const maxTfMs = Math.max(...timeframes.map((tf) => TIMEFRAME_MS[tf]));
+  return 150 * maxTfMs;
+}
 import { fetchTopSymbols } from './fetch-top-symbols';
 import { createPrng } from './prng';
 
@@ -156,6 +167,7 @@ async function runStage(
         endTime: week.endTime,
         symbols,
         timeframes: allTimeframes,
+        warmupMs: computeWarmupMs(allTimeframes),
       };
 
       const engine = createBacktestEngine(loader, exchangeConfig);
