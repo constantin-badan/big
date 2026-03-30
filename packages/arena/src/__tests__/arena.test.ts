@@ -96,6 +96,7 @@ function countingFactory(): {
         deps.bus.off('candle:close', handler);
         return Promise.resolve();
       },
+      resetState() {},
       getStats: () => zeroMetrics,
     };
     return strategy;
@@ -178,6 +179,7 @@ function tradingFactory(buyAt: number, sellAt: number): StrategyFactory {
         deps.bus.off('candle:close', handler);
         return Promise.resolve();
       },
+      resetState() {},
       getStats: () => zeroMetrics,
     };
     return strategy;
@@ -251,6 +253,7 @@ describe('Arena', () => {
           name: 'x',
           start: () => Promise.resolve(),
           stop: () => Promise.resolve(),
+          resetState() {},
           getStats: () => zeroMetrics,
         }),
         paramSets: [],

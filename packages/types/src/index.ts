@@ -270,6 +270,7 @@ export interface IPositionManager {
   hasOpenPosition(symbol: Symbol): boolean;
   hasPendingOrder(symbol: Symbol): boolean;
   getOpenPositions(): Position[];
+  resetAll(): void;
   dispose(): void;
 }
 
@@ -587,8 +588,8 @@ export interface IStrategy {
   readonly name: string;
   start(): Promise<void>;
   stop(): Promise<void>;
-  // Live-only — returns running performance metrics during live trading.
-  // In backtest mode, results come from BacktestResult. Returns stub zeros in Phase 2.
+  /** Reset PM and risk state. Called by backtest engine between warmup and real period. */
+  resetState(): void;
   getStats(): PerformanceMetrics;
 }
 

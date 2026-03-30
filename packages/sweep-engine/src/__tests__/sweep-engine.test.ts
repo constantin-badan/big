@@ -67,6 +67,7 @@ const dummyFactory: StrategyFactory = (_params, _deps) => ({
   name: 'dummy',
   start: () => Promise.resolve(),
   stop: () => Promise.resolve(),
+  resetState() {},
   getStats: () => zeroMetrics,
 });
 

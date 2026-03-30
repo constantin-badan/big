@@ -75,6 +75,12 @@ export class Strategy implements IStrategy {
     this.config.riskManager.dispose();
   }
 
+  resetState(): void {
+    this.buffer.clear();
+    this.config.positionManager.resetAll();
+    this.config.riskManager.reset();
+  }
+
   getStats(): PerformanceMetrics {
     return {
       totalTrades: 0,

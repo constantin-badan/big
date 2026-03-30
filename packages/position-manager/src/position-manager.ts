@@ -665,6 +665,12 @@ export class PositionManager implements IPositionManager {
     return positions;
   }
 
+  resetAll(): void {
+    for (const symState of this.symbolStates.values()) {
+      this.resetToIdle(symState);
+    }
+  }
+
   dispose(): void {
     this.eventBus.off('tick', this.handleTick);
     this.eventBus.off('candle:close', this.handleCandleClose);

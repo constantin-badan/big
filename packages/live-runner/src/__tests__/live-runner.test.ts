@@ -48,6 +48,7 @@ function makeStrategy(): IStrategy {
     name: 'test-strategy',
     async start(): Promise<void> {},
     async stop(): Promise<void> {},
+    resetState() {},
     getStats() {
       return {
         totalTrades: 0,

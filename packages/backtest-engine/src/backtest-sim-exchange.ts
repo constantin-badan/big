@@ -186,6 +186,10 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
     };
   }
 
+  resetBalance(balance: number): void {
+    this.balance = balance;
+  }
+
   dispose(): void {
     this.bus.off('candle:close', this.handler);
   }

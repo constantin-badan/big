@@ -66,6 +66,7 @@ function stubFactory(): IStrategy {
     name: 'test',
     start: async () => {},
     stop: async () => {},
+    resetState() {},
     getStats: () => ZERO_METRICS,
   };
 }

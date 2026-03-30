@@ -33,10 +33,9 @@ const PARITY_END_DATE = new Date(Date.UTC(TODAY.getUTCFullYear(), TODAY.getUTCMo
 const PARITY_START_DATE = new Date(PARITY_END_DATE.getTime() - 4 * 24 * 60 * 60 * 1000); // 4 days back
 const PARITY_START = PARITY_START_DATE.getTime();
 const PARITY_END = PARITY_END_DATE.getTime();
-// TV free tier loads ~5 days of 5m data. TV computes RSI from the first
-// visible bar. To match: load 1 extra day before our period start so
-// indicators warm up, but not so much that warmup trades leak state.
-const WARMUP_MS = 1 * 24 * 60 * 60 * 1000; // 1 day = 288 candles
+// 90 days warmup for indicator convergence. The engine resets PM state
+// after warmup so stale positions don't leak into the real period.
+const WARMUP_MS = 90 * 24 * 60 * 60 * 1000;
 
 const INITIAL_BALANCE = 10_000;
 const FEE_MAKER = 0.0002;

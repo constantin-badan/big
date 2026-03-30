@@ -148,6 +148,7 @@ function tradingFactory(buyAt: number, sellAt: number): StrategyFactory {
         deps.bus.off('candle:close', handler);
         return Promise.resolve();
       },
+      resetState() {},
       getStats: () => zeroMetrics,
     };
     return strategy;
@@ -566,6 +567,7 @@ describe('createBacktestEngine', () => {
           deps.bus.off('order:filled', fillHandler);
           return Promise.resolve();
         },
+        resetState() {},
         getStats: () => zeroMetrics,
       };
     };

@@ -47,6 +47,7 @@ function makePositionManager(): IPositionManager & { disposeCount: number } {
     getOpenPositions() {
       return [];
     },
+    resetAll() {},
     dispose() {
       disposeCount++;
     },

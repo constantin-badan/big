@@ -64,8 +64,17 @@ export function createBacktestEngine(
         candleMap.set(key, candles);
       }
 
-      // 5. Create replay data feed
-      const dataFeed = new ReplayDataFeed(bus, candleMap);
+      // 5. Split candles into warmup and real periods
+      const warmupCandleMap = new Map<string, Candle[]>();
+      const realCandleMap = new Map<string, Candle[]>();
+      for (const [key, candles] of candleMap) {
+        if (warmupMs > 0) {
+          warmupCandleMap.set(key, candles.filter((c) => c.closeTime < config.startTime));
+          realCandleMap.set(key, candles.filter((c) => c.closeTime >= config.startTime));
+        } else {
+          realCandleMap.set(key, candles);
+        }
+      }
 
       // 6. Collect trades from position:closed events
       const trades: TradeRecord[] = [];
@@ -77,12 +86,26 @@ export function createBacktestEngine(
       // 7. Create strategy via factory
       const strategy = factory(params, { bus, exchange, executor });
 
-      // 8-10. Run strategy with guaranteed cleanup
+      // 8. Run warmup + real replay with guaranteed cleanup
       let strategyStarted = false;
       try {
         await strategy.start();
         strategyStarted = true;
-        await dataFeed.start(config.symbols, config.timeframes);
+
+        // Phase 1: replay warmup candles (indicators warm up)
+        if (warmupMs > 0) {
+          const warmupFeed = new ReplayDataFeed(bus, warmupCandleMap);
+          await warmupFeed.start(config.symbols, config.timeframes);
+
+          // Reset PM, risk, exchange — start real period clean
+          strategy.resetState();
+          exchange.resetBalance(initialBalance);
+          trades.length = 0;
+        }
+
+        // Phase 2: replay real candles
+        const realFeed = new ReplayDataFeed(bus, realCandleMap);
+        await realFeed.start(config.symbols, config.timeframes);
       } finally {
         if (strategyStarted) {
           try {
@@ -95,10 +118,8 @@ export function createBacktestEngine(
         exchange.dispose();
       }
 
-      // 11. Discard trades that entered during the warmup period
-      const validTrades = warmupMs > 0
-        ? trades.filter((t) => t.entryTime >= config.startTime)
-        : trades;
+      // 9. All trades are from the real period
+      const validTrades = trades;
 
       // 12. Compute metrics and return result
       const metrics = computeMetrics(
