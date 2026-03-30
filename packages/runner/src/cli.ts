@@ -27,7 +27,7 @@ async function tournament(): Promise<void> {
   // Fetch top 30 symbols by volume for diverse tournament pool
   console.log('Fetching top symbols by volume...');
   const { fetchTopSymbols } = await import('./fetch-top-symbols');
-  const symbols = await fetchTopSymbols(30);
+  const symbols = await fetchTopSymbols(150);
   console.log(`Pool: ${String(symbols.length)} symbols`);
 
   // Sync 90 days of 5m data for all pool symbols
