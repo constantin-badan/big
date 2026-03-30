@@ -27,9 +27,9 @@ import { generatePineScript } from './generator';
 
 const SYMBOL: Symbol = toSymbol('BTCUSDT');
 const TIMEFRAME: Timeframe = '5m';
-// January 2026
-const PARITY_START = Date.UTC(2026, 0, 1, 0, 0, 0);   // 2026-01-01 00:00 UTC
-const PARITY_END = Date.UTC(2026, 1, 1, 0, 0, 0);     // 2026-02-01 00:00 UTC
+// Last 5 days (TV free tier limit for 5m chart)
+const PARITY_START = Date.UTC(2026, 2, 26, 0, 0, 0);   // 2026-03-26 00:00 UTC
+const PARITY_END = Date.UTC(2026, 2, 30, 0, 0, 0);     // 2026-03-30 00:00 UTC
 const WARMUP_MS = 150 * 300_000; // 150 candles × 5m = 750 min
 
 const INITIAL_BALANCE = 10_000;
@@ -137,7 +137,7 @@ async function runParityBacktest(config: StrategyConfig): Promise<BacktestResult
 function generateParityPine(config: StrategyConfig, result: BacktestResult): string {
   const parityConfig = {
     ...config,
-    dateRange: { startYear: 2026, startMonth: 1, startDay: 1, endYear: 2026, endMonth: 2, endDay: 1 },
+    dateRange: { startYear: 2026, startMonth: 3, startDay: 26, endYear: 2026, endMonth: 3, endDay: 30 },
   };
   const basePine = generatePineScript(parityConfig);
 
@@ -150,7 +150,7 @@ function generateParityPine(config: StrategyConfig, result: BacktestResult): str
     `// ═══════════════════════════════════════════════════════════`,
     `// Symbol:    BTCUSDT`,
     `// Timeframe: 5m`,
-    `// Period:    2026-01-01 -> 2026-02-01`,
+    `// Period:    2026-03-26 -> 2026-03-30`,
     `// Capital:   $${String(INITIAL_BALANCE)}`,
     `// Position:  ${String(POSITION_SIZE_PCT)}% of equity`,
     `// Fees:      maker ${String(FEE_MAKER * 100)}% / taker ${String(FEE_TAKER * 100)}%`,
@@ -187,7 +187,7 @@ async function ensureData(): Promise<void> {
   const storage = createStorage(DB_PATH);
   const fetcher = createBinanceFetcher();
 
-  console.log('Syncing BTCUSDT 5m data for Jan 2026 (+ warmup)...');
+  console.log('Syncing BTCUSDT 5m data for Mar 26-30 2026 (+ warmup)...');
   const syncResults = await syncCandles(storage.candles, fetcher, [{
     symbol: SYMBOL,
     timeframe: TIMEFRAME,
@@ -221,7 +221,7 @@ export async function runParity(inputPath: string, outputDir: string): Promise<v
   // Ensure candle data is available
   await ensureData();
 
-  console.log(`\nRunning ${String(data.robust.length)} parity backtests (BTCUSDT 5m, Jan 2026)...\n`);
+  console.log(`\nRunning ${String(data.robust.length)} parity backtests (BTCUSDT 5m, Mar 26-30 2026)...\n`);
 
   for (const entry of data.robust) {
     const label = entry.candidateId ?? entry.templateName;
@@ -240,7 +240,7 @@ export async function runParity(inputPath: string, outputDir: string): Promise<v
 
   console.log('\nDone. Open each .pine file in TradingView:');
   console.log('  1. Set chart to BTCUSDT, 5m');
-  console.log('  2. Set date range to 2026-01-01 -> 2026-02-01');
+  console.log('  2. Set date range to 2026-03-26 -> 2026-03-30');
   console.log('  3. Compare TV results against the comments at the top');
 }
 
@@ -253,7 +253,7 @@ async function main(): Promise<void> {
   if (!inputPath) {
     console.error('Usage: bun run pine-gen/src/parity.ts <robust.json> [output-dir]');
     console.error('');
-    console.error('Runs backtests on BTCUSDT 5m for Jan 2026 and generates Pine scripts');
+    console.error('Runs backtests on BTCUSDT 5m for Mar 26-30 2026 and generates Pine scripts');
     console.error('with embedded results for parity testing against TradingView.');
     process.exit(1);
   }
