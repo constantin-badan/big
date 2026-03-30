@@ -37,10 +37,10 @@ const TIMEFRAME_MS: Record<Timeframe, number> = {
   '1h': 3_600_000, '4h': 14_400_000, '1d': 86_400_000,
 };
 
-/** 150 candles of the largest timeframe — covers most indicator warmup periods. */
+/** 100 candles warmup — enough for indicators, doesn't eat into 1-week periods. */
 function computeWarmupMs(timeframes: Timeframe[]): number {
   const maxTfMs = Math.max(...timeframes.map((tf) => TIMEFRAME_MS[tf]));
-  return 500 * maxTfMs;
+  return 100 * maxTfMs;
 }
 import { fetchTopSymbols } from './fetch-top-symbols';
 import { createPrng } from './prng';
@@ -200,19 +200,15 @@ async function runStage(
     });
   }
 
-  // Kill zero-trade candidates regardless of PnL — they survived by not playing
-  for (const r of results) {
-    if (r.totalTrades === 0) r.totalPnl = -Infinity;
-  }
-
-  // Rank by total PnL and mark survivors
+  // Rank by total PnL. Zero-trade candidates rank at 0 PnL (neutral).
+  // They survive if within the keep threshold — some strategies legitimately
+  // produce few trades on a single coin/week.
   results.sort((a, b) => b.totalPnl - a.totalPnl);
   const killCount = Math.floor(results.length * stageConfig.killRate);
   const surviveCount = results.length - killCount;
 
   for (let i = 0; i < results.length; i++) {
-    // Zero-trade candidates are always killed
-    results[i]!.survived = i < surviveCount && results[i]!.totalTrades > 0;
+    results[i]!.survived = i < surviveCount;
   }
 
   return results;
