@@ -43,7 +43,8 @@ export class RestClient {
     const after = Date.now();
     this.tokens = Math.min(this.maxTokens, this.tokens + (after - this.lastRefillTime) * this.refillRate);
     this.lastRefillTime = after;
-    this.tokens -= weight;
+    // Guard: concurrent callers may have consumed tokens during our wait
+    this.tokens = Math.max(0, this.tokens - weight);
   }
 
   async restGet(path: string, params: Record<string, string | number>): Promise<unknown> {

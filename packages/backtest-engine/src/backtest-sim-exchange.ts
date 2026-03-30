@@ -38,7 +38,7 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
     candle: Candle;
   }) => void;
   private orderCounter = 0;
-  private currentTimestamp = 0;
+  private currentTimestamp = Date.now(); // fallback; overwritten by first candle:close
 
   constructor(bus: IEventBus, config: BacktestExchangeConfig) {
     this.bus = bus;

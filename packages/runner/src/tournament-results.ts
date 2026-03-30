@@ -76,11 +76,13 @@ function getFinalRankings(state: TournamentState): RankedCandidate[] {
     candidateMap.set(c.id, c);
   }
 
-  return lastResults.map((r, i) => ({
-    rank: i + 1,
-    candidate: candidateMap.get(r.candidateId)!,
-    lastStageResult: r,
-  }));
+  return lastResults
+    .filter((r) => candidateMap.has(r.candidateId))
+    .map((r, i) => ({
+      rank: i + 1,
+      candidate: candidateMap.get(r.candidateId)!,
+      lastStageResult: r,
+    }));
 }
 
 function formatCandidate(rc: RankedCandidate): string {

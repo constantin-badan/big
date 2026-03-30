@@ -229,11 +229,11 @@ export class Dashboard {
     });
 
     this.sub('exchange:connected', (data: { stream: ExchangeStream; symbol: string; timestamp: number }) => {
-      this.state.connectionStatus.set(data.stream, true);
+      this.state.connectionStatus.set(`${data.stream}:${data.symbol}`, true);
     });
 
     this.sub('exchange:disconnected', (data: { stream: ExchangeStream; symbol: string; reason: string; timestamp: number }) => {
-      this.state.connectionStatus.set(data.stream, false);
+      this.state.connectionStatus.set(`${data.stream}:${data.symbol}`, false);
     });
   }
 

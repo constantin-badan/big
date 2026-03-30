@@ -32,6 +32,7 @@ type SymbolState = {
   entryTime: number | null;
   exitReason: TradeRecord['exitReason'] | null;
   safetyStopOrderId: OrderId | null;
+  safetyStopPending: Promise<void> | null;
 };
 
 function makeSymbolState(): SymbolState {
@@ -46,6 +47,7 @@ function makeSymbolState(): SymbolState {
     entryTime: null,
     exitReason: null,
     safetyStopOrderId: null,
+    safetyStopPending: null,
   };
 }
 
@@ -285,7 +287,7 @@ export class PositionManager implements IPositionManager {
           ? fillPrice * (1 - mult * this.config.defaultStopLossPct / 100)
           : fillPrice * (1 + mult * this.config.defaultStopLossPct / 100);
         const exitSide = isLong ? 'SELL' : 'BUY';
-        void this.placeSafetyStop(symbol, symState, safetyPrice, exitSide, order.filledQuantity);
+        symState.safetyStopPending = this.placeSafetyStop(symbol, symState, safetyPrice, exitSide, order.filledQuantity);
       }
 
       const position = this.buildPositionFromEntry(symbol, order);
@@ -392,6 +394,7 @@ export class PositionManager implements IPositionManager {
       });
       symState.safetyStopOrderId = result.orderId;
     } catch (err) {
+      symState.safetyStopPending = null;
       this.eventBus.emit('error', {
         source: 'position-manager',
         error: err instanceof Error ? err : new Error(String(err)),
@@ -401,6 +404,11 @@ export class PositionManager implements IPositionManager {
   }
 
   private async cancelSafetyStop(symbol: Symbol, symState: SymbolState): Promise<void> {
+    // Wait for placement to finish so we have the order ID to cancel
+    if (symState.safetyStopPending) {
+      await symState.safetyStopPending;
+      symState.safetyStopPending = null;
+    }
     const orderId = symState.safetyStopOrderId;
     symState.safetyStopOrderId = null;
     if (orderId === null) return;
@@ -437,6 +445,7 @@ export class PositionManager implements IPositionManager {
     symState.entryTime = null;
     symState.exitReason = null;
     symState.safetyStopOrderId = null;
+    symState.safetyStopPending = null;
   }
 
   private evaluateSLTP(symbol: Symbol, price: number, timestamp: number): void {
