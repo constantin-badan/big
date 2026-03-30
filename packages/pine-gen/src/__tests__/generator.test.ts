@@ -52,7 +52,40 @@ describe('generatePineScript', () => {
     });
 
     expect(pine).toContain('Breakeven');
+    expect(pine).toContain('beEntryLong');
     expect(pine).toContain('longBeActive');
+    // Must NOT redefine longEntry/shortEntry — those are bool entry conditions
+    expect(pine).not.toContain('var float longEntry');
+    expect(pine).not.toContain('var float shortEntry');
+  });
+
+  test('no variable name collisions with breakeven + all features', () => {
+    const pine = generatePineScript({
+      templateName: 'rsi-reversal',
+      scannerParams: { rsiPeriod: 14, oversold: 25, overbought: 75 },
+      pmParams: {
+        stopLossPct: 2, takeProfitPct: 5, maxHoldTimeHours: 8,
+        breakevenPct: 1.0, trailingActivationPct: 1.5, trailingDistancePct: 0.5,
+      },
+    });
+
+    // longEntry should appear exactly as a bool assignment, not as float
+    const longEntryAssignments = pine.match(/^longEntry\s*=/gm);
+    expect(longEntryAssignments).not.toBeNull();
+    expect(longEntryAssignments!.length).toBe(1); // only the bool condition
+
+    // No 'var float longEntry' or 'var float shortEntry'
+    expect(pine).not.toContain('var float longEntry');
+    expect(pine).not.toContain('var float shortEntry');
+
+    // Breakeven uses beEntryLong/beEntryShort
+    expect(pine).toContain('var float beEntryLong');
+    expect(pine).toContain('var float beEntryShort');
+
+    // All features present
+    expect(pine).toContain('Breakeven');
+    expect(pine).toContain('Trailing stop');
+    expect(pine).toContain('Timeout');
   });
 
   test('includes timeout', () => {

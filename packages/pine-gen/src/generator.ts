@@ -262,18 +262,18 @@ function generateExitLogic(pm: Record<string, number>): string {
   // Breakeven SL
   if (breakeven > 0) {
     lines.push(`// Breakeven: move SL to entry after ${flt(breakeven)}% profit`);
-    lines.push(`var float longEntry = na`);
-    lines.push(`var float shortEntry = na`);
-    lines.push(`if strategy.position_size > 0 and na(longEntry)`);
-    lines.push(`    longEntry := strategy.position_avg_price`);
-    lines.push(`if strategy.position_size < 0 and na(shortEntry)`);
-    lines.push(`    shortEntry := strategy.position_avg_price`);
+    lines.push(`var float beEntryLong = na`);
+    lines.push(`var float beEntryShort = na`);
+    lines.push(`if strategy.position_size > 0 and na(beEntryLong)`);
+    lines.push(`    beEntryLong := strategy.position_avg_price`);
+    lines.push(`if strategy.position_size < 0 and na(beEntryShort)`);
+    lines.push(`    beEntryShort := strategy.position_avg_price`);
     lines.push(`if strategy.position_size == 0`);
-    lines.push(`    longEntry := na`);
-    lines.push(`    shortEntry := na`);
+    lines.push(`    beEntryLong := na`);
+    lines.push(`    beEntryShort := na`);
     lines.push(``);
-    lines.push(`longBePct = strategy.position_size > 0 and not na(longEntry) ? (high - longEntry) / longEntry * 100 : 0`);
-    lines.push(`shortBePct = strategy.position_size < 0 and not na(shortEntry) ? (shortEntry - low) / shortEntry * 100 : 0`);
+    lines.push(`longBePct = strategy.position_size > 0 and not na(beEntryLong) ? (high - beEntryLong) / beEntryLong * 100 : 0.0`);
+    lines.push(`shortBePct = strategy.position_size < 0 and not na(beEntryShort) ? (beEntryShort - low) / beEntryShort * 100 : 0.0`);
     lines.push(`longBeActive = longBePct >= ${flt(breakeven)}`);
     lines.push(`shortBeActive = shortBePct >= ${flt(breakeven)}`);
     lines.push(``);
