@@ -10,6 +10,8 @@ interface StrategyConfig {
   templateName: string;
   scannerParams: Record<string, number>;
   pmParams: Record<string, number>;
+  /** If set, restrict entries to this date range (UTC). */
+  dateRange?: { startYear: number; startMonth: number; startDay: number; endYear: number; endMonth: number; endDay: number };
 }
 
 // ─── Entry Logic Generators ────────────────────────────────────────
@@ -324,29 +326,39 @@ export function generatePineScript(config: StrategyConfig): string {
   const label = candidateId ?? `${templateName}-custom`;
   const sl = flt(pmParams.stopLossPct ?? 2);
   const tp = flt(pmParams.takeProfitPct ?? 4);
+  const dr = config.dateRange;
+
+  const dateFilter = dr
+    ? `\n// ─── Date Range Filter ─────────────────────────────────────────\ninDateRange = time >= timestamp(${String(dr.startYear)}, ${String(dr.startMonth)}, ${String(dr.startDay)}, 0, 0) and time < timestamp(${String(dr.endYear)}, ${String(dr.endMonth)}, ${String(dr.endDay)}, 0, 0)\n`
+    : '';
+
+  const entryGuard = dr ? 'inDateRange and ' : '';
+  const dateClose = dr
+    ? `\n// Close all positions when exiting date range\nif not inDateRange and strategy.position_size != 0\n    strategy.close_all("Date Range End")\n`
+    : '';
 
   return `//@version=6
 strategy("${label}", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=5, commission_type=strategy.commission.percent, commission_value=0.04, slippage=1, initial_capital=10000)
 
 // ─── Indicators ────────────────────────────────────────────────
 ${entry.indicators}
-
+${dateFilter}
 // ─── Entry Conditions ──────────────────────────────────────────
-longEntry = ${entry.longCondition}
-shortEntry = ${entry.shortCondition}
+longCond = ${entry.longCondition}
+shortCond = ${entry.shortCondition}
 
 // ─── Execute Entries ───────────────────────────────────────────
-if longEntry
+if ${entryGuard}longCond
     strategy.entry("Long", strategy.long)
-if shortEntry
+if ${entryGuard}shortCond
     strategy.entry("Short", strategy.short)
 
 // ─── Exit Logic (SL=${sl}% TP=${tp}%) ──────────────────────────
 ${exit}
-
+${dateClose}
 // ─── Plot ──────────────────────────────────────────────────────
-plotshape(longEntry, "Long Signal", shape.triangleup, location.belowbar, color.green, size=size.small)
-plotshape(shortEntry, "Short Signal", shape.triangledown, location.abovebar, color.red, size=size.small)
+plotshape(${entryGuard}longCond, "Long Signal", shape.triangleup, location.belowbar, color.green, size=size.small)
+plotshape(${entryGuard}shortCond, "Short Signal", shape.triangledown, location.abovebar, color.red, size=size.small)
 `;
 }
 

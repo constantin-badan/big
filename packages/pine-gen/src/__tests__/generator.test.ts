@@ -15,9 +15,11 @@ describe('generatePineScript', () => {
     expect(pine).toContain('ta.rsi(close, 8)');
     expect(pine).toContain('<= 15 and rsiVal > 15');
     expect(pine).toContain('>= 68 and rsiVal < 68');
-    expect(pine).toContain('strategy.entry("Long"');
-    expect(pine).toContain('strategy.entry("Short"');
+    expect(pine).toContain('strategy.entry("Long", strategy.long)');
+    expect(pine).toContain('strategy.entry("Short", strategy.short)');
     expect(pine).toContain('strategy.exit');
+    // Without dateRange, no date filter
+    expect(pine).not.toContain('inDateRange');
   });
 
   test('generates valid Pine for ema-crossover', () => {
@@ -54,7 +56,6 @@ describe('generatePineScript', () => {
     expect(pine).toContain('Breakeven');
     expect(pine).toContain('beEntryLong');
     expect(pine).toContain('longBeActive');
-    // Must NOT redefine longEntry/shortEntry — those are bool entry conditions
     expect(pine).not.toContain('var float longEntry');
     expect(pine).not.toContain('var float shortEntry');
   });
@@ -69,12 +70,11 @@ describe('generatePineScript', () => {
       },
     });
 
-    // longEntry should appear exactly as a bool assignment, not as float
-    const longEntryAssignments = pine.match(/^longEntry\s*=/gm);
-    expect(longEntryAssignments).not.toBeNull();
-    expect(longEntryAssignments!.length).toBe(1); // only the bool condition
+    // longCond is the entry condition variable
+    expect(pine).toContain('longCond =');
+    expect(pine).toContain('shortCond =');
 
-    // No 'var float longEntry' or 'var float shortEntry'
+    // No float variable name collisions
     expect(pine).not.toContain('var float longEntry');
     expect(pine).not.toContain('var float shortEntry');
 
@@ -98,6 +98,28 @@ describe('generatePineScript', () => {
     expect(pine).toContain('Timeout');
     expect(pine).toContain('strategy.close_all("Timeout")');
     expect(pine).toContain('ta.macd');
+  });
+
+  test('adds date range filter when dateRange is set', () => {
+    const pine = generatePineScript({
+      templateName: 'rsi-reversal',
+      scannerParams: { rsiPeriod: 14 },
+      pmParams: { stopLossPct: 2, takeProfitPct: 5, maxHoldTimeHours: 8 },
+      dateRange: { startYear: 2026, startMonth: 1, startDay: 1, endYear: 2026, endMonth: 2, endDay: 1 },
+    });
+
+    // Date range filter present
+    expect(pine).toContain('inDateRange = time >= timestamp(2026, 1, 1, 0, 0) and time < timestamp(2026, 2, 1, 0, 0)');
+
+    // Entries guarded by date range
+    expect(pine).toContain('if inDateRange and longCond');
+    expect(pine).toContain('if inDateRange and shortCond');
+
+    // Close positions at end of date range
+    expect(pine).toContain('strategy.close_all("Date Range End")');
+
+    // Plots also guarded
+    expect(pine).toContain('plotshape(inDateRange and longCond');
   });
 
   test('throws for unknown template', () => {

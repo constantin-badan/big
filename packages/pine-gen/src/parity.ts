@@ -135,7 +135,11 @@ async function runParityBacktest(config: StrategyConfig): Promise<BacktestResult
 // ─── Pine Script with Parity Results ───────────────────────────
 
 function generateParityPine(config: StrategyConfig, result: BacktestResult): string {
-  const basePine = generatePineScript(config);
+  const parityConfig = {
+    ...config,
+    dateRange: { startYear: 2026, startMonth: 1, startDay: 1, endYear: 2026, endMonth: 2, endDay: 1 },
+  };
+  const basePine = generatePineScript(parityConfig);
 
   const m = result.metrics;
   const trades = result.trades.sort((a, b) => a.entryTime - b.entryTime);
