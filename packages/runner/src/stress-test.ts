@@ -302,7 +302,8 @@ function printResults(results: StressResult[]): void {
       console.log(`    Tournament: $${r.tournamentPnl.toFixed(2)}`);
       console.log(`    Stress:     $${r.stressPnl.toFixed(2)}  (${r.degradation > 0 ? '+' : ''}${r.degradation.toFixed(0)}%)${arrow}`);
       const avgTpd = r.stressTotalRuns > 0 ? (r.stressTrades / (r.stressTotalRuns * 7)).toFixed(1) : '?';
-      console.log(`    Trades: ${String(r.stressTrades)} (${avgTpd}/day)  Profitable: ${String(r.stressProfitableRuns)}/${String(r.stressTotalRuns)} runs  AvgPF: ${r.stressAvgPF.toFixed(2)}  MaxDD: ${r.stressMaxDD.toFixed(1)}%`);
+      const avgPnl = r.stressTrades > 0 ? (r.stressPnl / r.stressTrades).toFixed(2) : '?';
+      console.log(`    Trades: ${String(r.stressTrades)} (${avgTpd}/day, avg $${avgPnl})  Profitable: ${String(r.stressProfitableRuns)}/${String(r.stressTotalRuns)} runs  AvgPF: ${r.stressAvgPF.toFixed(2)}  MaxDD: ${r.stressMaxDD.toFixed(1)}%`);
       console.log('');
     }
   }
@@ -311,10 +312,11 @@ function printResults(results: StressResult[]): void {
     console.log('--- FAILED (likely overfit) ---');
     for (const r of failed) {
       const avgTpd = r.stressTotalRuns > 0 ? (r.stressTrades / (r.stressTotalRuns * 7)).toFixed(1) : '?';
+      const avgPnl = r.stressTrades > 0 ? (r.stressPnl / r.stressTrades).toFixed(2) : '?';
       console.log(`  ${r.candidateId} [${r.templateName}]`);
       console.log(`    Tournament: $${r.tournamentPnl.toFixed(2)}`);
       console.log(`    Stress:     $${r.stressPnl.toFixed(2)}  (${r.degradation.toFixed(0)}%)`);
-      console.log(`    Trades: ${String(r.stressTrades)} (${avgTpd}/day)  Profitable: ${String(r.stressProfitableRuns)}/${String(r.stressTotalRuns)} runs`);
+      console.log(`    Trades: ${String(r.stressTrades)} (${avgTpd}/day, avg $${avgPnl})  Profitable: ${String(r.stressProfitableRuns)}/${String(r.stressTotalRuns)} runs`);
       console.log('');
     }
   }
@@ -506,6 +508,8 @@ export async function runStressTest(argv: string[]): Promise<void> {
           stress: {
             pnl: r.stressPnl,
             trades: r.stressTrades,
+            avgTradesPerDay: r.stressTotalRuns > 0 ? r.stressTrades / (r.stressTotalRuns * 7) : 0,
+            avgTradePnl: r.stressTrades > 0 ? r.stressPnl / r.stressTrades : 0,
             profitableRuns: r.stressProfitableRuns,
             totalRuns: r.stressTotalRuns,
             avgProfitFactor: r.stressAvgPF,
