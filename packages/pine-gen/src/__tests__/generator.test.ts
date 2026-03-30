@@ -54,13 +54,27 @@ describe('generatePineScript', () => {
     });
 
     expect(pine).toContain('Breakeven');
-    expect(pine).toContain('beEntryLong');
-    expect(pine).toContain('longBeActive');
-    expect(pine).not.toContain('var float longEntry');
-    expect(pine).not.toContain('var float shortEntry');
+    expect(pine).toContain('slPrice := entryPrice');
   });
 
-  test('no variable name collisions with breakeven + all features', () => {
+  test('uses fixed SL/TP price levels from entry', () => {
+    const pine = generatePineScript({
+      templateName: 'rsi-reversal',
+      scannerParams: { rsiPeriod: 14 },
+      pmParams: { stopLossPct: 2, takeProfitPct: 5, maxHoldTimeHours: 8 },
+    });
+
+    // SL/TP computed from entry price, not current close
+    expect(pine).toContain('var float entryPrice = na');
+    expect(pine).toContain('var float slPrice = na');
+    expect(pine).toContain('var float tpPrice = na');
+    expect(pine).toContain('stop=slPrice, limit=tpPrice');
+    // No tick-based profit/loss
+    expect(pine).not.toContain('profit=close');
+    expect(pine).not.toContain('loss=close');
+  });
+
+  test('all PM features work together without collisions', () => {
     const pine = generatePineScript({
       templateName: 'rsi-reversal',
       scannerParams: { rsiPeriod: 14, oversold: 25, overbought: 75 },
@@ -70,22 +84,12 @@ describe('generatePineScript', () => {
       },
     });
 
-    // longCond is the entry condition variable
     expect(pine).toContain('longCond =');
     expect(pine).toContain('shortCond =');
-
-    // No float variable name collisions
-    expect(pine).not.toContain('var float longEntry');
-    expect(pine).not.toContain('var float shortEntry');
-
-    // Breakeven uses beEntryLong/beEntryShort
-    expect(pine).toContain('var float beEntryLong');
-    expect(pine).toContain('var float beEntryShort');
-
-    // All features present
     expect(pine).toContain('Breakeven');
     expect(pine).toContain('Trailing stop');
     expect(pine).toContain('Timeout');
+    expect(pine).toContain('stop=slPrice, limit=tpPrice');
   });
 
   test('includes timeout', () => {

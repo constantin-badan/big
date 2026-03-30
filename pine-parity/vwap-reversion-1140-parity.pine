@@ -1,0 +1,94 @@
+// ═══════════════════════════════════════════════════════════
+// PARITY TEST — compare these results against TradingView
+// ═══════════════════════════════════════════════════════════
+// Symbol:    BTCUSDT
+// Timeframe: 5m
+// Period:    2026-03-26 -> 2026-03-30
+// Capital:   $10000
+// Position:  5% of equity
+// Fees:      maker 0.02% / taker 0.04%
+// Slippage:  5 bps
+//
+// ─── OUR BACKTEST RESULTS ───────────────────────────────
+// Final Balance:  $9995.78
+// Net PnL:        $-4.22
+// Total Trades:   2
+// Win Rate:       50.0%
+// Profit Factor:  0.10
+// Max Drawdown:   0.05%
+// Avg Win:        $0.49
+// Avg Loss:       $-4.71
+// Total Fees:     $0.80
+// Total Slippage: $0.00
+//
+// ─── TRADE LOG (2 trades) ────────────────────────
+//   #  1 L entry=68422.99 exit=68544.81 pnl=+0.49 fees=0.40 TIMEOUT  2026-03-26 18:04:59 UTC -> 2026-03-27 07:09:59 UTC
+//   #  2 L entry=66880.02 exit=66303.33 pnl=-4.71 fees=0.40 TIMEOUT  2026-03-27 10:44:59 UTC -> 2026-03-27 23:49:59 UTC
+// ═══════════════════════════════════════════════════════════
+
+//@version=6
+strategy("vwap-reversion-1140", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=5, commission_type=strategy.commission.percent, commission_value=0.04, slippage=1, initial_capital=10000, close_entries_rule="FIFO", process_orders_on_close=true)
+
+// ─── Indicators ────────────────────────────────────────────────
+vwapVal = ta.vwap
+vwapDev = ((close - vwapVal) / vwapVal) * 100
+
+// ─── Date Range Filter ─────────────────────────────────────────
+inDateRange = time >= timestamp(2026, 3, 26, 0, 0) and time < timestamp(2026, 3, 30, 0, 0)
+
+// ─── Entry Conditions ──────────────────────────────────────────
+longCond = vwapDev <= -1.8
+shortCond = vwapDev >= 1.8
+
+// ─── Execute Entries ───────────────────────────────────────────
+isFlat = strategy.position_size == 0
+if isFlat and inDateRange and longCond
+    strategy.entry("Long", strategy.long)
+if isFlat and inDateRange and shortCond
+    strategy.entry("Short", strategy.short)
+
+// ─── Exit Logic (SL=2.0% TP=7.5%) ──────────────────────────
+// Track entry and compute fixed SL/TP price levels from entry
+var float entryPrice = na
+var float slPrice = na
+var float tpPrice = na
+var int entryBarIdx = na
+var int posDir = 0  // 1=long, -1=short, 0=flat
+
+// Detect new position entry
+if strategy.position_size > 0 and posDir != 1
+    entryPrice := strategy.position_avg_price
+    slPrice := entryPrice * (1.0 - 2.0 / 100.0)
+    tpPrice := entryPrice * (1.0 + 7.5 / 100.0)
+    entryBarIdx := bar_index
+    posDir := 1
+if strategy.position_size < 0 and posDir != -1
+    entryPrice := strategy.position_avg_price
+    slPrice := entryPrice * (1.0 + 2.0 / 100.0)
+    tpPrice := entryPrice * (1.0 - 7.5 / 100.0)
+    entryBarIdx := bar_index
+    posDir := -1
+if strategy.position_size == 0
+    entryPrice := na
+    slPrice := na
+    tpPrice := na
+    entryBarIdx := na
+    posDir := 0
+
+// SL/TP at fixed price levels (computed once at entry)
+if posDir == 1 and not na(slPrice)
+    strategy.exit("Long Exit", "Long", stop=slPrice, limit=tpPrice)
+if posDir == -1 and not na(slPrice)
+    strategy.exit("Short Exit", "Short", stop=slPrice, limit=tpPrice)
+
+// Timeout: close after 156 bars (~13h on 5m)
+if strategy.position_size != 0 and not na(entryBarIdx) and bar_index - entryBarIdx >= 156
+    strategy.close_all("Timeout")
+
+// Close all positions when exiting date range
+if not inDateRange and strategy.position_size != 0
+    strategy.close_all("Date Range End")
+
+// ─── Plot ──────────────────────────────────────────────────────
+plotshape(inDateRange and longCond, "Long Signal", shape.triangleup, location.belowbar, color.green, size=size.small)
+plotshape(inDateRange and shortCond, "Short Signal", shape.triangledown, location.abovebar, color.red, size=size.small)

@@ -252,8 +252,8 @@ const entryGenerators: Record<string, EntryGenerator> = {
 // ─── PM / Exit Logic ───────────────────────────────────────────────
 
 function generateExitLogic(pm: Record<string, number>): string {
-  const sl = flt(pm.stopLossPct ?? 2);
-  const tp = flt(pm.takeProfitPct ?? 4);
+  const slPct = flt(pm.stopLossPct ?? 2);
+  const tpPct = flt(pm.takeProfitPct ?? 4);
   const holdBars = Math.round((pm.maxHoldTimeHours ?? 4) * 12); // 5m candles per hour
   const trailActivation = pm.trailingActivationPct ?? 0;
   const trailDist = flt(pm.trailingDistancePct ?? 0.5);
@@ -261,49 +261,67 @@ function generateExitLogic(pm: Record<string, number>): string {
 
   const lines: string[] = [];
 
-  // Breakeven SL
+  // Track entry price and compute fixed SL/TP price levels (matches our engine)
+  lines.push(`// Track entry and compute fixed SL/TP price levels from entry`);
+  lines.push(`var float entryPrice = na`);
+  lines.push(`var float slPrice = na`);
+  lines.push(`var float tpPrice = na`);
+  lines.push(`var int entryBarIdx = na`);
+  lines.push(`var int posDir = 0  // 1=long, -1=short, 0=flat`);
+  lines.push(``);
+  lines.push(`// Detect new position entry`);
+  lines.push(`if strategy.position_size > 0 and posDir != 1`);
+  lines.push(`    entryPrice := strategy.position_avg_price`);
+  lines.push(`    slPrice := entryPrice * (1.0 - ${slPct} / 100.0)`);
+  lines.push(`    tpPrice := entryPrice * (1.0 + ${tpPct} / 100.0)`);
+  lines.push(`    entryBarIdx := bar_index`);
+  lines.push(`    posDir := 1`);
+  lines.push(`if strategy.position_size < 0 and posDir != -1`);
+  lines.push(`    entryPrice := strategy.position_avg_price`);
+  lines.push(`    slPrice := entryPrice * (1.0 + ${slPct} / 100.0)`);
+  lines.push(`    tpPrice := entryPrice * (1.0 - ${tpPct} / 100.0)`);
+  lines.push(`    entryBarIdx := bar_index`);
+  lines.push(`    posDir := -1`);
+  lines.push(`if strategy.position_size == 0`);
+  lines.push(`    entryPrice := na`);
+  lines.push(`    slPrice := na`);
+  lines.push(`    tpPrice := na`);
+  lines.push(`    entryBarIdx := na`);
+  lines.push(`    posDir := 0`);
+
+  // Breakeven
   if (breakeven > 0) {
+    lines.push(``);
     lines.push(`// Breakeven: move SL to entry after ${flt(breakeven)}% profit`);
-    lines.push(`var float beEntryLong = na`);
-    lines.push(`var float beEntryShort = na`);
-    lines.push(`if strategy.position_size > 0 and na(beEntryLong)`);
-    lines.push(`    beEntryLong := strategy.position_avg_price`);
-    lines.push(`if strategy.position_size < 0 and na(beEntryShort)`);
-    lines.push(`    beEntryShort := strategy.position_avg_price`);
-    lines.push(`if strategy.position_size == 0`);
-    lines.push(`    beEntryLong := na`);
-    lines.push(`    beEntryShort := na`);
-    lines.push(``);
-    lines.push(`longBePct = strategy.position_size > 0 and not na(beEntryLong) ? (high - beEntryLong) / beEntryLong * 100 : 0.0`);
-    lines.push(`shortBePct = strategy.position_size < 0 and not na(beEntryShort) ? (beEntryShort - low) / beEntryShort * 100 : 0.0`);
-    lines.push(`longBeActive = longBePct >= ${flt(breakeven)}`);
-    lines.push(`shortBeActive = shortBePct >= ${flt(breakeven)}`);
-    lines.push(``);
-    lines.push(`longSlPct = longBeActive ? 0.01 : ${sl}  // 0.01% = effectively at entry`);
-    lines.push(`shortSlPct = shortBeActive ? 0.01 : ${sl}`);
+    lines.push(`if posDir == 1 and not na(entryPrice) and high >= entryPrice * (1.0 + ${flt(breakeven)} / 100.0)`);
+    lines.push(`    slPrice := entryPrice`);
+    lines.push(`if posDir == -1 and not na(entryPrice) and low <= entryPrice * (1.0 - ${flt(breakeven)} / 100.0)`);
+    lines.push(`    slPrice := entryPrice`);
   }
 
-  const slVar = breakeven > 0 ? 'longSlPct' : sl;
-  const slVarShort = breakeven > 0 ? 'shortSlPct' : sl;
-
+  // SL/TP exits using fixed price levels
   lines.push(``);
-  lines.push(`// Exit: SL/TP`);
-  lines.push(`strategy.exit("Long Exit", "Long", profit=close * ${tp} / 100 / syminfo.mintick, loss=close * ${slVar} / 100 / syminfo.mintick)`);
-  lines.push(`strategy.exit("Short Exit", "Short", profit=close * ${tp} / 100 / syminfo.mintick, loss=close * ${slVarShort} / 100 / syminfo.mintick)`);
+  lines.push(`// SL/TP at fixed price levels (computed once at entry)`);
+  lines.push(`if posDir == 1 and not na(slPrice)`);
+  lines.push(`    strategy.exit("Long Exit", "Long", stop=slPrice, limit=tpPrice)`);
+  lines.push(`if posDir == -1 and not na(slPrice)`);
+  lines.push(`    strategy.exit("Short Exit", "Short", stop=slPrice, limit=tpPrice)`);
 
   // Trailing stop
   if (trailActivation > 0) {
     lines.push(``);
     lines.push(`// Trailing stop: activates at ${flt(trailActivation)}%, trails at ${trailDist}%`);
-    lines.push(`strategy.exit("Long Trail", "Long", trail_price=strategy.position_avg_price * (1 + ${flt(trailActivation)} / 100), trail_offset=close * ${trailDist} / 100 / syminfo.mintick)`);
-    lines.push(`strategy.exit("Short Trail", "Short", trail_price=strategy.position_avg_price * (1 - ${flt(trailActivation)} / 100), trail_offset=close * ${trailDist} / 100 / syminfo.mintick)`);
+    lines.push(`if posDir == 1 and not na(entryPrice)`);
+    lines.push(`    strategy.exit("Long Trail", "Long", trail_price=entryPrice * (1.0 + ${flt(trailActivation)} / 100.0), trail_offset=math.round(entryPrice * ${trailDist} / 100.0 / syminfo.mintick))`);
+    lines.push(`if posDir == -1 and not na(entryPrice)`);
+    lines.push(`    strategy.exit("Short Trail", "Short", trail_price=entryPrice * (1.0 - ${flt(trailActivation)} / 100.0), trail_offset=math.round(entryPrice * ${trailDist} / 100.0 / syminfo.mintick))`);
   }
 
   // Timeout
   if (holdBars > 0) {
     lines.push(``);
     lines.push(`// Timeout: close after ${String(holdBars)} bars (~${String(pm.maxHoldTimeHours ?? 4)}h on 5m)`);
-    lines.push(`if strategy.position_size != 0 and bar_index - strategy.opentrades.entry_bar_index(0) >= ${String(holdBars)}`);
+    lines.push(`if strategy.position_size != 0 and not na(entryBarIdx) and bar_index - entryBarIdx >= ${String(holdBars)}`);
     lines.push(`    strategy.close_all("Timeout")`);
   }
 
@@ -338,7 +356,7 @@ export function generatePineScript(config: StrategyConfig): string {
     : '';
 
   return `//@version=6
-strategy("${label}", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=5, commission_type=strategy.commission.percent, commission_value=0.04, slippage=1, initial_capital=10000, close_entries_rule="FIFO")
+strategy("${label}", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=5, commission_type=strategy.commission.percent, commission_value=0.04, slippage=1, initial_capital=10000, close_entries_rule="FIFO", process_orders_on_close=true)
 
 // ─── Indicators ────────────────────────────────────────────────
 ${entry.indicators}

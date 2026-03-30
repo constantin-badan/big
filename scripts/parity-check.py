@@ -34,8 +34,8 @@ WARMUP_START = PARITY_START - pd.Timedelta(days=1)
 
 # Strategy params (rsi-reversal-391)
 RSI_PERIOD = 13
-OVERSOLD = 26
-OVERBOUGHT = 74
+OVERSOLD = 21
+OVERBOUGHT = 68
 SL_PCT = 1.5   # stop loss %
 TP_PCT = 9.5   # take profit %
 TIMEOUT_BARS = 216  # 18h * 12 bars/h

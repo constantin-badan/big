@@ -1,0 +1,107 @@
+// ═══════════════════════════════════════════════════════════
+// PARITY TEST — compare these results against TradingView
+// ═══════════════════════════════════════════════════════════
+// Symbol:    BTCUSDT
+// Timeframe: 5m
+// Period:    2026-03-26 -> 2026-03-30
+// Capital:   $10000
+// Position:  5% of equity
+// Fees:      maker 0.02% / taker 0.04%
+// Slippage:  5 bps
+//
+// ─── OUR BACKTEST RESULTS ───────────────────────────────
+// Final Balance:  $10025.26
+// Net PnL:        $25.26
+// Total Trades:   15
+// Win Rate:       53.3%
+// Profit Factor:  3.34
+// Max Drawdown:   0.05%
+// Avg Win:        $4.51
+// Avg Loss:       $-1.54
+// Total Fees:     $6.00
+// Total Slippage: $0.00
+//
+// ─── TRADE LOG (15 trades) ────────────────────────
+//   #  1 S entry=71152.11 exit=70023.69 pnl=+7.53 fees=0.40 TIMEOUT  2026-03-26 00:54:59 UTC -> 2026-03-26 05:59:59 UTC
+//   #  2 L entry=70099.13 exit=69492.74 pnl=-4.73 fees=0.40 TIMEOUT  2026-03-26 06:09:59 UTC -> 2026-03-26 11:14:59 UTC
+//   #  3 S entry=69582.59 exit=68468.32 pnl=+7.61 fees=0.40 TIMEOUT  2026-03-26 13:59:59 UTC -> 2026-03-26 19:04:59 UTC
+//   #  4 S entry=68923.82 exit=69050.91 pnl=-1.32 fees=0.40 TIMEOUT  2026-03-26 20:54:59 UTC -> 2026-03-27 01:59:59 UTC
+//   #  5 S entry=68983.19 exit=68913.14 pnl=+0.11 fees=0.40 TIMEOUT  2026-03-27 02:14:59 UTC -> 2026-03-27 07:19:59 UTC
+//   #  6 S entry=68807.28 exit=66534.05 pnl=+16.13 fees=0.39 TIMEOUT  2026-03-27 07:24:59 UTC -> 2026-03-27 12:29:59 UTC
+//   #  7 L entry=65888.43 exit=65927.52 pnl=-0.10 fees=0.40 TIMEOUT  2026-03-27 14:34:59 UTC -> 2026-03-27 19:39:59 UTC
+//   #  8 S entry=65961.90 exit=66148.76 pnl=-1.82 fees=0.40 TIMEOUT  2026-03-27 20:09:59 UTC -> 2026-03-28 01:14:59 UTC
+//   #  9 S entry=66126.92 exit=66408.09 pnl=-2.53 fees=0.40 TIMEOUT  2026-03-28 03:54:59 UTC -> 2026-03-28 08:59:59 UTC
+//   # 10 L entry=66293.73 exit=66682.84 pnl=+2.54 fees=0.40 TIMEOUT  2026-03-28 09:54:59 UTC -> 2026-03-28 14:59:59 UTC
+//   # 11 S entry=66960.60 exit=66942.25 pnl=-0.26 fees=0.40 TIMEOUT  2026-03-28 15:29:59 UTC -> 2026-03-28 20:34:59 UTC
+//   # 12 L entry=66687.63 exit=66738.01 pnl=-0.02 fees=0.40 TIMEOUT  2026-03-28 22:04:59 UTC -> 2026-03-29 03:09:59 UTC
+//   # 13 S entry=66854.46 exit=66728.25 pnl=+0.55 fees=0.40 TIMEOUT  2026-03-29 03:44:59 UTC -> 2026-03-29 08:49:59 UTC
+//   # 14 S entry=66761.00 exit=66497.53 pnl=+1.58 fees=0.40 TIMEOUT  2026-03-29 11:49:59 UTC -> 2026-03-29 16:54:59 UTC
+//   # 15 L entry=66262.01 exit=66316.63 pnl=+0.01 fees=0.40 TIMEOUT  2026-03-29 17:29:59 UTC -> 2026-03-29 22:34:59 UTC
+// ═══════════════════════════════════════════════════════════
+
+//@version=6
+strategy("rsi-reversal-348", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=5, commission_type=strategy.commission.percent, commission_value=0.04, slippage=1, initial_capital=10000, close_entries_rule="FIFO", process_orders_on_close=true)
+
+// ─── Indicators ────────────────────────────────────────────────
+rsiVal = ta.rsi(close, 9)
+prevRsi = ta.rsi(close, 9)[1]
+
+// ─── Date Range Filter ─────────────────────────────────────────
+inDateRange = time >= timestamp(2026, 3, 26, 0, 0) and time < timestamp(2026, 3, 30, 0, 0)
+
+// ─── Entry Conditions ──────────────────────────────────────────
+longCond = prevRsi <= 22 and rsiVal > 22
+shortCond = prevRsi >= 65 and rsiVal < 65
+
+// ─── Execute Entries ───────────────────────────────────────────
+isFlat = strategy.position_size == 0
+if isFlat and inDateRange and longCond
+    strategy.entry("Long", strategy.long)
+if isFlat and inDateRange and shortCond
+    strategy.entry("Short", strategy.short)
+
+// ─── Exit Logic (SL=4.0% TP=6.0%) ──────────────────────────
+// Track entry and compute fixed SL/TP price levels from entry
+var float entryPrice = na
+var float slPrice = na
+var float tpPrice = na
+var int entryBarIdx = na
+var int posDir = 0  // 1=long, -1=short, 0=flat
+
+// Detect new position entry
+if strategy.position_size > 0 and posDir != 1
+    entryPrice := strategy.position_avg_price
+    slPrice := entryPrice * (1.0 - 4.0 / 100.0)
+    tpPrice := entryPrice * (1.0 + 6.0 / 100.0)
+    entryBarIdx := bar_index
+    posDir := 1
+if strategy.position_size < 0 and posDir != -1
+    entryPrice := strategy.position_avg_price
+    slPrice := entryPrice * (1.0 + 4.0 / 100.0)
+    tpPrice := entryPrice * (1.0 - 6.0 / 100.0)
+    entryBarIdx := bar_index
+    posDir := -1
+if strategy.position_size == 0
+    entryPrice := na
+    slPrice := na
+    tpPrice := na
+    entryBarIdx := na
+    posDir := 0
+
+// SL/TP at fixed price levels (computed once at entry)
+if posDir == 1 and not na(slPrice)
+    strategy.exit("Long Exit", "Long", stop=slPrice, limit=tpPrice)
+if posDir == -1 and not na(slPrice)
+    strategy.exit("Short Exit", "Short", stop=slPrice, limit=tpPrice)
+
+// Timeout: close after 60 bars (~5h on 5m)
+if strategy.position_size != 0 and not na(entryBarIdx) and bar_index - entryBarIdx >= 60
+    strategy.close_all("Timeout")
+
+// Close all positions when exiting date range
+if not inDateRange and strategy.position_size != 0
+    strategy.close_all("Date Range End")
+
+// ─── Plot ──────────────────────────────────────────────────────
+plotshape(inDateRange and longCond, "Long Signal", shape.triangleup, location.belowbar, color.green, size=size.small)
+plotshape(inDateRange and shortCond, "Short Signal", shape.triangledown, location.abovebar, color.red, size=size.small)

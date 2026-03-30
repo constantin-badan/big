@@ -1,0 +1,99 @@
+// ═══════════════════════════════════════════════════════════
+// PARITY TEST — compare these results against TradingView
+// ═══════════════════════════════════════════════════════════
+// Symbol:    BTCUSDT
+// Timeframe: 5m
+// Period:    2026-03-26 -> 2026-03-30
+// Capital:   $10000
+// Position:  5% of equity
+// Fees:      maker 0.02% / taker 0.04%
+// Slippage:  5 bps
+//
+// ─── OUR BACKTEST RESULTS ───────────────────────────────
+// Final Balance:  $10002.01
+// Net PnL:        $2.01
+// Total Trades:   5
+// Win Rate:       60.0%
+// Profit Factor:  1.10
+// Max Drawdown:   0.18%
+// Avg Win:        $7.18
+// Avg Loss:       $-9.76
+// Total Fees:     $1.99
+// Total Slippage: $33.26
+//
+// ─── TRADE LOG (5 trades) ────────────────────────
+//   #  1 S entry=70716.92 exit=68506.84 pnl=+15.22 fees=0.39 TIMEOUT  2026-03-26 03:04:59 UTC -> 2026-03-26 19:09:59 UTC
+//   #  2 L entry=68936.35 exit=66490.32 pnl=-18.17 fees=0.39 STOP_LOSS  2026-03-26 21:54:59 UTC -> 2026-03-27 10:59:59 UTC
+//   #  3 L entry=66143.66 exit=66556.80 pnl=+2.72 fees=0.40 TIMEOUT  2026-03-27 21:29:59 UTC -> 2026-03-28 13:34:59 UTC
+//   #  4 L entry=66845.01 exit=66718.72 pnl=-1.34 fees=0.40 TIMEOUT  2026-03-28 13:49:59 UTC -> 2026-03-29 05:54:59 UTC
+//   #  5 S entry=66599.68 exit=66069.02 pnl=+3.58 fees=0.40 TIMEOUT  2026-03-29 07:19:59 UTC -> 2026-03-29 23:24:59 UTC
+// ═══════════════════════════════════════════════════════════
+
+//@version=6
+strategy("sma-crossover-830", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=5, commission_type=strategy.commission.percent, commission_value=0.04, slippage=1, initial_capital=10000, close_entries_rule="FIFO", process_orders_on_close=true)
+
+// ─── Indicators ────────────────────────────────────────────────
+fastSma = ta.sma(close, 39)
+slowSma = ta.sma(close, 69)
+prevFastSma = ta.sma(close, 39)[1]
+prevSlowSma = ta.sma(close, 69)[1]
+
+// ─── Date Range Filter ─────────────────────────────────────────
+inDateRange = time >= timestamp(2026, 3, 26, 0, 0) and time < timestamp(2026, 3, 30, 0, 0)
+
+// ─── Entry Conditions ──────────────────────────────────────────
+longCond = prevFastSma <= prevSlowSma and fastSma > slowSma
+shortCond = prevFastSma >= prevSlowSma and fastSma < slowSma
+
+// ─── Execute Entries ───────────────────────────────────────────
+isFlat = strategy.position_size == 0
+if isFlat and inDateRange and longCond
+    strategy.entry("Long", strategy.long)
+if isFlat and inDateRange and shortCond
+    strategy.entry("Short", strategy.short)
+
+// ─── Exit Logic (SL=3.5% TP=9.0%) ──────────────────────────
+// Track entry and compute fixed SL/TP price levels from entry
+var float entryPrice = na
+var float slPrice = na
+var float tpPrice = na
+var int entryBarIdx = na
+var int posDir = 0  // 1=long, -1=short, 0=flat
+
+// Detect new position entry
+if strategy.position_size > 0 and posDir != 1
+    entryPrice := strategy.position_avg_price
+    slPrice := entryPrice * (1.0 - 3.5 / 100.0)
+    tpPrice := entryPrice * (1.0 + 9.0 / 100.0)
+    entryBarIdx := bar_index
+    posDir := 1
+if strategy.position_size < 0 and posDir != -1
+    entryPrice := strategy.position_avg_price
+    slPrice := entryPrice * (1.0 + 3.5 / 100.0)
+    tpPrice := entryPrice * (1.0 - 9.0 / 100.0)
+    entryBarIdx := bar_index
+    posDir := -1
+if strategy.position_size == 0
+    entryPrice := na
+    slPrice := na
+    tpPrice := na
+    entryBarIdx := na
+    posDir := 0
+
+// SL/TP at fixed price levels (computed once at entry)
+if posDir == 1 and not na(slPrice)
+    strategy.exit("Long Exit", "Long", stop=slPrice, limit=tpPrice)
+if posDir == -1 and not na(slPrice)
+    strategy.exit("Short Exit", "Short", stop=slPrice, limit=tpPrice)
+
+// Timeout: close after 192 bars (~16h on 5m)
+if strategy.position_size != 0 and not na(entryBarIdx) and bar_index - entryBarIdx >= 192
+    strategy.close_all("Timeout")
+
+// Close all positions when exiting date range
+if not inDateRange and strategy.position_size != 0
+    strategy.close_all("Date Range End")
+
+// ─── Plot ──────────────────────────────────────────────────────
+plotshape(inDateRange and longCond, "Long Signal", shape.triangleup, location.belowbar, color.green, size=size.small)
+plotshape(inDateRange and shortCond, "Short Signal", shape.triangledown, location.abovebar, color.red, size=size.small)

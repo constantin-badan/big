@@ -1,0 +1,94 @@
+// ═══════════════════════════════════════════════════════════
+// PARITY TEST — compare these results against TradingView
+// ═══════════════════════════════════════════════════════════
+// Symbol:    BTCUSDT
+// Timeframe: 5m
+// Period:    2026-03-26 -> 2026-03-30
+// Capital:   $10000
+// Position:  5% of equity
+// Fees:      maker 0.02% / taker 0.04%
+// Slippage:  5 bps
+//
+// ─── OUR BACKTEST RESULTS ───────────────────────────────
+// Final Balance:  $9998.08
+// Net PnL:        $-1.92
+// Total Trades:   1
+// Win Rate:       0.0%
+// Profit Factor:  0.00
+// Max Drawdown:   0.02%
+// Avg Win:        $0.00
+// Avg Loss:       $-1.92
+// Total Fees:     $0.40
+// Total Slippage: $0.00
+//
+// ─── TRADE LOG (1 trades) ────────────────────────
+//   #  1 S entry=66649.36 exit=66852.01 pnl=-1.92 fees=0.40 TIMEOUT  2026-03-28 14:54:59 UTC -> 2026-03-29 12:59:59 UTC
+// ═══════════════════════════════════════════════════════════
+
+//@version=6
+strategy("rsi-ema-combo-1067", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=5, commission_type=strategy.commission.percent, commission_value=0.04, slippage=1, initial_capital=10000, close_entries_rule="FIFO", process_orders_on_close=true)
+
+// ─── Indicators ────────────────────────────────────────────────
+emaVal = ta.ema(close, 12)
+rsiVal = ta.rsi(close, 12)
+prevRsi = ta.rsi(close, 12)[1]
+
+// ─── Date Range Filter ─────────────────────────────────────────
+inDateRange = time >= timestamp(2026, 3, 26, 0, 0) and time < timestamp(2026, 3, 30, 0, 0)
+
+// ─── Entry Conditions ──────────────────────────────────────────
+longCond = close > emaVal and prevRsi <= 30 and rsiVal > 30
+shortCond = close < emaVal and prevRsi >= 67 and rsiVal < 67
+
+// ─── Execute Entries ───────────────────────────────────────────
+isFlat = strategy.position_size == 0
+if isFlat and inDateRange and longCond
+    strategy.entry("Long", strategy.long)
+if isFlat and inDateRange and shortCond
+    strategy.entry("Short", strategy.short)
+
+// ─── Exit Logic (SL=1.5% TP=4.0%) ──────────────────────────
+// Track entry and compute fixed SL/TP price levels from entry
+var float entryPrice = na
+var float slPrice = na
+var float tpPrice = na
+var int entryBarIdx = na
+var int posDir = 0  // 1=long, -1=short, 0=flat
+
+// Detect new position entry
+if strategy.position_size > 0 and posDir != 1
+    entryPrice := strategy.position_avg_price
+    slPrice := entryPrice * (1.0 - 1.5 / 100.0)
+    tpPrice := entryPrice * (1.0 + 4.0 / 100.0)
+    entryBarIdx := bar_index
+    posDir := 1
+if strategy.position_size < 0 and posDir != -1
+    entryPrice := strategy.position_avg_price
+    slPrice := entryPrice * (1.0 + 1.5 / 100.0)
+    tpPrice := entryPrice * (1.0 - 4.0 / 100.0)
+    entryBarIdx := bar_index
+    posDir := -1
+if strategy.position_size == 0
+    entryPrice := na
+    slPrice := na
+    tpPrice := na
+    entryBarIdx := na
+    posDir := 0
+
+// SL/TP at fixed price levels (computed once at entry)
+if posDir == 1 and not na(slPrice)
+    strategy.exit("Long Exit", "Long", stop=slPrice, limit=tpPrice)
+if posDir == -1 and not na(slPrice)
+    strategy.exit("Short Exit", "Short", stop=slPrice, limit=tpPrice)
+
+// Timeout: close after 264 bars (~22h on 5m)
+if strategy.position_size != 0 and not na(entryBarIdx) and bar_index - entryBarIdx >= 264
+    strategy.close_all("Timeout")
+
+// Close all positions when exiting date range
+if not inDateRange and strategy.position_size != 0
+    strategy.close_all("Date Range End")
+
+// ─── Plot ──────────────────────────────────────────────────────
+plotshape(inDateRange and longCond, "Long Signal", shape.triangleup, location.belowbar, color.green, size=size.small)
+plotshape(inDateRange and shortCond, "Short Signal", shape.triangledown, location.abovebar, color.red, size=size.small)
