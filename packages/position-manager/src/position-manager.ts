@@ -56,6 +56,7 @@ function makeSymbolState(): SymbolState {
 export class PositionManager implements IPositionManager {
   private readonly symbolStates = new Map<Symbol, SymbolState>();
   private readonly lastTickPrice = new Map<Symbol, number>();
+  private readonly lastCandle = new Map<Symbol, Candle>();
 
   private readonly handleTick: (data: { symbol: Symbol; tick: Tick }) => void;
   private readonly handleCandleClose: (data: {
@@ -147,10 +148,15 @@ export class PositionManager implements IPositionManager {
     candle: Candle;
   }): void {
     if (this.config.evaluationTimeframe && timeframe !== this.config.evaluationTimeframe) return;
+    this.lastCandle.set(symbol, candle);
     if (this.getState(symbol) !== 'OPEN') return;
     const symState = this.getSymbolState(symbol);
     const entryOrder = symState.entryOrder;
     if (!entryOrder) return;
+
+    // Skip SL/TP evaluation on the entry bar — the position was opened at this
+    // bar's close, so high/low occurred before entry and can't trigger SL/TP.
+    if (entryOrder.timestamp === candle.closeTime) return;
 
     const isLong = entryOrder.side === 'BUY';
     const closeTimestamp = candle.closeTime;

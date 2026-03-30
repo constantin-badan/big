@@ -255,21 +255,21 @@ function generateExitLogic(pm: Record<string, number>): string {
   const slPct = flt(pm.stopLossPct ?? 2);
   const tpPct = flt(pm.takeProfitPct ?? 4);
   const holdBars = Math.round((pm.maxHoldTimeHours ?? 4) * 12); // 5m candles per hour
-  const holdMs = (pm.maxHoldTimeHours ?? 4) * 3600 * 1000;
 
   const lines: string[] = [];
 
-  // SL/TP using percentage from entry — registered inline with entry so
-  // they activate immediately when the entry fills (no 1-bar delay).
-  // strategy.exit with loss/profit in ticks, computed from close as proxy for entry price.
-  // These are re-registered every bar but TV deduplicates by ID.
-  lines.push(`// SL/TP exits — percentage based, active from entry bar`);
-  lines.push(`longSlTicks = math.round(close * ${slPct} / 100.0 / syminfo.mintick)`);
-  lines.push(`longTpTicks = math.round(close * ${tpPct} / 100.0 / syminfo.mintick)`);
-  lines.push(`strategy.exit("Long Exit", "Long", loss=longSlTicks, profit=longTpTicks)`);
-  lines.push(`strategy.exit("Short Exit", "Short", loss=longSlTicks, profit=longTpTicks)`);
+  // SL/TP using strategy.exit with stop/limit prices.
+  // calc_on_order_fills=true re-runs script on fill, so
+  // strategy.position_avg_price is available immediately.
+  // Without process_orders_on_close, TV evaluates stops intra-bar
+  // and fills at the stop/limit price (not close).
+  lines.push(`// SL/TP exits — exact price levels, evaluated intra-bar by TV`);
+  lines.push(`if strategy.position_size > 0`);
+  lines.push(`    strategy.exit("Long Exit", "Long", stop=strategy.position_avg_price * (1.0 - ${slPct} / 100.0), limit=strategy.position_avg_price * (1.0 + ${tpPct} / 100.0))`);
+  lines.push(`if strategy.position_size < 0`);
+  lines.push(`    strategy.exit("Short Exit", "Short", stop=strategy.position_avg_price * (1.0 + ${slPct} / 100.0), limit=strategy.position_avg_price * (1.0 - ${tpPct} / 100.0))`);
 
-  // Timeout: close after N bars
+  // Timeout
   if (holdBars > 0) {
     lines.push(``);
     lines.push(`// Timeout: close after ${String(holdBars)} bars (~${String(pm.maxHoldTimeHours ?? 4)}h on 5m)`);
@@ -308,7 +308,7 @@ export function generatePineScript(config: StrategyConfig): string {
     : '';
 
   return `//@version=6
-strategy("${label}", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=5, commission_type=strategy.commission.percent, commission_value=0.04, slippage=1, initial_capital=10000, close_entries_rule="FIFO")
+strategy("${label}", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=5, commission_type=strategy.commission.percent, commission_value=0.04, slippage=1, initial_capital=10000, close_entries_rule="FIFO", calc_on_order_fills=true)
 
 // ─── Indicators ────────────────────────────────────────────────
 ${entry.indicators}

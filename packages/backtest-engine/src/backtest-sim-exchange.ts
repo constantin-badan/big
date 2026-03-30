@@ -32,6 +32,7 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
   private readonly leverage: number;
   private balance: number;
   private readonly currentPrices = new Map<string, number>();
+  private readonly currentCandles = new Map<string, Candle>();
   private readonly handler: (data: {
     symbol: string;
     timeframe: Timeframe;
@@ -51,6 +52,7 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
 
     this.handler = (data) => {
       this.currentPrices.set(data.symbol, data.candle.close);
+      this.currentCandles.set(data.symbol, data.candle);
       this.currentTimestamp = data.candle.closeTime;
     };
     bus.on('candle:close', this.handler);
@@ -96,10 +98,14 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
 
   private fillStop(request: OrderRequest & { type: 'STOP_MARKET' }, currentPrice: number, slippageMult: number): OrderResult {
     // BUY STOP triggers when price >= stop; SELL STOP triggers when price <= stop
+    // Check against candle high/low (not just close) for intra-bar stop triggers
+    const candle = this.currentCandles.get(request.symbol);
+    const highPrice = candle?.high ?? currentPrice;
+    const lowPrice = candle?.low ?? currentPrice;
     const triggered =
       request.side === 'BUY'
-        ? currentPrice >= request.stopPrice
-        : currentPrice <= request.stopPrice;
+        ? highPrice >= request.stopPrice
+        : lowPrice <= request.stopPrice;
     if (!triggered) {
       return this.makeRejected(request, 'STOP_MARKET not triggered');
     }
@@ -114,10 +120,14 @@ export class BacktestSimExchange implements IExchange, IFillSimulator {
     slippageMult: number,
   ): OrderResult {
     // BUY TP triggers when price <= stop; SELL TP triggers when price >= stop
+    // Check against candle high/low for intra-bar TP triggers
+    const candle = this.currentCandles.get(request.symbol);
+    const highPrice = candle?.high ?? currentPrice;
+    const lowPrice = candle?.low ?? currentPrice;
     const triggered =
       request.side === 'BUY'
-        ? currentPrice <= request.stopPrice
-        : currentPrice >= request.stopPrice;
+        ? lowPrice <= request.stopPrice
+        : highPrice >= request.stopPrice;
     if (!triggered) {
       return this.makeRejected(request, 'TAKE_PROFIT_MARKET not triggered');
     }

@@ -41,22 +41,22 @@ describe('generatePineScript', () => {
       pmParams: { stopLossPct: 2, takeProfitPct: 5, maxHoldTimeHours: 8, trailingActivationPct: 1.5, breakevenPct: 1.0 },
     });
 
-    // SL/TP always present regardless of other PM features
-    expect(pine).toContain('loss=longSlTicks');
-    expect(pine).toContain('profit=longTpTicks');
+    expect(pine).toContain('strategy.exit("Long Exit"');
+    expect(pine).toContain('strategy.exit("Short Exit"');
     expect(pine).toContain('Timeout');
   });
 
-  test('uses tick-based SL/TP registered with entry', () => {
+  test('uses price-level SL/TP from position_avg_price', () => {
     const pine = generatePineScript({
       templateName: 'rsi-reversal',
       scannerParams: { rsiPeriod: 14 },
       pmParams: { stopLossPct: 2, takeProfitPct: 5, maxHoldTimeHours: 8 },
     });
 
-    expect(pine).toContain('strategy.exit("Long Exit", "Long", loss=longSlTicks, profit=longTpTicks)');
-    expect(pine).toContain('strategy.exit("Short Exit", "Short", loss=longSlTicks, profit=longTpTicks)');
+    expect(pine).toContain('strategy.exit("Long Exit", "Long", stop=strategy.position_avg_price');
+    expect(pine).toContain('strategy.exit("Short Exit", "Short", stop=strategy.position_avg_price');
     expect(pine).toContain('Timeout');
+    expect(pine).toContain('calc_on_order_fills=true');
   });
 
   test('includes timeout', () => {
