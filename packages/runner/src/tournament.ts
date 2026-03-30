@@ -201,10 +201,15 @@ async function runStage(
     });
   }
 
-  // Rank by total PnL. Zero-trade candidates rank at 0 PnL (neutral).
-  // They survive if within the keep threshold — some strategies legitimately
-  // produce few trades on a single coin/week.
-  results.sort((a, b) => b.totalPnl - a.totalPnl);
+  // Rank: active traders by PnL, low-activity candidates at the bottom.
+  // Require >= 1 trade/day average (7 trades per 1-week stage per symbol).
+  const minTrades = stageConfig.symbols * 1; // at least 1 trade per symbol-week
+  results.sort((a, b) => {
+    const aActive = a.totalTrades >= minTrades ? 1 : 0;
+    const bActive = b.totalTrades >= minTrades ? 1 : 0;
+    if (aActive !== bActive) return bActive - aActive; // active first
+    return b.totalPnl - a.totalPnl; // then by PnL
+  });
   const killCount = Math.floor(results.length * stageConfig.killRate);
   const surviveCount = results.length - killCount;
 
