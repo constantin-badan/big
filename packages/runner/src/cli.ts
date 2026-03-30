@@ -45,8 +45,22 @@ async function tournament(): Promise<void> {
   if (totalFetched > 0) console.log(`Fetched ${String(totalFetched)} candles`);
   else console.log('All data cached');
 
-  const dataStart = store.getEarliestTimestamp(symbols[0]!, timeframe)!;
-  const dataEnd = store.getLatestTimestamp(symbols[0]!, timeframe)!;
+  // Filter to symbols with at least 60 days of data
+  const minDataMs = 60 * 24 * 60 * 60 * 1000;
+  const validSymbols = symbols.filter((s) => {
+    const earliest = store.getEarliestTimestamp(s, timeframe);
+    const latest = store.getLatestTimestamp(s, timeframe);
+    if (earliest === null || latest === null) return false;
+    return (latest - earliest) >= minDataMs;
+  });
+  console.log(`Valid symbols (60+ days data): ${String(validSymbols.length)}/${String(symbols.length)}`);
+  if (validSymbols.length < 6) {
+    console.error('Need at least 6 valid symbols. Sync more data.');
+    return;
+  }
+
+  const dataStart = store.getEarliestTimestamp(validSymbols[0]!, timeframe)!;
+  const dataEnd = store.getLatestTimestamp(validSymbols[0]!, timeframe)!;
 
   const config: TournamentConfig = {
     templates: [...TEMPLATES],
@@ -77,7 +91,7 @@ async function tournament(): Promise<void> {
       initialBalance: 10_000,
     },
     timeframe,
-    symbolPool: symbols,
+    symbolPool: validSymbols,
     dataRange: { startTime: dataStart, endTime: dataEnd },
     // Each stage: 1 week per coin, new random coins each round.
     // Forces generalization — overfit configs die early.
