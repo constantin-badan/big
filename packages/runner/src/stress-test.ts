@@ -288,8 +288,15 @@ function printResults(results: StressResult[]): void {
   // Sort by stress PnL
   const sorted = [...results].sort((a, b) => b.stressPnl - a.stressPnl);
 
-  const passed = sorted.filter((r) => r.stressPnl > 0);
-  const failed = sorted.filter((r) => r.stressPnl <= 0);
+  // Filter: must be profitable AND average >= 1 trade/day
+  const minTradesPerDay = 1;
+  const passed = sorted.filter((r) => {
+    if (r.stressPnl <= 0) return false;
+    const days = r.stressTotalRuns * 7;
+    const tpd = days > 0 ? r.stressTrades / days : 0;
+    return tpd >= minTradesPerDay;
+  });
+  const failed = sorted.filter((r) => !passed.includes(r));
 
   console.log('');
   console.log(`=== STRESS TEST RESULTS ===`);
@@ -479,7 +486,11 @@ export async function runStressTest(argv: string[]): Promise<void> {
 
   if (args.exportPath) {
     const passed = results
-      .filter((r) => r.stressPnl > 0)
+      .filter((r) => {
+        if (r.stressPnl <= 0) return false;
+        const days = r.stressTotalRuns * 7;
+        return days > 0 && r.stressTrades / days >= 1;
+      })
       .sort((a, b) => b.stressPnl - a.stressPnl);
 
     const candidateMap = new Map(
