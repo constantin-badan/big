@@ -34,62 +34,29 @@ describe('generatePineScript', () => {
     expect(pine).toContain('fastEma > slowEma');
   });
 
-  test('includes trailing stop when configured', () => {
+  test('SL/TP exits are always registered', () => {
     const pine = generatePineScript({
       templateName: 'rsi-reversal',
       scannerParams: { rsiPeriod: 14 },
-      pmParams: { stopLossPct: 2, takeProfitPct: 5, maxHoldTimeHours: 8, trailingActivationPct: 1.5, trailingDistancePct: 0.5 },
+      pmParams: { stopLossPct: 2, takeProfitPct: 5, maxHoldTimeHours: 8, trailingActivationPct: 1.5, breakevenPct: 1.0 },
     });
 
-    expect(pine).toContain('Trailing stop');
-    expect(pine).toContain('trail_price');
-    expect(pine).toContain('trail_offset');
+    // SL/TP always present regardless of other PM features
+    expect(pine).toContain('loss=longSlTicks');
+    expect(pine).toContain('profit=longTpTicks');
+    expect(pine).toContain('Timeout');
   });
 
-  test('includes breakeven when configured', () => {
-    const pine = generatePineScript({
-      templateName: 'rsi-reversal',
-      scannerParams: { rsiPeriod: 14 },
-      pmParams: { stopLossPct: 2, takeProfitPct: 5, maxHoldTimeHours: 8, breakevenPct: 1.0 },
-    });
-
-    expect(pine).toContain('Breakeven');
-    expect(pine).toContain('slPrice := entryPrice');
-  });
-
-  test('uses fixed SL/TP price levels from entry', () => {
+  test('uses tick-based SL/TP registered with entry', () => {
     const pine = generatePineScript({
       templateName: 'rsi-reversal',
       scannerParams: { rsiPeriod: 14 },
       pmParams: { stopLossPct: 2, takeProfitPct: 5, maxHoldTimeHours: 8 },
     });
 
-    // SL/TP computed from entry price, not current close
-    expect(pine).toContain('var float entryPrice = na');
-    expect(pine).toContain('var float slPrice = na');
-    expect(pine).toContain('var float tpPrice = na');
-    expect(pine).toContain('stop=slPrice, limit=tpPrice');
-    // No tick-based profit/loss
-    expect(pine).not.toContain('profit=close');
-    expect(pine).not.toContain('loss=close');
-  });
-
-  test('all PM features work together without collisions', () => {
-    const pine = generatePineScript({
-      templateName: 'rsi-reversal',
-      scannerParams: { rsiPeriod: 14, oversold: 25, overbought: 75 },
-      pmParams: {
-        stopLossPct: 2, takeProfitPct: 5, maxHoldTimeHours: 8,
-        breakevenPct: 1.0, trailingActivationPct: 1.5, trailingDistancePct: 0.5,
-      },
-    });
-
-    expect(pine).toContain('longCond =');
-    expect(pine).toContain('shortCond =');
-    expect(pine).toContain('Breakeven');
-    expect(pine).toContain('Trailing stop');
+    expect(pine).toContain('strategy.exit("Long Exit", "Long", loss=longSlTicks, profit=longTpTicks)');
+    expect(pine).toContain('strategy.exit("Short Exit", "Short", loss=longSlTicks, profit=longTpTicks)');
     expect(pine).toContain('Timeout');
-    expect(pine).toContain('stop=slPrice, limit=tpPrice');
   });
 
   test('includes timeout', () => {

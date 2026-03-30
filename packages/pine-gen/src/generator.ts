@@ -255,73 +255,25 @@ function generateExitLogic(pm: Record<string, number>): string {
   const slPct = flt(pm.stopLossPct ?? 2);
   const tpPct = flt(pm.takeProfitPct ?? 4);
   const holdBars = Math.round((pm.maxHoldTimeHours ?? 4) * 12); // 5m candles per hour
-  const trailActivation = pm.trailingActivationPct ?? 0;
-  const trailDist = flt(pm.trailingDistancePct ?? 0.5);
-  const breakeven = pm.breakevenPct ?? 0;
+  const holdMs = (pm.maxHoldTimeHours ?? 4) * 3600 * 1000;
 
   const lines: string[] = [];
 
-  // Track entry price and compute fixed SL/TP price levels (matches our engine)
-  lines.push(`// Track entry and compute fixed SL/TP price levels from entry`);
-  lines.push(`var float entryPrice = na`);
-  lines.push(`var float slPrice = na`);
-  lines.push(`var float tpPrice = na`);
-  lines.push(`var int entryBarIdx = na`);
-  lines.push(`var int posDir = 0  // 1=long, -1=short, 0=flat`);
-  lines.push(``);
-  lines.push(`// Detect new position entry`);
-  lines.push(`if strategy.position_size > 0 and posDir != 1`);
-  lines.push(`    entryPrice := strategy.position_avg_price`);
-  lines.push(`    slPrice := entryPrice * (1.0 - ${slPct} / 100.0)`);
-  lines.push(`    tpPrice := entryPrice * (1.0 + ${tpPct} / 100.0)`);
-  lines.push(`    entryBarIdx := bar_index`);
-  lines.push(`    posDir := 1`);
-  lines.push(`if strategy.position_size < 0 and posDir != -1`);
-  lines.push(`    entryPrice := strategy.position_avg_price`);
-  lines.push(`    slPrice := entryPrice * (1.0 + ${slPct} / 100.0)`);
-  lines.push(`    tpPrice := entryPrice * (1.0 - ${tpPct} / 100.0)`);
-  lines.push(`    entryBarIdx := bar_index`);
-  lines.push(`    posDir := -1`);
-  lines.push(`if strategy.position_size == 0`);
-  lines.push(`    entryPrice := na`);
-  lines.push(`    slPrice := na`);
-  lines.push(`    tpPrice := na`);
-  lines.push(`    entryBarIdx := na`);
-  lines.push(`    posDir := 0`);
+  // SL/TP using percentage from entry — registered inline with entry so
+  // they activate immediately when the entry fills (no 1-bar delay).
+  // strategy.exit with loss/profit in ticks, computed from close as proxy for entry price.
+  // These are re-registered every bar but TV deduplicates by ID.
+  lines.push(`// SL/TP exits — percentage based, active from entry bar`);
+  lines.push(`longSlTicks = math.round(close * ${slPct} / 100.0 / syminfo.mintick)`);
+  lines.push(`longTpTicks = math.round(close * ${tpPct} / 100.0 / syminfo.mintick)`);
+  lines.push(`strategy.exit("Long Exit", "Long", loss=longSlTicks, profit=longTpTicks)`);
+  lines.push(`strategy.exit("Short Exit", "Short", loss=longSlTicks, profit=longTpTicks)`);
 
-  // Breakeven
-  if (breakeven > 0) {
-    lines.push(``);
-    lines.push(`// Breakeven: move SL to entry after ${flt(breakeven)}% profit`);
-    lines.push(`if posDir == 1 and not na(entryPrice) and high >= entryPrice * (1.0 + ${flt(breakeven)} / 100.0)`);
-    lines.push(`    slPrice := entryPrice`);
-    lines.push(`if posDir == -1 and not na(entryPrice) and low <= entryPrice * (1.0 - ${flt(breakeven)} / 100.0)`);
-    lines.push(`    slPrice := entryPrice`);
-  }
-
-  // SL/TP exits using fixed price levels
-  lines.push(``);
-  lines.push(`// SL/TP at fixed price levels (computed once at entry)`);
-  lines.push(`if posDir == 1 and not na(slPrice)`);
-  lines.push(`    strategy.exit("Long Exit", "Long", stop=slPrice, limit=tpPrice)`);
-  lines.push(`if posDir == -1 and not na(slPrice)`);
-  lines.push(`    strategy.exit("Short Exit", "Short", stop=slPrice, limit=tpPrice)`);
-
-  // Trailing stop
-  if (trailActivation > 0) {
-    lines.push(``);
-    lines.push(`// Trailing stop: activates at ${flt(trailActivation)}%, trails at ${trailDist}%`);
-    lines.push(`if posDir == 1 and not na(entryPrice)`);
-    lines.push(`    strategy.exit("Long Trail", "Long", trail_price=entryPrice * (1.0 + ${flt(trailActivation)} / 100.0), trail_offset=math.round(entryPrice * ${trailDist} / 100.0 / syminfo.mintick))`);
-    lines.push(`if posDir == -1 and not na(entryPrice)`);
-    lines.push(`    strategy.exit("Short Trail", "Short", trail_price=entryPrice * (1.0 - ${flt(trailActivation)} / 100.0), trail_offset=math.round(entryPrice * ${trailDist} / 100.0 / syminfo.mintick))`);
-  }
-
-  // Timeout
+  // Timeout: close after N bars
   if (holdBars > 0) {
     lines.push(``);
     lines.push(`// Timeout: close after ${String(holdBars)} bars (~${String(pm.maxHoldTimeHours ?? 4)}h on 5m)`);
-    lines.push(`if strategy.position_size != 0 and not na(entryBarIdx) and bar_index - entryBarIdx >= ${String(holdBars)}`);
+    lines.push(`if strategy.position_size != 0 and strategy.opentrades > 0 and bar_index - strategy.opentrades.entry_bar_index(0) >= ${String(holdBars)}`);
     lines.push(`    strategy.close_all("Timeout")`);
   }
 
