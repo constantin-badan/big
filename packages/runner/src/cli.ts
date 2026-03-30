@@ -100,7 +100,7 @@ async function tournament(): Promise<void> {
       { weeks: 1, symbols: 6, killRate: 0.05 },
       { weeks: 1, symbols: 6, killRate: 0.05 },
     ],
-    seed: 42,
+    seed: Date.now(), // random seed each run for diverse coin selection
   };
 
   console.log('=== Evolutionary Discovery Tournament ===');
