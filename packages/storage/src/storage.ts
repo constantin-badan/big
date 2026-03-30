@@ -304,9 +304,57 @@ class TradeStore implements ITradeStore {
   }
 }
 
+// === Tournament State Persistence ===
+
+const TOURNAMENT_SCHEMA = `
+CREATE TABLE IF NOT EXISTS tournaments (
+  id TEXT PRIMARY KEY,
+  state TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+)`;
+
+export interface ITournamentStore {
+  save(id: string, state: unknown): void;
+  load(id: string): unknown | null;
+  list(): string[];
+}
+
+class TournamentStore implements ITournamentStore {
+  private readonly saveStmt: ReturnType<Database['prepare']>;
+  private readonly loadStmt: ReturnType<Database['prepare']>;
+  private readonly listStmt: ReturnType<Database['prepare']>;
+
+  constructor(db: Database) {
+    this.saveStmt = db.prepare(`
+      INSERT OR REPLACE INTO tournaments (id, state, updated_at) VALUES (?, ?, ?)
+    `);
+    this.loadStmt = db.prepare(`SELECT state FROM tournaments WHERE id = ?`);
+    this.listStmt = db.prepare(`SELECT id FROM tournaments ORDER BY updated_at DESC`);
+  }
+
+  save(id: string, state: unknown): void {
+    this.saveStmt.run(id, JSON.stringify(state), Date.now());
+  }
+
+  load(id: string): unknown | null {
+    interface Row { state: string }
+    const row = unsafeCast<Row | null>(this.loadStmt.get(id));
+    if (!row) return null;
+    return jsonParse<unknown>(row.state);
+  }
+
+  list(): string[] {
+    interface Row { id: string }
+    return unsafeCast<Row[]>(this.listStmt.all()).map((r) => r.id);
+  }
+}
+
+// === Storage Factory ===
+
 export function createStorage(dbPath: string): {
   candles: ICandleStore;
   trades: ITradeStore;
+  tournaments: ITournamentStore;
   close: () => void;
 } {
   const db = new Database(dbPath);
@@ -318,6 +366,7 @@ export function createStorage(dbPath: string): {
   // Create tables
   db.run(CANDLE_SCHEMA);
   db.run(TRADE_SCHEMA);
+  db.run(TOURNAMENT_SCHEMA);
   for (const idx of TRADE_INDEXES) {
     db.run(idx);
   }
@@ -325,6 +374,7 @@ export function createStorage(dbPath: string): {
   return {
     candles: new CandleStore(db),
     trades: new TradeStore(db),
+    tournaments: new TournamentStore(db),
     close: () => db.close(),
   };
 }

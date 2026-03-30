@@ -27,6 +27,8 @@ export const emaCrossover: ScannerTemplate = {
     slowPeriod: { min: 5, max: 100, step: 1 },
   },
 
+  isValid: (params) => (params.fastPeriod ?? 5) < (params.slowPeriod ?? 10),
+
   createFactory(symbols, timeframe, riskConfig, pmConfig) {
     return (params, deps) => {
       const fastPeriod = params.fastPeriod ?? 5;

@@ -29,11 +29,13 @@ import type {
   TournamentState,
 } from '@trading-bot/types';
 import { createStorage, syncCandles } from '@trading-bot/storage';
-import type { ICandleStore } from '@trading-bot/storage';
+import type { ICandleStore, ITournamentStore } from '@trading-bot/storage';
 import { createBacktestEngine } from '@trading-bot/backtest-engine';
 
 import { createBinanceFetcher } from './fetch-binance';
+import { classifyWeeks, selectStratifiedWeeks } from './regime-detection';
 import { emaCrossover } from '../strategies/ema-crossover';
+import { rsiReversal } from '../strategies/rsi-reversal';
 
 // ─── Param Generation ───────────────────────────────────────────────
 
@@ -72,10 +74,8 @@ function generateCandidates(
     const pmParamSets = sampleFromBounds(pmBounds, pmSamples);
 
     for (const scannerParams of scannerParamSets) {
-      // Skip invalid combinations (e.g., fastPeriod >= slowPeriod for crossover)
-      if (scannerParams.fastPeriod !== undefined && scannerParams.slowPeriod !== undefined) {
-        if (scannerParams.fastPeriod >= scannerParams.slowPeriod) continue;
-      }
+      // Skip invalid combinations via template constraint
+      if (template.isValid !== undefined && !template.isValid(scannerParams)) continue;
 
       for (const pmParams of pmParamSets) {
         idCounter += 1;
@@ -230,7 +230,11 @@ async function runStage(
 
 // ─── Tournament Runner ──────────────────────────────────────────────
 
-async function runTournament(config: TournamentConfig): Promise<TournamentState> {
+async function runTournament(
+  config: TournamentConfig,
+  tournamentStore: ITournamentStore,
+  tournamentId: string,
+): Promise<TournamentState> {
   const templateMap = new Map<string, ScannerTemplate>();
   for (const t of config.templates) {
     templateMap.set(t.name, t);
@@ -267,13 +271,21 @@ async function runTournament(config: TournamentConfig): Promise<TournamentState>
       break;
     }
 
-    // Select random symbols and weeks for this stage
+    // Select random symbols
     const symbols = selectRandomSymbols(config.symbolPool, stageConfig.symbols);
-    const weeks = selectRandomWeeks(
+
+    // Select weeks with stratified regime diversity
+    const store = createStorage('./data/candles.db').candles;
+    const allWeeks = classifyWeeks(
+      store,
+      symbols[0]!,
+      config.timeframe,
       config.dataRange.startTime,
       config.dataRange.endTime,
-      stageConfig.weeks,
     );
+    const selectedWeeks = selectStratifiedWeeks(allWeeks, stageConfig.weeks);
+    const weeks = selectedWeeks.map((w) => ({ startTime: w.startTime, endTime: w.endTime }));
+    const regimes = selectedWeeks.map((w) => w.regime);
 
     state.stageSymbols.push(symbols);
     state.stageWeeks.push(weeks);
@@ -283,7 +295,7 @@ async function runTournament(config: TournamentConfig): Promise<TournamentState>
     console.log(`=== Stage ${String(s + 1)}/${String(config.stages.length)} ===`);
     console.log(`  Candidates: ${String(activeCandidates.length)}`);
     console.log(`  Symbols: ${symbols.join(', ')}`);
-    console.log(`  Weeks: ${weeks.map((w) => new Date(w.startTime).toISOString().slice(0, 10)).join(', ')}`);
+    console.log(`  Weeks: ${weeks.map((w, i) => `${new Date(w.startTime).toISOString().slice(0, 10)}[${regimes[i]}]`).join(', ')}`);
     console.log(`  Kill rate: ${String(stageConfig.killRate * 100)}%`);
 
     const stageStart = Date.now();
@@ -303,6 +315,9 @@ async function runTournament(config: TournamentConfig): Promise<TournamentState>
 
     state.stageResults.push(...results);
     state.completedStages = s + 1;
+
+    // Persist state after each stage for resume capability
+    tournamentStore.save(tournamentId, state);
 
     // Filter to survivors
     const survivorIds = new Set(
@@ -365,7 +380,7 @@ async function runTournament(config: TournamentConfig): Promise<TournamentState>
 
 async function main(): Promise<void> {
   // Ensure we have data
-  const { candles: store } = createStorage('./data/candles.db');
+  const { candles: store, tournaments: tournamentStore } = createStorage('./data/candles.db');
   const symbols = [
     toSymbol('BTCUSDT'),
     toSymbol('ETHUSDT'),
@@ -396,7 +411,7 @@ async function main(): Promise<void> {
   const dataEnd = store.getLatestTimestamp(symbols[0]!, timeframe)!;
 
   const config: TournamentConfig = {
-    templates: [emaCrossover],
+    templates: [emaCrossover, rsiReversal],
     candidatesPerTemplate: 50,  // 50 scanner param sets
     pmParams: {
       stopLossPct: { min: 1, max: 5, step: 0.5 },
@@ -439,7 +454,9 @@ async function main(): Promise<void> {
   console.log(`Timeframe: ${config.timeframe}`);
   console.log(`Data: ${new Date(dataStart).toISOString().slice(0, 10)} → ${new Date(dataEnd).toISOString().slice(0, 10)}`);
 
-  await runTournament(config);
+  const tournamentId = `tournament-${Date.now()}`;
+  await runTournament(config, tournamentStore, tournamentId);
+  console.log(`Tournament state saved as: ${tournamentId}`);
 }
 
 main().catch((err) => {

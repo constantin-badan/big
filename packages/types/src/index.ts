@@ -393,6 +393,8 @@ export interface ScannerTemplate {
   name: string;
   description: string;
   params: ParamBounds;
+  /** Optional constraint: returns false for invalid param combinations (e.g., fast >= slow). */
+  isValid?: (params: Record<string, number>) => boolean;
   createFactory: (symbols: Symbol[], timeframe: Timeframe, riskConfig: RiskConfig, pmConfig: PositionManagerConfig) => StrategyFactory;
 }
 
