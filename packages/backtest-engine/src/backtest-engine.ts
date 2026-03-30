@@ -109,10 +109,13 @@ export function createBacktestEngine(
         config.endTime,
       );
 
-      // Use the exchange's internal balance as authoritative source of truth.
-      // This accounts for fees and slippage that the exchange applied during fills.
-      const balances = await exchange.getBalance();
-      const finalBalance = balances[0]?.total ?? initialBalance;
+      // Compute final balance from closed trades only.
+      // The exchange's internal balance includes unreturned notional from open positions,
+      // which would incorrectly show as a loss. Trade-based PnL is the correct measure.
+      let finalBalance = initialBalance;
+      for (const t of validTrades) {
+        finalBalance += t.pnl;
+      }
 
       const result: BacktestResult = {
         trades: validTrades,
