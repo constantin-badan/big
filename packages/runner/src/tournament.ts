@@ -400,14 +400,8 @@ export async function runTournament(
     console.log('  Top 5 survivors:');
     for (const r of topResults) {
       const c = candidates.find((x) => x.id === r.candidateId)!;
-      const scannerStr = Object.entries(c.scannerParams)
-        .map(([k, v]) => `${k}=${String(Math.round(v))}`)
-        .join(',');
-      let pmStr = `SL=${String(c.pmParams.stopLossPct?.toFixed(1))}% TP=${String(c.pmParams.takeProfitPct?.toFixed(1))}%`;
-      if (c.pmParams.trailingActivationPct) pmStr += ` trail=${String(c.pmParams.trailingActivationPct.toFixed(1))}%`;
-      if (c.pmParams.breakevenPct) pmStr += ` BE=${String(c.pmParams.breakevenPct.toFixed(1))}%`;
       console.log(
-        `    ${c.id}: ${scannerStr} ${pmStr} | PnL=${r.totalPnl.toFixed(2)} trades=${String(r.totalTrades)} weeks=${String(r.profitableWeeks)}/${String(r.totalWeeks)}`,
+        `    ${c.id}: PnL=${r.totalPnl.toFixed(2)} trades=${String(r.totalTrades)} weeks=${String(r.profitableWeeks)}/${String(r.totalWeeks)}`,
       );
     }
   }
