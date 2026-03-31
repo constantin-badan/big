@@ -420,24 +420,21 @@ export async function runTournament(
   console.log('');
 
   if (activeCandidates.length > 0) {
-    console.log('Final rankings:');
-    // Get last stage results for survivors
+    // Show top 10 only
     const lastStage = state.completedStages - 1;
     const lastResults = state.stageResults
       .filter((r) => r.stageIndex === lastStage && r.survived)
       .sort((a, b) => b.totalPnl - a.totalPnl);
 
-    for (let i = 0; i < lastResults.length; i++) {
+    console.log(`Final: ${String(lastResults.length)} survivors, top 10:`);
+    for (let i = 0; i < Math.min(10, lastResults.length); i++) {
       const r = lastResults[i]!;
       const c = candidates.find((x) => x.id === r.candidateId)!;
+      let pmStr = `SL=${String(c.pmParams.stopLossPct?.toFixed(1))}% TP=${String(c.pmParams.takeProfitPct?.toFixed(1))}%`;
+      if (c.pmParams.trailingActivationPct) pmStr += ` trail=${String(c.pmParams.trailingActivationPct.toFixed(1))}%`;
+      if (c.pmParams.breakevenPct) pmStr += ` BE=${String(c.pmParams.breakevenPct.toFixed(1))}%`;
       console.log(
-        `  #${String(i + 1)} ${c.id}: PnL=${r.totalPnl.toFixed(2)} trades=${String(r.totalTrades)} profWeeks=${String(r.profitableWeeks)}/${String(r.totalWeeks)} avgPF=${r.avgProfitFactor.toFixed(2)} maxDD=${r.maxDrawdown.toFixed(1)}%`,
-      );
-      console.log(
-        `       scanner: ${JSON.stringify(c.scannerParams)}`,
-      );
-      console.log(
-        `       pm: SL=${String(c.pmParams.stopLossPct?.toFixed(1))}% TP=${String(c.pmParams.takeProfitPct?.toFixed(1))}% hold=${String(c.pmParams.maxHoldTimeHours?.toFixed(0))}h`,
+        `  #${String(i + 1)} ${c.id}: PnL=${r.totalPnl.toFixed(2)} trades=${String(r.totalTrades)} | ${pmStr}`,
       );
     }
   }
