@@ -183,8 +183,10 @@ export async function runGrind(argv: string[]): Promise<void> {
     for (const c of bottom) {
       const key = paramsKey(c.templateName, c.scannerParams, c.pmParams);
       const prev = blacklist.data[key] ?? 0;
-      blacklist.data[key] = prev + 1;
-      if (prev + 1 === BLACKLIST_THRESHOLD) newlyBlacklisted++;
+      if (prev < BLACKLIST_THRESHOLD) {
+        blacklist.data[key] = prev + 1;
+        if (prev + 1 === BLACKLIST_THRESHOLD) newlyBlacklisted++;
+      }
     }
 
     const tracked = Object.keys(blacklist.data).length;
@@ -202,7 +204,7 @@ export async function runGrind(argv: string[]): Promise<void> {
   const final = await loadBlacklist();
   const counts = Object.values(final.data);
   const strike1 = counts.filter((c) => c === 1).length;
-  const strike2 = counts.filter((c) => c === 2).length;
+  const strike2 = counts.filter((c) => c === BLACKLIST_THRESHOLD).length;
   const blacklisted = counts.filter((c) => c >= BLACKLIST_THRESHOLD).length;
   console.log(`Tracked: ${String(counts.length)} | 1 strike: ${String(strike1)} | 2 strikes: ${String(strike2)} | Blacklisted: ${String(blacklisted)}`);
 }
