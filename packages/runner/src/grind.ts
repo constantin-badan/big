@@ -200,5 +200,9 @@ export async function runGrind(argv: string[]): Promise<void> {
 
   console.log('\n=== GRIND COMPLETE ===');
   const final = await loadBlacklist();
-  console.log(`Tracked: ${String(Object.keys(final.data).length)}, Active blacklist (${String(BLACKLIST_THRESHOLD)}+ strikes): ${String(final.activeKeys.size)}`);
+  const counts = Object.values(final.data);
+  const strike1 = counts.filter((c) => c === 1).length;
+  const strike2 = counts.filter((c) => c === 2).length;
+  const blacklisted = counts.filter((c) => c >= BLACKLIST_THRESHOLD).length;
+  console.log(`Tracked: ${String(counts.length)} | 1 strike: ${String(strike1)} | 2 strikes: ${String(strike2)} | Blacklisted (${String(BLACKLIST_THRESHOLD)}+): ${String(blacklisted)}`);
 }
