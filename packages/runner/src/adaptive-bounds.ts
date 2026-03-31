@@ -2,13 +2,12 @@
  * Adaptive parameter bounds.
  *
  * After each grind round, analyzes winners vs losers to narrow
- * parameter ranges. Persists to grind-bounds.json.
+ * both PM and per-template scanner parameter ranges.
+ * Persists to grind-bounds.json.
  *
- * Approach: for each PM param, compute the interquartile range (IQR)
- * of survivors. Shrink bounds toward where survivors cluster.
- * Never shrinks below 50% of original range to avoid over-narrowing.
+ * Approach: IQR of top 25% performers, floor at 50% of original range.
  */
-import type { ParamBounds, TournamentCandidate, TournamentState } from '@trading-bot/types';
+import type { ParamBounds, ParamSpec, ScannerTemplate, TournamentCandidate, TournamentState } from '@trading-bot/types';
 
 const BOUNDS_PATH = './grind-bounds.json';
 
@@ -19,6 +18,7 @@ function unsafeCast(value: unknown) {
 
 export interface AdaptiveBounds {
   pmParams: ParamBounds;
+  scannerParams: Record<string, ParamBounds>; // keyed by template name
   roundsAnalyzed: number;
 }
 
@@ -31,12 +31,32 @@ const DEFAULT_PM_BOUNDS: ParamBounds = {
   breakevenPct: { min: 0, max: 3, step: 0.5 },
 };
 
-export async function loadBounds(): Promise<AdaptiveBounds> {
+export function getDefaultScannerBounds(templates: readonly ScannerTemplate[]): Record<string, ParamBounds> {
+  const result: Record<string, ParamBounds> = {};
+  for (const t of templates) {
+    result[t.name] = { ...t.params };
+  }
+  return result;
+}
+
+export async function loadBounds(templates: readonly ScannerTemplate[]): Promise<AdaptiveBounds> {
   try {
     const raw = await Bun.file(BOUNDS_PATH).text();
-    return unsafeCast<AdaptiveBounds>(JSON.parse(raw));
+    const loaded = unsafeCast<AdaptiveBounds>(JSON.parse(raw));
+    // Ensure all templates have bounds (new templates get defaults)
+    if (!loaded.scannerParams) loaded.scannerParams = {};
+    for (const t of templates) {
+      if (!loaded.scannerParams[t.name]) {
+        loaded.scannerParams[t.name] = { ...t.params };
+      }
+    }
+    return loaded;
   } catch {
-    return { pmParams: DEFAULT_PM_BOUNDS, roundsAnalyzed: 0 };
+    return {
+      pmParams: DEFAULT_PM_BOUNDS,
+      scannerParams: getDefaultScannerBounds(templates),
+      roundsAnalyzed: 0,
+    };
   }
 }
 
@@ -52,16 +72,64 @@ function percentile(sorted: number[], p: number): number {
   return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (idx - lo);
 }
 
-/**
- * Analyze tournament survivors and narrow PM bounds toward winning ranges.
- * Shrinks each param's range to the IQR of top 25% performers,
- * but never narrows below 50% of the original range.
- */
-export function narrowBounds(
-  state: TournamentState,
+function narrowParamBounds(
   currentBounds: ParamBounds,
+  candidates: TournamentCandidate[],
+  getParam: (c: TournamentCandidate, param: string) => number | undefined,
 ): ParamBounds {
-  // Get top 25% by cumulative PnL
+  if (candidates.length < 10) return currentBounds;
+
+  const newBounds: ParamBounds = {};
+
+  for (const [param, spec] of Object.entries(currentBounds)) {
+    const step = spec.step ?? 1;
+    const values = candidates
+      .map((c) => getParam(c, param))
+      .filter((v): v is number => v !== undefined)
+      .sort((a, b) => a - b);
+
+    if (values.length < 5) {
+      newBounds[param] = spec;
+      continue;
+    }
+
+    const q1 = percentile(values, 0.25);
+    const q3 = percentile(values, 0.75);
+    const originalRange = spec.max - spec.min;
+    const minAllowedRange = originalRange * 0.5;
+
+    let newMin = Math.max(spec.min, q1 - step);
+    let newMax = Math.min(spec.max, q3 + step);
+
+    newMin = spec.min + Math.floor((newMin - spec.min) / step) * step;
+    newMax = spec.min + Math.ceil((newMax - spec.min) / step) * step;
+
+    if (newMax - newMin < minAllowedRange) {
+      const center = (newMin + newMax) / 2;
+      newMin = center - minAllowedRange / 2;
+      newMax = center + minAllowedRange / 2;
+      newMin = spec.min + Math.floor((newMin - spec.min) / step) * step;
+      newMax = spec.min + Math.ceil((newMax - spec.min) / step) * step;
+    }
+
+    newMin = Math.max(spec.min, newMin);
+    newMax = Math.min(spec.max, newMax);
+
+    newBounds[param] = { min: newMin, max: newMax, step };
+  }
+
+  return newBounds;
+}
+
+/**
+ * Narrow both PM bounds and per-template scanner bounds
+ * based on top 25% performers.
+ */
+export function narrowAllBounds(
+  state: TournamentState,
+  currentBounds: AdaptiveBounds,
+): AdaptiveBounds {
+  // Rank all candidates by cumulative PnL
   const pnlById = new Map<string, number>();
   for (const r of state.stageResults) {
     const prev = pnlById.get(r.candidateId) ?? 0;
@@ -81,53 +149,38 @@ export function narrowBounds(
     if (c) topCandidates.push(c);
   }
 
-  if (topCandidates.length < 10) {
-    // Not enough data to narrow reliably
-    return currentBounds;
+  // Narrow PM bounds using all top candidates
+  const newPmBounds = narrowParamBounds(
+    currentBounds.pmParams,
+    topCandidates,
+    (c, param) => c.pmParams[param],
+  );
+
+  // Narrow scanner bounds per template
+  const newScannerBounds: Record<string, ParamBounds> = {};
+  const topByTemplate = new Map<string, TournamentCandidate[]>();
+  for (const c of topCandidates) {
+    const list = topByTemplate.get(c.templateName) ?? [];
+    list.push(c);
+    topByTemplate.set(c.templateName, list);
   }
 
-  const newBounds: ParamBounds = {};
-
-  for (const [param, spec] of Object.entries(currentBounds)) {
-    const step = spec.step ?? 1;
-    const values = topCandidates
-      .map((c) => c.pmParams[param])
-      .filter((v): v is number => v !== undefined)
-      .sort((a, b) => a - b);
-
-    if (values.length < 5) {
-      newBounds[param] = spec;
-      continue;
+  for (const [name, bounds] of Object.entries(currentBounds.scannerParams)) {
+    const templateTop = topByTemplate.get(name);
+    if (templateTop && templateTop.length >= 5) {
+      newScannerBounds[name] = narrowParamBounds(
+        bounds,
+        templateTop,
+        (c, param) => c.scannerParams[param],
+      );
+    } else {
+      newScannerBounds[name] = bounds;
     }
-
-    const q1 = percentile(values, 0.25);
-    const q3 = percentile(values, 0.75);
-
-    const originalRange = spec.max - spec.min;
-    const minAllowedRange = originalRange * 0.5;
-
-    let newMin = Math.max(spec.min, q1 - step);
-    let newMax = Math.min(spec.max, q3 + step);
-
-    // Snap to step
-    newMin = spec.min + Math.floor((newMin - spec.min) / step) * step;
-    newMax = spec.min + Math.ceil((newMax - spec.min) / step) * step;
-
-    // Ensure minimum range
-    if (newMax - newMin < minAllowedRange) {
-      const center = (newMin + newMax) / 2;
-      newMin = center - minAllowedRange / 2;
-      newMax = center + minAllowedRange / 2;
-      newMin = spec.min + Math.floor((newMin - spec.min) / step) * step;
-      newMax = spec.min + Math.ceil((newMax - spec.min) / step) * step;
-    }
-
-    // Clamp to original bounds
-    newMin = Math.max(spec.min, newMin);
-    newMax = Math.min(spec.max, newMax);
-
-    newBounds[param] = { min: newMin, max: newMax, step };
   }
 
-  return newBounds;
+  return {
+    pmParams: newPmBounds,
+    scannerParams: newScannerBounds,
+    roundsAnalyzed: currentBounds.roundsAnalyzed + 1,
+  };
 }

@@ -17,12 +17,12 @@ import { TEMPLATES } from '@trading-bot/strategies';
 
 import { createBinanceFetcher } from './fetch-binance';
 import { fetchTopSymbols } from './fetch-top-symbols';
-import { loadBounds, saveBounds, narrowBounds } from './adaptive-bounds';
+import { loadBounds, saveBounds, narrowAllBounds } from './adaptive-bounds';
 import { runTournament } from './tournament';
 
 const DB_PATH = './data/candles.db';
 
-function countPossibleConfigs(pmBounds: ParamBounds): number {
+function countPossibleConfigs(pmBounds: ParamBounds, scannerBounds: Record<string, ParamBounds>): number {
   let pmCombos = 1;
   for (const spec of Object.values(pmBounds)) {
     const step = spec.step ?? 1;
@@ -30,9 +30,9 @@ function countPossibleConfigs(pmBounds: ParamBounds): number {
     pmCombos *= steps;
   }
   let scannerCombos = 0;
-  for (const t of TEMPLATES) {
+  for (const bounds of Object.values(scannerBounds)) {
     let combos = 1;
-    for (const spec of Object.values(t.params)) {
+    for (const spec of Object.values(bounds)) {
       const step = spec.step ?? 1;
       const steps = Math.max(1, Math.floor((spec.max - spec.min) / step) + 1);
       combos *= steps;
@@ -70,14 +70,9 @@ export async function runGrind(argv: string[]): Promise<void> {
   console.log(`Pool: ${String(symbols.length)} symbols\n`);
 
   for (let round = 1; round <= rounds; round++) {
-    const bounds = await loadBounds();
-    const configsBefore = countPossibleConfigs(bounds.pmParams);
-    const pmStr = Object.entries(bounds.pmParams)
-      .filter(([k]) => k !== 'maxHoldTimeHours')
-      .map(([k, v]) => `${k}=[${String(v.min)}-${String(v.max)}]`)
-      .join(' ');
-    console.log(`\n=== Round ${String(round)}/${String(rounds)} | Search space: ${configsBefore.toLocaleString()} configs | Narrowed ${String(bounds.roundsAnalyzed)}x ===`);
-    console.log(`  PM: ${pmStr}\n`);
+    const bounds = await loadBounds(TEMPLATES);
+    const configsBefore = countPossibleConfigs(bounds.pmParams, bounds.scannerParams);
+    console.log(`\n=== Round ${String(round)}/${String(rounds)} | Search space: ${configsBefore.toLocaleString()} | Narrowed ${String(bounds.roundsAnalyzed)}x ===\n`);
 
     const templateCount = TEMPLATES.length;
     let scannerSamples = 200;
@@ -88,8 +83,15 @@ export async function runGrind(argv: string[]): Promise<void> {
       scannerSamples = Math.min(200, Math.max(1, Math.floor(perTemplate / pmSamples)));
     }
 
+    // Override template scanner bounds with adaptive bounds
+    const adaptedTemplates = TEMPLATES.map((t) => {
+      const adapted = bounds.scannerParams[t.name];
+      if (!adapted) return t;
+      return { ...t, params: adapted };
+    });
+
     const config: TournamentConfig = {
-      templates: [...TEMPLATES],
+      templates: adaptedTemplates,
       candidatesPerTemplate: scannerSamples,
       pmParams: bounds.pmParams,
       pmSamples,
@@ -125,10 +127,10 @@ export async function runGrind(argv: string[]): Promise<void> {
     const tournamentId = `grind-${String(round)}-${Date.now()}`;
     const state = await runTournament(config, tournamentStore, tournamentId, DB_PATH);
 
-    // Narrow PM bounds based on winners
-    const newPmBounds = narrowBounds(state, bounds.pmParams);
-    const configsAfter = countPossibleConfigs(newPmBounds);
-    await saveBounds({ pmParams: newPmBounds, roundsAnalyzed: bounds.roundsAnalyzed + 1 });
+    // Narrow PM + scanner bounds based on winners
+    const newBounds = narrowAllBounds(state, bounds);
+    const configsAfter = countPossibleConfigs(newBounds.pmParams, newBounds.scannerParams);
+    await saveBounds(newBounds);
 
     const survivors = state.stageResults.filter(
       (r) => r.stageIndex === state.completedStages - 1 && r.survived,
@@ -139,12 +141,12 @@ export async function runGrind(argv: string[]): Promise<void> {
   }
 
   console.log('\n=== GRIND COMPLETE ===');
-  const finalBounds = await loadBounds();
-  const finalConfigs = countPossibleConfigs(finalBounds.pmParams);
-  console.log(`Final search space: ${finalConfigs.toLocaleString()} configs (narrowed ${String(finalBounds.roundsAnalyzed)} times)`);
-  const pmSummary = Object.entries(finalBounds.pmParams)
-    .filter(([k]) => k !== 'maxHoldTimeHours')
-    .map(([k, v]) => `  ${k}: [${String(v.min)} - ${String(v.max)}]`)
-    .join('\n');
-  console.log('PM bounds:\n' + pmSummary);
+  const finalBounds = await loadBounds(TEMPLATES);
+  const finalConfigs = countPossibleConfigs(finalBounds.pmParams, finalBounds.scannerParams);
+  console.log(`Final search space: ${finalConfigs.toLocaleString()} (narrowed ${String(finalBounds.roundsAnalyzed)}x)`);
+  console.log('PM bounds:');
+  for (const [k, v] of Object.entries(finalBounds.pmParams)) {
+    if (k === 'maxHoldTimeHours') continue;
+    console.log(`  ${k}: [${String(v.min)} - ${String(v.max)}]`);
+  }
 }
