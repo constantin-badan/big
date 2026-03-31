@@ -46,7 +46,13 @@ async function tournament(): Promise<void> {
   const dataEnd = store.getLatestTimestamp(refSymbol, timeframe)!;
 
   const config: TournamentConfig = {
-    templates: [...TEMPLATES],
+    // Exclude templates with >90% early death rate from losers analysis:
+    // ema-trend-rsi-entry (100%), macd-momentum (100%), stochrsi-reversal (96%)
+    templates: TEMPLATES.filter((t) =>
+      t.name !== 'ema-trend-rsi-entry' &&
+      t.name !== 'macd-momentum' &&
+      t.name !== 'stochrsi-reversal'
+    ),
     candidatesPerTemplate: 50,
     pmParams: {
       stopLossPct: { min: 2, max: 8, step: 0.5 },
