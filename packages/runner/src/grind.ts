@@ -58,6 +58,7 @@ async function loadBlacklist(): Promise<{ data: BlacklistData; activeKeys: Set<s
 
 async function saveBlacklist(data: BlacklistData): Promise<void> {
   await Bun.write(BLACKLIST_PATH, JSON.stringify(data) + '\n');
+  await Bun.spawn(['npx', 'oxfmt', '--write', BLACKLIST_PATH]).exited;
 }
 
 function getBottom5Percent(state: TournamentState): TournamentCandidate[] {
