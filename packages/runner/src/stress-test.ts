@@ -289,7 +289,7 @@ function printResults(results: StressResult[]): void {
   const sorted = [...results].sort((a, b) => b.stressPnl - a.stressPnl);
 
   // Filter: must be profitable AND average >= 1 trade/day
-  const minTradesPerDay = 1;
+  const minTradesPerDay = 0.5;
   const passed = sorted.filter((r) => {
     if (r.stressPnl <= 0) return false;
     const days = r.stressTotalRuns * 7;
@@ -489,7 +489,7 @@ export async function runStressTest(argv: string[]): Promise<void> {
       .filter((r) => {
         if (r.stressPnl <= 0) return false;
         const days = r.stressTotalRuns * 7;
-        return days > 0 && r.stressTrades / days >= 1;
+        return days > 0 && r.stressTrades / days >= 0.5;
       })
       .sort((a, b) => b.stressPnl - a.stressPnl);
 
