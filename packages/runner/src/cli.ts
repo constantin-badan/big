@@ -53,16 +53,16 @@ async function tournament(): Promise<void> {
       t.name !== 'macd-momentum' &&
       t.name !== 'stochrsi-reversal'
     ),
-    candidatesPerTemplate: 50,
+    candidatesPerTemplate: 200,
     pmParams: {
-      stopLossPct: { min: 2, max: 8, step: 0.5 },
-      takeProfitPct: { min: 1, max: 6, step: 0.5 },
-      maxHoldTimeHours: { min: 999, max: 999, step: 1 }, // no timeout — exit only via SL/TP/trailing
-      trailingActivationPct: { min: 0, max: 3, step: 0.5 },
-      trailingDistancePct: { min: 0.3, max: 2, step: 0.1 },
-      breakevenPct: { min: 0, max: 2, step: 0.5 },
+      stopLossPct: { min: 1, max: 10, step: 0.5 },
+      takeProfitPct: { min: 0.5, max: 8, step: 0.5 },
+      maxHoldTimeHours: { min: 999, max: 999, step: 1 },
+      trailingActivationPct: { min: 0, max: 5, step: 0.5 },
+      trailingDistancePct: { min: 0.2, max: 3, step: 0.1 },
+      breakevenPct: { min: 0, max: 3, step: 0.5 },
     },
-    pmSamples: 8,
+    pmSamples: 20,
     riskConfig: {
       maxPositionSizePct: 5,
       maxConcurrentPositions: 2,
