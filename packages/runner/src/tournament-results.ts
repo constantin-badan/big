@@ -22,6 +22,7 @@ interface ResultsArgs {
   top: number;
   byTemplate: boolean;
   exportPath: string | null;
+  losersPath: string | null;
   dbPath: string;
 }
 
@@ -32,6 +33,7 @@ function parseArgs(argv: string[]): ResultsArgs {
     top: 10,
     byTemplate: false,
     exportPath: null,
+    losersPath: null,
     dbPath: './data/candles.db',
   };
 
@@ -47,6 +49,8 @@ function parseArgs(argv: string[]): ResultsArgs {
       args.byTemplate = true;
     } else if (arg === '--export' && argv[i + 1]) {
       args.exportPath = argv[++i]!;
+    } else if (arg === '--losers' && argv[i + 1]) {
+      args.losersPath = argv[++i]!;
     } else if (arg === '--db' && argv[i + 1]) {
       args.dbPath = argv[++i]!;
     }
@@ -288,10 +292,110 @@ export async function runResults(argv: string[]): Promise<void> {
     return;
   }
 
+  if (args.losersPath) {
+    await exportLosers(state, args.losersPath);
+    return;
+  }
+
   if (args.byTemplate) {
     showByTemplate(state);
     return;
   }
 
   showTop(state, args.top);
+}
+
+async function exportLosers(state: TournamentState, path: string): Promise<void> {
+  // Find candidates killed in the first half of stages (early deaths = consistently bad)
+  const earlyDeathCutoff = Math.floor(state.completedStages / 2);
+
+  const candidateMap = new Map<string, TournamentCandidate>();
+  for (const c of state.candidates) {
+    candidateMap.set(c.id, c);
+  }
+
+  // Find which candidates survived each stage
+  const survivedStages = new Map<string, number>();
+  for (const c of state.candidates) {
+    survivedStages.set(c.id, 0);
+  }
+  for (const r of state.stageResults) {
+    if (r.survived) {
+      const prev = survivedStages.get(r.candidateId) ?? 0;
+      survivedStages.set(r.candidateId, Math.max(prev, r.stageIndex + 1));
+    }
+  }
+
+  // Early deaths: killed before halfway
+  const earlyDeaths: TournamentCandidate[] = [];
+  for (const [id, stagesCompleted] of survivedStages) {
+    if (stagesCompleted <= earlyDeathCutoff) {
+      const c = candidateMap.get(id);
+      if (c) earlyDeaths.push(c);
+    }
+  }
+
+  // Group by template and compute param ranges
+  const byTemplate = new Map<string, TournamentCandidate[]>();
+  for (const c of earlyDeaths) {
+    const list = byTemplate.get(c.templateName) ?? [];
+    list.push(c);
+    byTemplate.set(c.templateName, list);
+  }
+
+  const templateStats: Record<string, {
+    totalCandidates: number;
+    earlyDeaths: number;
+    earlyDeathRate: number;
+    scannerParamRanges: Record<string, { min: number; max: number }>;
+    pmParamRanges: Record<string, { min: number; max: number }>;
+  }> = {};
+
+  for (const [name, losers] of byTemplate) {
+    const totalForTemplate = state.candidates.filter((c) => c.templateName === name).length;
+
+    // Compute param ranges of losers
+    const scannerRanges: Record<string, { min: number; max: number }> = {};
+    const pmRanges: Record<string, { min: number; max: number }> = {};
+
+    for (const c of losers) {
+      for (const [k, v] of Object.entries(c.scannerParams)) {
+        if (!scannerRanges[k]) scannerRanges[k] = { min: v, max: v };
+        else { scannerRanges[k].min = Math.min(scannerRanges[k].min, v); scannerRanges[k].max = Math.max(scannerRanges[k].max, v); }
+      }
+      for (const [k, v] of Object.entries(c.pmParams)) {
+        if (!pmRanges[k]) pmRanges[k] = { min: v, max: v };
+        else { pmRanges[k].min = Math.min(pmRanges[k].min, v); pmRanges[k].max = Math.max(pmRanges[k].max, v); }
+      }
+    }
+
+    templateStats[name] = {
+      totalCandidates: totalForTemplate,
+      earlyDeaths: losers.length,
+      earlyDeathRate: losers.length / totalForTemplate,
+      scannerParamRanges: scannerRanges,
+      pmParamRanges: pmRanges,
+    };
+  }
+
+  const output = {
+    exportedAt: new Date().toISOString(),
+    tournamentId: state.config.seed ?? 'unknown',
+    completedStages: state.completedStages,
+    earlyDeathCutoff,
+    totalCandidates: state.candidates.length,
+    totalEarlyDeaths: earlyDeaths.length,
+    templateStats,
+  };
+
+  await Bun.write(path, JSON.stringify(output, null, 2) + '\n');
+
+  console.log(`Exported losers analysis to ${path}`);
+  console.log(`  ${String(earlyDeaths.length)}/${String(state.candidates.length)} candidates died before stage ${String(earlyDeathCutoff + 1)}`);
+  console.log('');
+  console.log('  Templates with highest early death rates:');
+  const sorted = Object.entries(templateStats).sort((a, b) => b[1].earlyDeathRate - a[1].earlyDeathRate);
+  for (const [name, stats] of sorted) {
+    console.log(`    ${name}: ${(stats.earlyDeathRate * 100).toFixed(0)}% early deaths (${String(stats.earlyDeaths)}/${String(stats.totalCandidates)})`);
+  }
 }
