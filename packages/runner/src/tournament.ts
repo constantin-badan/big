@@ -13,6 +13,7 @@
  */
 import type {
   BacktestConfig,
+  Candle,
   CandidateStageResult,
   ExchangeConfig,
   ParamBounds,
@@ -134,11 +135,37 @@ async function runStage(
   let factoryMs = 0;
   let engineMs = 0;
 
+  // Pre-load candles for all symbol/timeframe/week combos (avoids repeated SQLite reads)
+  const warmupMs = computeWarmupMs([timeframe]);
+  const allTemplateTimeframes = new Set<Timeframe>([timeframe]);
+  for (const t of templates.values()) {
+    if (t.requiredTimeframes) {
+      for (const tf of t.requiredTimeframes) allTemplateTimeframes.add(tf);
+    }
+  }
+  const candleCache = new Map<string, Candle[]>();
+  for (const sym of symbols) {
+    for (const tf of allTemplateTimeframes) {
+      const earliest = Math.min(...weeks.map((w) => w.startTime)) - warmupMs;
+      const latest = Math.max(...weeks.map((w) => w.endTime));
+      const key = `${String(sym)}:${tf}`;
+      candleCache.set(key, store.getCandles(sym, tf, earliest, latest));
+    }
+  }
+
+  // In-memory loader using pre-loaded cache
+  const loader = (sym: Symbol, tf: Timeframe, start: number, end: number) => {
+    const key = `${String(sym)}:${tf}`;
+    const all = candleCache.get(key);
+    if (!all) return Promise.resolve([]);
+    // Filter to requested range
+    return Promise.resolve(all.filter((c) => c.openTime >= start && c.openTime < end));
+  };
+
   for (const candidate of candidates) {
     const template = templates.get(candidate.templateName);
     if (!template) throw new Error(`Unknown template: ${candidate.templateName}`);
 
-    // Build PM config from candidate's PM params
     const trailingActivation = candidate.pmParams.trailingActivationPct ?? 0;
     const pmConfig: PositionManagerConfig = {
       defaultStopLossPct: candidate.pmParams.stopLossPct ?? 2,
@@ -161,11 +188,7 @@ async function runStage(
     let sharpeSum = 0;
     let worstDrawdown = 0;
 
-    const loader = (sym: Symbol, tf: Timeframe, start: number, end: number) =>
-      Promise.resolve(store.getCandles(sym, tf, start, end));
-
     for (const week of weeks) {
-      // Include any additional timeframes the template requires (e.g., 4h trend filter)
       const extraTimeframes = template.requiredTimeframes ?? [];
       const allTimeframes = [timeframe, ...extraTimeframes.filter((tf) => tf !== timeframe)];
 
@@ -174,7 +197,7 @@ async function runStage(
         endTime: week.endTime,
         symbols,
         timeframes: allTimeframes,
-        warmupMs: computeWarmupMs(allTimeframes),
+        warmupMs,
       };
 
       const eStart = Date.now();
