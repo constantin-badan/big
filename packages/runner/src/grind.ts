@@ -204,5 +204,5 @@ export async function runGrind(argv: string[]): Promise<void> {
   const strike1 = counts.filter((c) => c === 1).length;
   const strike2 = counts.filter((c) => c === 2).length;
   const blacklisted = counts.filter((c) => c >= BLACKLIST_THRESHOLD).length;
-  console.log(`Tracked: ${String(counts.length)} | 1 strike: ${String(strike1)} | 2 strikes: ${String(strike2)} | Blacklisted (${String(BLACKLIST_THRESHOLD)}+): ${String(blacklisted)}`);
+  console.log(`Tracked: ${String(counts.length)} | 1 strike: ${String(strike1)} | 2 strikes: ${String(strike2)} | Blacklisted: ${String(blacklisted)}`);
 }
