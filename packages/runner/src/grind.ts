@@ -34,8 +34,10 @@ interface BlacklistEntry {
   templateName: string;
   scannerParams: Record<string, number>;
   pmParams: Record<string, number>;
-  killedInRound: number;
+  bottomCount: number;  // how many rounds this config was in bottom 5%
 }
+
+const BLACKLIST_THRESHOLD = 3; // must be bottom 5% in N rounds to get blacklisted
 
 interface BlacklistFile {
   entries: BlacklistEntry[];
@@ -49,17 +51,20 @@ function paramsKey(templateName: string, scanner: Record<string, number>, pm: Re
   return `${templateName}:${s}|${p}`;
 }
 
-async function loadBlacklist(): Promise<{ entries: BlacklistEntry[]; keys: Set<string> }> {
+async function loadBlacklist(): Promise<{ entries: BlacklistEntry[]; keys: Set<string>; byKey: Map<string, BlacklistEntry> }> {
   try {
     const raw = await Bun.file(BLACKLIST_PATH).text();
     const data: BlacklistFile = unsafeCast<BlacklistFile>(JSON.parse(raw));
     const keys = new Set<string>();
+    const byKey = new Map<string, BlacklistEntry>();
     for (const e of data.entries) {
-      keys.add(paramsKey(e.templateName, e.scannerParams, e.pmParams));
+      const key = paramsKey(e.templateName, e.scannerParams, e.pmParams);
+      if (e.bottomCount >= BLACKLIST_THRESHOLD) keys.add(key);
+      byKey.set(key, e);
     }
-    return { entries: data.entries, keys };
+    return { entries: data.entries, keys, byKey };
   } catch {
-    return { entries: [], keys: new Set() };
+    return { entries: [], keys: new Set(), byKey: new Map() };
   }
 }
 
@@ -100,11 +105,13 @@ function getBottom5Percent(state: TournamentState): TournamentCandidate[] {
 
 export async function runGrind(argv: string[]): Promise<void> {
   let rounds = 10;
+  let maxConfigs = 0; // 0 = no limit
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--rounds' && argv[i + 1]) rounds = Number(argv[++i]);
+    if (argv[i] === '--max-configs' && argv[i + 1]) maxConfigs = Number(argv[++i]);
   }
 
-  console.log(`=== GRIND MODE: ${String(rounds)} rounds ===\n`);
+  console.log(`=== GRIND MODE: ${String(rounds)} rounds${maxConfigs > 0 ? `, max ${String(maxConfigs)} configs` : ''} ===\n`);
 
   const timeframe: Timeframe = '5m';
   const refSymbol = toSymbol('BTCUSDT');
@@ -127,11 +134,23 @@ export async function runGrind(argv: string[]): Promise<void> {
 
   for (let round = 1; round <= rounds; round++) {
     const blacklist = await loadBlacklist();
-    console.log(`\n=== Round ${String(round)}/${String(rounds)} | Blacklist: ${String(blacklist.entries.length)} entries ===\n`);
+    const activeCount = [...blacklist.byKey.values()].filter((e) => e.bottomCount >= BLACKLIST_THRESHOLD).length;
+    console.log(`\n=== Round ${String(round)}/${String(rounds)} | Tracked: ${String(blacklist.byKey.size)}, Blacklisted: ${String(activeCount)} ===\n`);
+
+    // Compute candidates per template based on max-configs limit
+    const templateCount = TEMPLATES.length;
+    let scannerSamples = 200;
+    let pmSamples = 20;
+    if (maxConfigs > 0) {
+      // target = scannerSamples * pmSamples * templateCount <= maxConfigs
+      const perTemplate = Math.floor(maxConfigs / templateCount);
+      pmSamples = Math.min(20, Math.max(1, Math.floor(Math.sqrt(perTemplate))));
+      scannerSamples = Math.min(200, Math.max(1, Math.floor(perTemplate / pmSamples)));
+    }
 
     const config: TournamentConfig = {
       templates: [...TEMPLATES],
-      candidatesPerTemplate: 200,
+      candidatesPerTemplate: scannerSamples,
       pmParams: {
         stopLossPct: { min: 1, max: 10, step: 0.5 },
         takeProfitPct: { min: 0.5, max: 8, step: 0.5 },
@@ -140,7 +159,7 @@ export async function runGrind(argv: string[]): Promise<void> {
         trailingDistancePct: { min: 0.2, max: 3, step: 0.1 },
         breakevenPct: { min: 0, max: 3, step: 0.5 },
       },
-      pmSamples: 20,
+      pmSamples,
       riskConfig: {
         maxPositionSizePct: 5,
         maxConcurrentPositions: 2,
@@ -188,33 +207,39 @@ export async function runGrind(argv: string[]): Promise<void> {
     const tournamentId = `grind-${String(round)}-${Date.now()}`;
     const state = await runTournament(config, tournamentStore, tournamentId, DB_PATH, blacklist.keys);
 
-    // Collect bottom 5% as new losers
-    const newLosers = getBottom5Percent(state);
-    const newEntries: BlacklistEntry[] = [];
-    for (const c of newLosers) {
+    // Increment bottom count for bottom 5% — only blacklisted after N rounds
+    const bottom = getBottom5Percent(state);
+    let newlyBlacklisted = 0;
+    for (const c of bottom) {
       const key = paramsKey(c.templateName, c.scannerParams, c.pmParams);
-      if (!blacklist.keys.has(key)) {
-        newEntries.push({
+      const existing = blacklist.byKey.get(key);
+      if (existing) {
+        existing.bottomCount += 1;
+        if (existing.bottomCount === BLACKLIST_THRESHOLD) newlyBlacklisted++;
+      } else {
+        const entry: BlacklistEntry = {
           templateName: c.templateName,
           scannerParams: c.scannerParams,
           pmParams: c.pmParams,
-          killedInRound: round,
-        });
-        blacklist.keys.add(key);
+          bottomCount: 1,
+        };
+        blacklist.byKey.set(key, entry);
       }
     }
 
-    const allEntries = [...blacklist.entries, ...newEntries];
-    await saveBlacklist(allEntries, (blacklist.entries.length > 0 ? round : 0) + 1);
+    const allEntries = [...blacklist.byKey.values()];
+    const activeBlacklist = allEntries.filter((e) => e.bottomCount >= BLACKLIST_THRESHOLD).length;
+    await saveBlacklist(allEntries, round);
 
     const survivors = state.stageResults
       .filter((r) => r.stageIndex === state.completedStages - 1 && r.survived)
       .length;
 
-    console.log(`\nRound ${String(round)} done: ${String(survivors)} survivors, +${String(newEntries.length)} new blacklist entries (total: ${String(allEntries.length)})`);
+    console.log(`\nRound ${String(round)} done: ${String(survivors)} survivors, +${String(newlyBlacklisted)} newly blacklisted (tracked: ${String(allEntries.length)}, active blacklist: ${String(activeBlacklist)})`);
   }
 
   console.log('\n=== GRIND COMPLETE ===');
   const finalBlacklist = await loadBlacklist();
-  console.log(`Total blacklisted configs: ${String(finalBlacklist.entries.length)}`);
+  const active = finalBlacklist.entries.filter((e) => e.bottomCount >= BLACKLIST_THRESHOLD).length;
+  console.log(`Tracked configs: ${String(finalBlacklist.entries.length)}, Active blacklist (${String(BLACKLIST_THRESHOLD)}+ strikes): ${String(active)}`);
 }
