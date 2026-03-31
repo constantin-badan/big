@@ -227,6 +227,7 @@ export async function runTournament(
   tournamentStore: ITournamentStore,
   tournamentId: string,
   dbPath = './data/candles.db',
+  blacklist?: Set<string>,
 ): Promise<TournamentState> {
   // Resolve symbol pool — fetch dynamically if not provided
   const symbolPool =
@@ -245,8 +246,8 @@ export async function runTournament(
     templateMap.set(t.name, t);
   }
 
-  // Generate all candidates
-  const candidates = generateCandidates(
+  // Generate all candidates, then filter out blacklisted ones
+  let candidates = generateCandidates(
     config.templates,
     config.candidatesPerTemplate,
     config.pmParams,
@@ -254,7 +255,17 @@ export async function runTournament(
     random,
   );
 
-  console.log(`Generated ${String(candidates.length)} candidates`);
+  if (blacklist && blacklist.size > 0) {
+    const before = candidates.length;
+    candidates = candidates.filter((c) => {
+      const s = Object.entries(c.scannerParams).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${String(Math.round(v * 100))}`).join(',');
+      const p = Object.entries(c.pmParams).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${String(Math.round(v * 100))}`).join(',');
+      return !blacklist.has(`${c.templateName}:${s}|${p}`);
+    });
+    console.log(`Generated ${String(before)} candidates, ${String(before - candidates.length)} blacklisted, ${String(candidates.length)} remaining`);
+  } else {
+    console.log(`Generated ${String(candidates.length)} candidates`);
+  }
 
   const state: TournamentState = {
     config,

@@ -16,6 +16,7 @@ import { createBinanceFetcher } from './fetch-binance';
 import { runTestnet } from './testnet';
 import { runResults } from './tournament-results';
 import { runStressTest } from './stress-test';
+import { runGrind } from './grind';
 
 const command = process.argv[2]; // 'tournament' | 'sync' | 'testnet'
 
@@ -46,13 +47,7 @@ async function tournament(): Promise<void> {
   const dataEnd = store.getLatestTimestamp(refSymbol, timeframe)!;
 
   const config: TournamentConfig = {
-    // Exclude templates with >90% early death rate from losers analysis:
-    // ema-trend-rsi-entry (100%), macd-momentum (100%), stochrsi-reversal (96%)
-    templates: TEMPLATES.filter((t) =>
-      t.name !== 'ema-trend-rsi-entry' &&
-      t.name !== 'macd-momentum' &&
-      t.name !== 'stochrsi-reversal'
-    ),
+    templates: [...TEMPLATES],
     candidatesPerTemplate: 200,
     pmParams: {
       stopLossPct: { min: 1, max: 10, step: 0.5 },
@@ -185,6 +180,8 @@ async function main(): Promise<void> {
     await runResults(process.argv.slice(3));
   } else if (command === 'stress') {
     await runStressTest(process.argv.slice(3));
+  } else if (command === 'grind') {
+    await runGrind(process.argv.slice(3));
   } else {
     console.error(`Unknown command: ${String(command)}`);
     console.error('Usage: bun run packages/runner/src/cli.ts <command> [options]');
