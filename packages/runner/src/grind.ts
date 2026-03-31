@@ -1,3 +1,5 @@
+import { createStorage, syncCandles } from '@trading-bot/storage';
+import { TEMPLATES } from '@trading-bot/strategies';
 /**
  * Grind: automated tournament loop with cumulative loser blacklist.
  *
@@ -14,13 +16,18 @@
  * Usage:
  *   bun run packages/runner/src/cli.ts grind [--rounds 10]
  */
-import type { TournamentConfig, Timeframe, TournamentState, TournamentCandidate } from '@trading-bot/types';
+import type {
+  TournamentConfig,
+  Timeframe,
+  TournamentState,
+  TournamentCandidate,
+} from '@trading-bot/types';
 import { toSymbol } from '@trading-bot/types';
-import { createStorage, syncCandles } from '@trading-bot/storage';
-import { TEMPLATES } from '@trading-bot/strategies';
+
 import { createBinanceFetcher } from './fetch-binance';
-import { runTournament } from './tournament';
 import { fetchTopSymbols } from './fetch-top-symbols';
+import { loadBounds, saveBounds, narrowBounds } from './adaptive-bounds';
+import { runTournament } from './tournament';
 
 const DB_PATH = './data/candles.db';
 const BLACKLIST_PATH = './grind-blacklist.json';
@@ -36,9 +43,19 @@ const BLACKLIST_THRESHOLD = 2;
 // Hash = paramsKey. Count = how many rounds in bottom 5%.
 type BlacklistData = Record<string, number>;
 
-function paramsKey(templateName: string, scanner: Record<string, number>, pm: Record<string, number>): string {
-  const s = Object.entries(scanner).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${String(Math.round(v * 100))}`).join(',');
-  const p = Object.entries(pm).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${String(Math.round(v * 100))}`).join(',');
+function paramsKey(
+  templateName: string,
+  scanner: Record<string, number>,
+  pm: Record<string, number>,
+): string {
+  const s = Object.entries(scanner)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${String(Math.round(v * 100))}`)
+    .join(',');
+  const p = Object.entries(pm)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${String(Math.round(v * 100))}`)
+    .join(',');
   return `${templateName}:${s}|${p}`;
 }
 
@@ -95,7 +112,9 @@ export async function runGrind(argv: string[]): Promise<void> {
     if (argv[i] === '--max-configs' && argv[i + 1]) maxConfigs = Number(argv[++i]);
   }
 
-  console.log(`=== GRIND MODE: ${String(rounds)} rounds${maxConfigs > 0 ? `, max ${String(maxConfigs)} configs` : ''} ===\n`);
+  console.log(
+    `=== GRIND MODE: ${String(rounds)} rounds${maxConfigs > 0 ? `, max ${String(maxConfigs)} configs` : ''} ===\n`,
+  );
 
   const timeframe: Timeframe = '5m';
   const refSymbol = toSymbol('BTCUSDT');
@@ -104,10 +123,14 @@ export async function runGrind(argv: string[]): Promise<void> {
   // Ensure reference data
   const { candles: refStore, tournaments: tournamentStore } = createStorage(DB_PATH);
   const lookback = 90 * 24 * 60 * 60 * 1000;
-  await syncCandles(refStore, fetcher, [{
-    symbol: refSymbol, timeframe,
-    startTime: Date.now() - lookback, endTime: Date.now(),
-  }]);
+  await syncCandles(refStore, fetcher, [
+    {
+      symbol: refSymbol,
+      timeframe,
+      startTime: Date.now() - lookback,
+      endTime: Date.now(),
+    },
+  ]);
   const dataStart = refStore.getEarliestTimestamp(refSymbol, timeframe)!;
   const dataEnd = refStore.getLatestTimestamp(refSymbol, timeframe)!;
 
@@ -118,7 +141,15 @@ export async function runGrind(argv: string[]): Promise<void> {
 
   for (let round = 1; round <= rounds; round++) {
     const blacklist = await loadBlacklist();
-    console.log(`\n=== Round ${String(round)}/${String(rounds)} | Tracked: ${String(Object.keys(blacklist.data).length)}, Blacklisted: ${String(blacklist.activeKeys.size)} ===\n`);
+    const bounds = await loadBounds();
+    const pmBoundsStr = Object.entries(bounds.pmParams)
+      .filter(([k]) => k !== 'maxHoldTimeHours')
+      .map(([k, v]) => `${k}=[${String(v.min)}-${String(v.max)}]`)
+      .join(' ');
+    console.log(
+      `\n=== Round ${String(round)}/${String(rounds)} | Blacklisted: ${String(blacklist.activeKeys.size)} | Bounds narrowed ${String(bounds.roundsAnalyzed)}x ===`,
+    );
+    console.log(`  PM: ${pmBoundsStr}\n`);
 
     // Compute candidates per template based on max-configs limit
     const templateCount = TEMPLATES.length;
@@ -134,14 +165,7 @@ export async function runGrind(argv: string[]): Promise<void> {
     const config: TournamentConfig = {
       templates: [...TEMPLATES],
       candidatesPerTemplate: scannerSamples,
-      pmParams: {
-        stopLossPct: { min: 1, max: 10, step: 0.5 },
-        takeProfitPct: { min: 0.5, max: 8, step: 0.5 },
-        maxHoldTimeHours: { min: 999, max: 999, step: 1 },
-        trailingActivationPct: { min: 0, max: 5, step: 0.5 },
-        trailingDistancePct: { min: 0.2, max: 3, step: 0.1 },
-        breakevenPct: { min: 0, max: 3, step: 0.5 },
-      },
+      pmParams: bounds.pmParams,
       pmSamples,
       riskConfig: {
         maxPositionSizePct: 5,
@@ -166,16 +190,22 @@ export async function runGrind(argv: string[]): Promise<void> {
       // Full 20-stage tournament is for the final 'tournament' command.
       stages: [
         { weeks: 1, symbols: 2, killRate: 0.15 },
-        { weeks: 1, symbols: 3, killRate: 0.20 },
+        { weeks: 1, symbols: 3, killRate: 0.2 },
         { weeks: 1, symbols: 4, killRate: 0.25 },
-        { weeks: 1, symbols: 5, killRate: 0.30 },
-        { weeks: 1, symbols: 6, killRate: 0.30 },
+        { weeks: 1, symbols: 5, killRate: 0.3 },
+        { weeks: 1, symbols: 6, killRate: 0.3 },
       ],
       seed: Date.now(),
     };
 
     const tournamentId = `grind-${String(round)}-${Date.now()}`;
-    const state = await runTournament(config, tournamentStore, tournamentId, DB_PATH, blacklist.activeKeys);
+    const state = await runTournament(
+      config,
+      tournamentStore,
+      tournamentId,
+      DB_PATH,
+      blacklist.activeKeys,
+    );
 
     // Increment bottom count for bottom 5%
     const bottom = getBottom5Percent(state);
@@ -193,11 +223,17 @@ export async function runGrind(argv: string[]): Promise<void> {
     const active = Object.values(blacklist.data).filter((c) => c >= BLACKLIST_THRESHOLD).length;
     await saveBlacklist(blacklist.data);
 
-    const survivors = state.stageResults
-      .filter((r) => r.stageIndex === state.completedStages - 1 && r.survived)
-      .length;
+    // Narrow PM bounds based on winners vs losers
+    const newPmBounds = narrowBounds(state, bounds.pmParams);
+    await saveBounds({ pmParams: newPmBounds, roundsAnalyzed: bounds.roundsAnalyzed + 1 });
 
-    console.log(`\nRound ${String(round)} done: ${String(survivors)} survivors, +${String(newlyBlacklisted)} newly blacklisted (tracked: ${String(tracked)}, active: ${String(active)})`);
+    const survivors = state.stageResults.filter(
+      (r) => r.stageIndex === state.completedStages - 1 && r.survived,
+    ).length;
+
+    console.log(
+      `\nRound ${String(round)} done: ${String(survivors)} survivors, +${String(newlyBlacklisted)} newly blacklisted (tracked: ${String(tracked)}, active: ${String(active)})`,
+    );
   }
 
   console.log('\n=== GRIND COMPLETE ===');
@@ -206,5 +242,7 @@ export async function runGrind(argv: string[]): Promise<void> {
   const strike1 = counts.filter((c) => c === 1).length;
   const strike2 = counts.filter((c) => c === BLACKLIST_THRESHOLD).length;
   const blacklisted = counts.filter((c) => c >= BLACKLIST_THRESHOLD).length;
-  console.log(`Tracked: ${String(counts.length)} | 1 strike: ${String(strike1)} | 2 strikes: ${String(strike2)} | Blacklisted: ${String(blacklisted)}`);
+  console.log(
+    `Tracked: ${String(counts.length)} | 1 strike: ${String(strike1)} | 2 strikes: ${String(strike2)} | Blacklisted: ${String(blacklisted)}`,
+  );
 }
