@@ -30,7 +30,7 @@ function unsafeCast(value: unknown) {
   return value;
 }
 
-const BLACKLIST_THRESHOLD = 3;
+const BLACKLIST_THRESHOLD = 2;
 
 // Compact format: { "hash": count, "hash": count, ... }
 // Hash = paramsKey. Count = how many rounds in bottom 5%.
@@ -76,7 +76,7 @@ function getBottom5Percent(state: TournamentState): TournamentCandidate[] {
 
   // Sort by cumulative PnL ascending (worst first)
   const sorted = [...pnlByCandidateId.entries()].sort((a, b) => a[1] - b[1]);
-  const cutoff = Math.ceil(sorted.length * 0.05);
+  const cutoff = Math.ceil(sorted.length * 0.25);
   const bottom = sorted.slice(0, cutoff);
 
   const losers: TournamentCandidate[] = [];
