@@ -30,20 +30,11 @@ function unsafeCast(value: unknown) {
   return value;
 }
 
-interface BlacklistEntry {
-  templateName: string;
-  scannerParams: Record<string, number>;
-  pmParams: Record<string, number>;
-  bottomCount: number;  // how many rounds this config was in bottom 5%
-}
+const BLACKLIST_THRESHOLD = 3;
 
-const BLACKLIST_THRESHOLD = 3; // must be bottom 5% in N rounds to get blacklisted
-
-interface BlacklistFile {
-  entries: BlacklistEntry[];
-  totalRuns: number;
-  lastUpdated: string;
-}
+// Compact format: { "hash": count, "hash": count, ... }
+// Hash = paramsKey. Count = how many rounds in bottom 5%.
+type BlacklistData = Record<string, number>;
 
 function paramsKey(templateName: string, scanner: Record<string, number>, pm: Record<string, number>): string {
   const s = Object.entries(scanner).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${String(Math.round(v * 100))}`).join(',');
@@ -51,30 +42,22 @@ function paramsKey(templateName: string, scanner: Record<string, number>, pm: Re
   return `${templateName}:${s}|${p}`;
 }
 
-async function loadBlacklist(): Promise<{ entries: BlacklistEntry[]; keys: Set<string>; byKey: Map<string, BlacklistEntry> }> {
+async function loadBlacklist(): Promise<{ data: BlacklistData; activeKeys: Set<string> }> {
   try {
     const raw = await Bun.file(BLACKLIST_PATH).text();
-    const data: BlacklistFile = unsafeCast<BlacklistFile>(JSON.parse(raw));
-    const keys = new Set<string>();
-    const byKey = new Map<string, BlacklistEntry>();
-    for (const e of data.entries) {
-      const key = paramsKey(e.templateName, e.scannerParams, e.pmParams);
-      if (e.bottomCount >= BLACKLIST_THRESHOLD) keys.add(key);
-      byKey.set(key, e);
+    const data = unsafeCast<BlacklistData>(JSON.parse(raw));
+    const activeKeys = new Set<string>();
+    for (const [key, count] of Object.entries(data)) {
+      if (count >= BLACKLIST_THRESHOLD) activeKeys.add(key);
     }
-    return { entries: data.entries, keys, byKey };
+    return { data, activeKeys };
   } catch {
-    return { entries: [], keys: new Set(), byKey: new Map() };
+    return { data: {}, activeKeys: new Set() };
   }
 }
 
-async function saveBlacklist(entries: BlacklistEntry[], totalRuns: number): Promise<void> {
-  const data: BlacklistFile = {
-    entries,
-    totalRuns,
-    lastUpdated: new Date().toISOString(),
-  };
-  await Bun.write(BLACKLIST_PATH, JSON.stringify(data, null, 2) + '\n');
+async function saveBlacklist(data: BlacklistData): Promise<void> {
+  await Bun.write(BLACKLIST_PATH, JSON.stringify(data) + '\n');
 }
 
 function getBottom5Percent(state: TournamentState): TournamentCandidate[] {
@@ -134,8 +117,7 @@ export async function runGrind(argv: string[]): Promise<void> {
 
   for (let round = 1; round <= rounds; round++) {
     const blacklist = await loadBlacklist();
-    const activeCount = [...blacklist.byKey.values()].filter((e) => e.bottomCount >= BLACKLIST_THRESHOLD).length;
-    console.log(`\n=== Round ${String(round)}/${String(rounds)} | Tracked: ${String(blacklist.byKey.size)}, Blacklisted: ${String(activeCount)} ===\n`);
+    console.log(`\n=== Round ${String(round)}/${String(rounds)} | Tracked: ${String(Object.keys(blacklist.data).length)}, Blacklisted: ${String(blacklist.activeKeys.size)} ===\n`);
 
     // Compute candidates per template based on max-configs limit
     const templateCount = TEMPLATES.length;
@@ -205,41 +187,30 @@ export async function runGrind(argv: string[]): Promise<void> {
     };
 
     const tournamentId = `grind-${String(round)}-${Date.now()}`;
-    const state = await runTournament(config, tournamentStore, tournamentId, DB_PATH, blacklist.keys);
+    const state = await runTournament(config, tournamentStore, tournamentId, DB_PATH, blacklist.activeKeys);
 
-    // Increment bottom count for bottom 5% — only blacklisted after N rounds
+    // Increment bottom count for bottom 5%
     const bottom = getBottom5Percent(state);
     let newlyBlacklisted = 0;
     for (const c of bottom) {
       const key = paramsKey(c.templateName, c.scannerParams, c.pmParams);
-      const existing = blacklist.byKey.get(key);
-      if (existing) {
-        existing.bottomCount += 1;
-        if (existing.bottomCount === BLACKLIST_THRESHOLD) newlyBlacklisted++;
-      } else {
-        const entry: BlacklistEntry = {
-          templateName: c.templateName,
-          scannerParams: c.scannerParams,
-          pmParams: c.pmParams,
-          bottomCount: 1,
-        };
-        blacklist.byKey.set(key, entry);
-      }
+      const prev = blacklist.data[key] ?? 0;
+      blacklist.data[key] = prev + 1;
+      if (prev + 1 === BLACKLIST_THRESHOLD) newlyBlacklisted++;
     }
 
-    const allEntries = [...blacklist.byKey.values()];
-    const activeBlacklist = allEntries.filter((e) => e.bottomCount >= BLACKLIST_THRESHOLD).length;
-    await saveBlacklist(allEntries, round);
+    const tracked = Object.keys(blacklist.data).length;
+    const active = Object.values(blacklist.data).filter((c) => c >= BLACKLIST_THRESHOLD).length;
+    await saveBlacklist(blacklist.data);
 
     const survivors = state.stageResults
       .filter((r) => r.stageIndex === state.completedStages - 1 && r.survived)
       .length;
 
-    console.log(`\nRound ${String(round)} done: ${String(survivors)} survivors, +${String(newlyBlacklisted)} newly blacklisted (tracked: ${String(allEntries.length)}, active blacklist: ${String(activeBlacklist)})`);
+    console.log(`\nRound ${String(round)} done: ${String(survivors)} survivors, +${String(newlyBlacklisted)} newly blacklisted (tracked: ${String(tracked)}, active: ${String(active)})`);
   }
 
   console.log('\n=== GRIND COMPLETE ===');
-  const finalBlacklist = await loadBlacklist();
-  const active = finalBlacklist.entries.filter((e) => e.bottomCount >= BLACKLIST_THRESHOLD).length;
-  console.log(`Tracked configs: ${String(finalBlacklist.entries.length)}, Active blacklist (${String(BLACKLIST_THRESHOLD)}+ strikes): ${String(active)}`);
+  const final = await loadBlacklist();
+  console.log(`Tracked: ${String(Object.keys(final.data).length)}, Active blacklist (${String(BLACKLIST_THRESHOLD)}+ strikes): ${String(final.activeKeys.size)}`);
 }
