@@ -131,6 +131,8 @@ async function runStage(
   store: ICandleStore,
 ): Promise<CandidateStageResult[]> {
   const results: CandidateStageResult[] = [];
+  let factoryMs = 0;
+  let engineMs = 0;
 
   for (const candidate of candidates) {
     const template = templates.get(candidate.templateName);
@@ -148,7 +150,9 @@ async function runStage(
       breakevenActivationPct: candidate.pmParams.breakevenPct ?? 0,
     };
 
+    const fStart = Date.now();
     const factory = template.createFactory(symbols, timeframe, riskConfig, pmConfig);
+    factoryMs += Date.now() - fStart;
 
     let totalPnl = 0;
     let totalTrades = 0;
@@ -173,8 +177,10 @@ async function runStage(
         warmupMs: computeWarmupMs(allTimeframes),
       };
 
+      const eStart = Date.now();
       const engine = createBacktestEngine(loader, exchangeConfig);
       const result = await engine.run(factory, candidate.scannerParams, btConfig);
+      engineMs += Date.now() - eStart;
 
       const weekPnl = result.finalBalance - result.initialBalance;
       totalPnl += weekPnl;
@@ -215,6 +221,10 @@ async function runStage(
 
   for (let i = 0; i < results.length; i++) {
     results[i]!.survived = i < surviveCount;
+  }
+
+  if (candidates.length > 0) {
+    console.log(`  Perf: factory=${String(factoryMs)}ms engine=${String(engineMs)}ms (${String(Math.round(engineMs / candidates.length))}ms/bt)`);
   }
 
   return results;
@@ -331,6 +341,7 @@ export async function runTournament(
     stageStore.close();
 
     const stageStart = Date.now();
+    const candidateCount = activeCandidates.length;
     const results = await runStage(
       s,
       stageConfig,
@@ -344,6 +355,7 @@ export async function runTournament(
       createStorage(dbPath).candles,
     );
     const stageMs = Date.now() - stageStart;
+    const msPerCandidate = candidateCount > 0 ? (stageMs / candidateCount).toFixed(1) : '0';
 
     state.stageResults.push(...results);
     state.completedStages = s + 1;
@@ -360,7 +372,7 @@ export async function runTournament(
 
     // Print stage summary
     const topResults = results.filter((r) => r.survived).slice(0, 5);
-    console.log(`  Completed in ${String(stageMs)}ms`);
+    console.log(`  Completed in ${String(stageMs)}ms (${msPerCandidate}ms/candidate)`);
     console.log(`  Killed: ${String(killed)}, Survived: ${String(activeCandidates.length)}`);
     console.log('  Top 5 survivors:');
     for (const r of topResults) {
